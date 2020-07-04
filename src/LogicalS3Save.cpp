@@ -65,8 +65,16 @@ public:
         dimensions[1] = DimensionDesc("dest_instance_id",   0, 0, nInstances-1, nInstances-1, 1, 0);
         dimensions[2] = DimensionDesc("source_instance_id", 0, 0, nInstances-1, nInstances-1, 1, 0);
         Attributes attributes;
-        attributes.push_back(AttributeDesc("val", TID_STRING, AttributeDesc::IS_NULLABLE, CompressorType::NONE));
-        return ArrayDesc("s3save", attributes, dimensions, createDistribution(defaultDistType()), query->getDefaultArrayResidency(), 0, false);
+        attributes.push_back(
+            AttributeDesc("val", TID_STRING, AttributeDesc::IS_NULLABLE, CompressorType::NONE));
+        return ArrayDesc(
+            "s3save",
+            attributes,
+            dimensions,
+            createDistribution(defaultDistType()),
+            query->getDefaultArrayResidency(),
+            0,
+            false);
     }
 };
 
