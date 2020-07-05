@@ -6,6 +6,9 @@
 This document contains installation and usage instructions of the
 `s3bridge` SciDB plugin.
 
+1. [Installation](#installation)
+1. [Usage](#usage)
+
 ## Installation
 
 ### AWS C++ SDK
