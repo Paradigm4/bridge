@@ -302,32 +302,24 @@ public:
         LOG4CXX_DEBUG(logger, "S3SAVE >> PhysicalS3Save");
     }
 
-    bool haveChunk(shared_ptr<Array>& input, ArrayDesc const& schema)
-    {
-        LOG4CXX_DEBUG(logger, "S3SAVE >> haveChunk")
-        shared_ptr<ConstArrayIterator> iter = input->getConstIterator(schema.getAttributes(true).firstDataAttribute());
-        return !(iter->end());
-    }
-
     std::shared_ptr<Array> execute(std::vector< std::shared_ptr<Array> >& inputArrays,
                                    std::shared_ptr<Query> query)
     {
         LOG4CXX_DEBUG(logger, "S3SAVE >> execute");
 
+        S3SaveSettings settings (_parameters, _kwParameters, false, query);
         shared_ptr<Array>& inputArray = inputArrays[0];
         ArrayDesc const& inputSchema = inputArray->getArrayDesc();
 
-        shared_ptr<ConstArrayIterator> inputIter = inputArray->getConstIterator(inputSchema.getAttributes(true).firstDataAttribute());
-        if (!inputIter->end())
+        if (haveChunk(inputArray, inputSchema))
         {
-            S3SaveSettings settings (_parameters, _kwParameters, false, query);
 
             ArrayCursor inputCursor(inputArray);
             THROW_NOT_OK(setArrowOutput(inputSchema, inputCursor));
 
             Aws::SDKOptions options;
             Aws::InitAPI(options);
-            uploadS3();
+            uploadS3(settings.getBucketPath());
             Aws::ShutdownAPI(options);
         }
 
@@ -340,10 +332,17 @@ private:
     const char* _arrowOutput;
     size_t      _arrowOutputSize;
 
-    void uploadS3()
+    bool haveChunk(shared_ptr<Array>& array, ArrayDesc const& schema)
+    {
+        LOG4CXX_DEBUG(logger, "S3SAVE >> haveChunk")
+        shared_ptr<ConstArrayIterator> iter = array->getConstIterator(schema.getAttributes(true).firstDataAttribute());
+        return !(iter->end());
+    }
+
+    void uploadS3(string bucketPath)
     {
         const Aws::String& s3_bucket_name = "p4tests";
-        const Aws::String& s3_object_name = "foo";
+        const Aws::String& s3_object_name = Aws::String(bucketPath.c_str());
 
         Aws::Client::ClientConfiguration clientConfig;
         Aws::S3::S3Client s3_client(clientConfig);

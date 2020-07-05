@@ -45,7 +45,7 @@ static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3s
 namespace scidb
 {
 
-static const char* const KW_BUCKET_PATH = "paths";
+static const char* const KW_BUCKET_PATH = "bucket_path";
 static const char* const KW_FORMAT	= "format";
 
 typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t ;
@@ -150,22 +150,6 @@ private:
         alreadySet = setKeywordParamString(kwParams, kw, innersetter);
     }
 
-    bool getParamContentBool(Parameter& param)
-    {
-        bool paramContent;
-
-        if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
-            ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
-            paramContent = evaluate(paramExpr->getExpression(), TID_BOOL).getBool();
-        } else {
-            OperatorParamPhysicalExpression* exp =
-                dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
-            SCIDB_ASSERT(exp != nullptr);
-            paramContent = exp->getExpression()->evaluate().getBool();
-        }
-        return paramContent;
-    }
-
     Parameter getKeywordParam(KeywordParameters const& kwp, const std::string& kw) const
     {
         auto const& kwPair = kwp.find(kw);
@@ -185,6 +169,11 @@ public:
 
         setKeywordParamString(kwParams, KW_BUCKET_PATH, bucketPathSet, &S3SaveSettings::setParamBucketPath);
         setKeywordParamString(kwParams, KW_FORMAT, formatSet, &S3SaveSettings::setParamFormat);
+
+        if(_bucketPath.size() == 0)
+        {
+          throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_PATH << " was not provided, or failed to parse";
+        }
     }
 
     bool isArrowFormat() const
@@ -192,6 +181,10 @@ public:
         return _format == ARROW;
     }
 
+    string const& getBucketPath() const
+    {
+        return _bucketPath;
+    }
 };
 
 }
