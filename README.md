@@ -94,8 +94,9 @@ S3 bucket used.
 
 ### SciDB Plug-in
 
-1. Compile the plug-in:
+1. Checkout and compile the plug-in:
    ```
+   > git clone https://github.com/Paradigm4/s3bridge.git
    s3bridge> make
    ```
 1. Install in SciDB:
