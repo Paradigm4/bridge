@@ -23,9 +23,13 @@ endif
 
 # Debug:
 CFLAGS  := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -Wall -Wextra -Wno-long-long -Wno-strict-aliasing -Wno-system-headers -Wno-unused -Wno-unused-parameter -Wno-variadic-macros -fPIC -fno-omit-frame-pointer -g -std=c++14
+CFLAGS  += -DAWS_COMMON_USE_IMPORT_EXPORT -DAWS_EVENT_STREAM_USE_IMPORT_EXPORT -DAWS_SDK_VERSION_MAJOR=1 -DAWS_SDK_VERSION_MINOR=8 -DAWS_SDK_VERSION_PATCH=3
 
 INC     := -I. -DPROJECT_ROOT="\"$(SCIDB)\"" -I"$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/include/" -I"$(SCIDB)/include"
+INC     += -isystem /usr/local/include
+
 LIBS    :=-shared -Wl,-soname,libs3backer.so -L. -L"$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L"$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
+LIBS    +=-rdynamic /usr/local/lib/libaws-cpp-sdk-s3.so /usr/local/lib/libaws-cpp-sdk-core.so /usr/local/lib/libaws-c-event-stream.so.1.0.0 /usr/local/lib/libaws-c-common.so.1.0.0 -lm -pthread -lrt -ldl /usr/local/lib/libaws-checksums.so -Wl,-rpath,/usr/local/lib
 
 SRCS    := plugin.cpp LogicalS3Save.cpp PhysicalS3Save.cpp
 HEADERS := S3SaveSettings.h

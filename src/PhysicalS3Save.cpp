@@ -23,46 +23,17 @@
 * END_COPYRIGHT
 */
 
-#include <limits>
-#include <sstream>
-#include <memory>
-#include <string>
-#include <vector>
-#include <ctype.h>
-
-#include <system/Exceptions.h>
-#include <system/SystemCatalog.h>
-#include <system/Sysinfo.h>
-
-#include <arrow/buffer.h>
-#include <arrow/builder.h>
-#include <arrow/io/file.h>
-#include <arrow/io/interfaces.h>
-#include <arrow/io/memory.h>
-#include <arrow/ipc/reader.h>
-#include <arrow/ipc/writer.h>
-#include <arrow/memory_pool.h>
-#include <arrow/record_batch.h>
-#include <arrow/status.h>
-#include <arrow/type.h>
-#include <arrow/util/io_util.h>
-
-#include <query/TypeSystem.h>
-#include <query/FunctionDescription.h>
-#include <query/FunctionLibrary.h>
-#include <query/TypeSystem.h>
-#include <query/FunctionLibrary.h>
-#include <query/PhysicalOperator.h>
-#include <array/Tile.h>
 #include <array/TileIteratorAdaptors.h>
-#include <util/Platform.h>
-#include <network/Network.h>
-#include <array/SinglePassArray.h>
-#include <array/SynchableArray.h>
-#include <array/PinBuffer.h>
+#include <query/PhysicalOperator.h>
 
-#include <boost/algorithm/string.hpp>
-#include <boost/unordered_map.hpp>
+#include <arrow/builder.h>
+#include <arrow/io/memory.h>
+#include <arrow/ipc/writer.h>
+#include <arrow/record_batch.h>
+
+#include <aws/core/Aws.h>
+#include <aws/s3/S3Client.h>
+#include <aws/s3/model/PutObjectRequest.h>
 
 #include "S3SaveSettings.h"
 
@@ -345,10 +316,20 @@ public:
 
         shared_ptr<Array>& inputArray = inputArrays[0];
         ArrayDesc const& inputSchema = inputArray->getArrayDesc();
-        S3SaveSettings settings (_parameters, _kwParameters, false, query);
 
-        ArrayCursor inputCursor(inputArray);
-        THROW_NOT_OK(populateArrays(inputSchema, inputCursor));
+        shared_ptr<ConstArrayIterator> inputIter = inputArray->getConstIterator(inputSchema.getAttributes(true).firstDataAttribute());
+        if (!inputIter->end())
+        {
+            S3SaveSettings settings (_parameters, _kwParameters, false, query);
+
+            ArrayCursor inputCursor(inputArray);
+            THROW_NOT_OK(setArrowOutput(inputSchema, inputCursor));
+
+            Aws::SDKOptions options;
+            Aws::InitAPI(options);
+            uploadS3();
+            Aws::ShutdownAPI(options);
+        }
 
         return shared_ptr<Array>(new MemArray(_schema, query));
     }
@@ -356,8 +337,28 @@ public:
 private:
     std::vector<std::shared_ptr<arrow::Array>>        _arrowArrays;
     std::vector<std::unique_ptr<arrow::ArrayBuilder>> _arrowBuilders;
+    const char* _arrowOutput;
+    size_t      _arrowOutputSize;
 
-    arrow::Status populateArrays(ArrayDesc const& schema, ArrayCursor& cursor)
+    void uploadS3()
+    {
+        const Aws::String& s3_bucket_name = "p4tests";
+        const Aws::String& s3_object_name = "foo";
+
+        Aws::Client::ClientConfiguration clientConfig;
+        Aws::S3::S3Client s3_client(clientConfig);
+        Aws::S3::Model::PutObjectRequest object_request;
+
+        object_request.SetBucket(s3_bucket_name);
+        object_request.SetKey(s3_object_name);
+        const std::shared_ptr<Aws::IOStream> input_data = Aws::MakeShared<Aws::StringStream>("");
+        input_data->write(_arrowOutput, _arrowOutputSize);
+        object_request.SetBody(input_data);
+
+        auto put_object_outcome = s3_client.PutObject(object_request);
+    }
+
+    arrow::Status setArrowOutput(ArrayDesc const& schema, ArrayCursor& cursor)
     {
         const Attributes& attrs = schema.getAttributes(true);
         const size_t nAttrs = attrs.size();
@@ -705,11 +706,10 @@ private:
         std::shared_ptr<arrow::Buffer> arrowBuffer;
         ARROW_ASSIGN_OR_RAISE(arrowBuffer, arrowStream->Finish());
 
-        LOG4CXX_DEBUG(logger, "S3SAVE >> arrowBuffer::size: " << arrowBuffer->size())
+        LOG4CXX_DEBUG(logger, "S3SAVE >> arrowBuffer::size: " << arrowBuffer->size());
 
-        // Copy data to ...
-        // reinterpret_cast<const char*>(arrowBuffer->data())
-        // arrowBuffer->size()
+        _arrowOutput = reinterpret_cast<const char*>(arrowBuffer->data());
+        _arrowOutputSize = arrowBuffer->size();
 
         return arrow::Status::OK();
     }
