@@ -26,10 +26,10 @@ CFLAGS  := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_LI
 CFLAGS  += -DAWS_COMMON_USE_IMPORT_EXPORT -DAWS_EVENT_STREAM_USE_IMPORT_EXPORT -DAWS_SDK_VERSION_MAJOR=1 -DAWS_SDK_VERSION_MINOR=8 -DAWS_SDK_VERSION_PATCH=3
 
 INC     := -DPROJECT_ROOT="\"$(SCIDB)\"" -I. -I"$(SCIDB)/include" -I"$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/include"
-INC     += -I/usr/local/include
+INC     += -I/opt/aws/include
 
 LIBS    := -shared -Wl,-soname,libs3backer.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
-LIBS    += -rdynamic /usr/local/lib/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,/usr/local/lib
+LIBS    += -rdynamic /opt/aws/lib/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,/opt/aws/lib
 
 SRCS    := plugin.cpp LogicalS3Save.cpp PhysicalS3Save.cpp
 HEADERS := S3SaveSettings.h
