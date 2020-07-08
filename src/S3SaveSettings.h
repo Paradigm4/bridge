@@ -45,7 +45,8 @@ static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3s
 namespace scidb
 {
 
-static const char* const KW_BUCKET_PATH = "bucket_path";
+static const char* const KW_BUCKET_NAME = "bucket_name";
+static const char* const KW_OBJECT_PATH = "object_path";
 static const char* const KW_FORMAT	= "format";
 
 typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t ;
@@ -70,7 +71,8 @@ private:
         ARROW  = 0
     };
 
-    string			_bucketPath;
+    string			_bucketName;
+    string			_objectPath;
     FormatType                  _format;
 
     void checkIfSet(bool alreadySet, const char* kw)
@@ -83,13 +85,22 @@ private:
         }
     }
 
-  void setParamBucketPath(vector<string> bucketPath)
+    void setParamBucketName(vector<string> bucketName)
     {
-        if (_bucketPath != "") {
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal attempt to set bucket paths multiple times";
+        if (_bucketName != "") {
+            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal attempt to set bucket name multiple times";
         }
 
-        _bucketPath = bucketPath[0];
+        _bucketName = bucketName[0];
+    }
+
+    void setParamObjectPath(vector<string> objectPath)
+    {
+        if (_objectPath != "") {
+            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal attempt to set object path multiple times";
+        }
+
+        _objectPath = objectPath[0];
     }
 
     void setParamFormat(vector<string> format)
@@ -161,18 +172,26 @@ public:
                    KeywordParameters const& kwParams,
                    bool logical,
                    shared_ptr<Query>& query):
-                _bucketPath(""),
+                _bucketName(""),
+                _objectPath(""),
                 _format(ARROW)
     {
-        bool  bucketPathSet  = false;
+        bool  bucketNameSet  = false;
+        bool  objectPathSet  = false;
         bool  formatSet      = false;
 
-        setKeywordParamString(kwParams, KW_BUCKET_PATH, bucketPathSet, &S3SaveSettings::setParamBucketPath);
+        setKeywordParamString(kwParams, KW_BUCKET_NAME, bucketNameSet, &S3SaveSettings::setParamBucketName);
+        setKeywordParamString(kwParams, KW_OBJECT_PATH, objectPathSet, &S3SaveSettings::setParamObjectPath);
         setKeywordParamString(kwParams, KW_FORMAT, formatSet, &S3SaveSettings::setParamFormat);
 
-        if(_bucketPath.size() == 0)
+        if(_bucketName.size() == 0)
         {
-          throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_PATH << " was not provided, or failed to parse";
+          throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_NAME << " was not provided, or failed to parse";
+        }
+
+        if(_objectPath.size() == 0)
+        {
+          throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_OBJECT_PATH << " was not provided, or failed to parse";
         }
     }
 
@@ -181,9 +200,14 @@ public:
         return _format == ARROW;
     }
 
-    string const& getBucketPath() const
+    string const& getBucketName() const
     {
-        return _bucketPath;
+        return _bucketName;
+    }
+
+    string const& getObjectPath() const
+    {
+        return _objectPath;
     }
 };
 

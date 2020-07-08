@@ -319,7 +319,7 @@ public:
 
             Aws::SDKOptions options;
             Aws::InitAPI(options);
-            uploadS3(settings.getBucketPath());
+            uploadS3(settings.getBucketName(), settings.getObjectPath());
             Aws::ShutdownAPI(options);
         }
 
@@ -334,15 +334,15 @@ private:
 
     bool haveChunk(shared_ptr<Array>& array, ArrayDesc const& schema)
     {
-        LOG4CXX_DEBUG(logger, "S3SAVE >> haveChunk")
+        LOG4CXX_DEBUG(logger, "S3SAVE >> haveChunk");
         shared_ptr<ConstArrayIterator> iter = array->getConstIterator(schema.getAttributes(true).firstDataAttribute());
         return !(iter->end());
     }
 
-    void uploadS3(string bucketPath)
+    void uploadS3(string bucketName, string objectPath)
     {
-        const Aws::String& s3_bucket_name = "p4tests";
-        const Aws::String& s3_object_name = Aws::String(bucketPath.c_str());
+        const Aws::String& s3_bucket_name = Aws::String(bucketName.c_str());
+        const Aws::String& s3_object_name = Aws::String(objectPath.c_str());
 
         Aws::Client::ClientConfiguration clientConfig;
         Aws::S3::S3Client s3_client(clientConfig);
@@ -355,6 +355,22 @@ private:
         object_request.SetBody(input_data);
 
         auto put_object_outcome = s3_client.PutObject(object_request);
+        LOG4CXX_DEBUG(logger, "S3SAVE >> PutObject " << put_object_outcome.IsSuccess());
+        LOG4CXX_DEBUG(logger, "S3SAVE >> PutObject " << put_object_outcome.GetError());
+        LOG4CXX_DEBUG(logger, "S3SAVE >> PutObject " << s3_bucket_name);
+        LOG4CXX_DEBUG(logger, "S3SAVE >> PutObject " << s3_object_name);
+
+        if (!put_object_outcome.IsSuccess()) {
+            ostringstream out;
+            out << "Upload to s3://" << s3_bucket_name << "/" << s3_object_name
+                << " failed. ";
+            auto error = put_object_outcome.GetError();
+            out << error.GetMessage() << ". ";
+            if (error.GetResponseCode() == Aws::Http::HttpResponseCode::FORBIDDEN)
+                out << "See https://aws.amazon.com/premiumsupport/knowledge-center/s3-troubleshoot-403/";
+            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                 SCIDB_LE_UNKNOWN_ERROR) << out.str();
+        }
     }
 
     arrow::Status setArrowOutput(ArrayDesc const& schema, ArrayCursor& cursor)

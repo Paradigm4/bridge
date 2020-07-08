@@ -120,7 +120,7 @@ Note: only single chunks arrays are currently supported.
 1. Save SciDB array in S3:
    ```
    > iquery --afl
-   AFL% s3save(apply(build(<v:int64>[i=0:9], i), w, double(v * v)), bucket_path:'foo);
+   AFL% s3save(apply(build(<v:int64>[i=0:9], i), w, double(v * v)), bucket_name:'p4tests', object_path:'foo');
    {chunk_no,dest_instance_id,source_instance_id} val
    ```
    The SciDB array is saved in the `p4tests` bucket in the `foo` object.
@@ -142,3 +142,19 @@ Note: only single chunks arrays are currently supported.
    8  8  64.0  8
    9  9  81.0  9
    ```
+
+### Troubleshoot
+
+It is common for S3 to return _Access Denied_ for non-obvious cases
+like, for example, if the bucket specified does not exist. `s3save`
+includes an extended error message for this type of errors which
+include a link to a troubleshootting guide. E.g.:
+
+```
+> iquery -aq "s3save(build(<v:int64>[i=0:9], i), bucket_name:'foo', object_path:'bar')"
+UserException in file: PhysicalS3Save.cpp function: uploadS3 line: 372 instance: s0-i1 (1)
+Error id: scidb::SCIDB_SE_ARRAY_WRITER::SCIDB_LE_UNKNOWN_ERROR
+Error description: Error while saving array. Unknown error: Upload to
+s3://foo/bar failed. Access Denied. See
+https://aws.amazon.com/premiumsupport/knowledge-center/s3-troubleshoot-403/.
+```
