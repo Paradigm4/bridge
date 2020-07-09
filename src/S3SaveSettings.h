@@ -33,6 +33,8 @@
 #ifndef S3SAVE_SETTINGS
 #define S3SAVE_SETTINGS
 
+#define S3BRIDGE_VERSION 1
+
 using boost::algorithm::trim;
 using boost::starts_with;
 using boost::lexical_cast;

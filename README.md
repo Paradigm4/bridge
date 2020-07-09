@@ -129,6 +129,11 @@ Note: only single chunks arrays are currently supported.
    > python
    >>> import boto3, pyarrow
    >>> res = boto3.client('s3').get_object(Bucket="p4tests", Key="foo")
+   >>> res["Metadata"]
+   {'s3bridge_version' : '1',
+    'format'           : 'arrow',
+    'schema'           : 'build<v:int64,w:double> [i=0:9:0:1000000]',
+    'attribute_mapping': 'UNUSED'}
    >>> pyarrow.ipc.open_stream(res["Body"].read()).read_all().to_pandas()
       v     w  i
    0  0   0.0  0

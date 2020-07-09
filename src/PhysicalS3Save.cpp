@@ -319,7 +319,21 @@ public:
 
             Aws::SDKOptions options;
             Aws::InitAPI(options);
-            uploadS3(settings.getBucketName(), settings.getObjectPath());
+
+            // Set Metadata
+ 	    Aws::Map<Aws::String, Aws::String> metadata;
+            ostringstream out;
+            printSchema(out, inputSchema);
+            metadata["schema"] = Aws::String(out.str().c_str());
+            metadata["s3bridge_version"] = Aws::String(to_string(S3BRIDGE_VERSION).c_str());
+            metadata["attribute_mapping"] = Aws::String("UNUSED");
+
+            // if (settings.isArrowFormat())
+            metadata["format"] = Aws::String("arrow");
+
+            uploadS3(Aws::String(settings.getBucketName().c_str()),
+                     Aws::String(settings.getObjectPath().c_str()),
+                     metadata);
             Aws::ShutdownAPI(options);
         }
 
@@ -329,33 +343,26 @@ public:
 private:
     std::shared_ptr<arrow::Buffer> _arrowBuffer;
 
-    bool haveChunk(shared_ptr<Array>& array, ArrayDesc const& schema)
+    void uploadS3(const Aws::String& bucket_name,
+                  const Aws::String& object_name,
+                  const Aws::Map<Aws::String, Aws::String> &metadata)
     {
-        LOG4CXX_DEBUG(logger, "S3SAVE >> haveChunk");
-        shared_ptr<ConstArrayIterator> iter = array->getConstIterator(schema.getAttributes(true).firstDataAttribute());
-        return !(iter->end());
-    }
-
-    void uploadS3(string bucketName, string objectPath)
-    {
-        const Aws::String& s3_bucket_name = Aws::String(bucketName.c_str());
-        const Aws::String& s3_object_name = Aws::String(objectPath.c_str());
-
         Aws::Client::ClientConfiguration clientConfig;
         Aws::S3::S3Client s3_client(clientConfig);
         Aws::S3::Model::PutObjectRequest object_request;
 
-        object_request.SetBucket(s3_bucket_name);
-        object_request.SetKey(s3_object_name);
+        object_request.SetBucket(bucket_name);
+        object_request.SetKey(object_name);
         const std::shared_ptr<Aws::IOStream> input_data = Aws::MakeShared<Aws::StringStream>("");
         input_data->write(reinterpret_cast<const char*>(_arrowBuffer->data()),
                           _arrowBuffer->size());
         object_request.SetBody(input_data);
+        object_request.SetMetadata(metadata);
 
         auto put_object_outcome = s3_client.PutObject(object_request);
         if (!put_object_outcome.IsSuccess()) {
             ostringstream out;
-            out << "Upload to s3://" << s3_bucket_name << "/" << s3_object_name
+            out << "Upload to s3://" << bucket_name << "/" << object_name
                 << " failed. ";
             auto error = put_object_outcome.GetError();
             out << error.GetMessage() << ". ";
@@ -769,6 +776,12 @@ private:
 
         return static_cast<ArrowBuilder*>(
             arrowBuilders[attrIdx].get())->AppendValues(values, is_valid);
+    }
+
+    bool haveChunk(shared_ptr<Array>& array, ArrayDesc const& schema)
+    {
+        shared_ptr<ConstArrayIterator> iter = array->getConstIterator(schema.getAttributes(true).firstDataAttribute());
+        return !(iter->end());
     }
 };
 
