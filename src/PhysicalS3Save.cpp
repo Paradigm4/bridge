@@ -327,10 +327,7 @@ public:
     }
 
 private:
-    std::vector<std::shared_ptr<arrow::Array>>        _arrowArrays;
-    std::vector<std::unique_ptr<arrow::ArrayBuilder>> _arrowBuilders;
-    const char* _arrowOutput;
-    size_t      _arrowOutputSize;
+    std::shared_ptr<arrow::Buffer> _arrowBuffer;
 
     bool haveChunk(shared_ptr<Array>& array, ArrayDesc const& schema)
     {
@@ -351,15 +348,11 @@ private:
         object_request.SetBucket(s3_bucket_name);
         object_request.SetKey(s3_object_name);
         const std::shared_ptr<Aws::IOStream> input_data = Aws::MakeShared<Aws::StringStream>("");
-        input_data->write(_arrowOutput, _arrowOutputSize);
+        input_data->write(reinterpret_cast<const char*>(_arrowBuffer->data()),
+                          _arrowBuffer->size());
         object_request.SetBody(input_data);
 
         auto put_object_outcome = s3_client.PutObject(object_request);
-        LOG4CXX_DEBUG(logger, "S3SAVE >> PutObject " << put_object_outcome.IsSuccess());
-        LOG4CXX_DEBUG(logger, "S3SAVE >> PutObject " << put_object_outcome.GetError());
-        LOG4CXX_DEBUG(logger, "S3SAVE >> PutObject " << s3_bucket_name);
-        LOG4CXX_DEBUG(logger, "S3SAVE >> PutObject " << s3_object_name);
-
         if (!put_object_outcome.IsSuccess()) {
             ostringstream out;
             out << "Upload to s3://" << s3_bucket_name << "/" << s3_object_name
@@ -381,8 +374,8 @@ private:
         std::vector<TypeEnum> types(nAttrs);
 
         arrow::MemoryPool* arrowPool = arrow::default_memory_pool();
-        _arrowBuilders.resize(nAttrs + nDims);
-        _arrowArrays.resize(nAttrs + nDims);
+        std::vector<std::shared_ptr<arrow::Array>> arrowArrays(nAttrs + nDims);
+        std::vector<std::unique_ptr<arrow::ArrayBuilder>> arrowBuilders(nAttrs + nDims);
         const std::shared_ptr<arrow::Schema> arrowSchema = attributes2ArrowSchema(schema);
 
         // Create Arrow Builders
@@ -393,14 +386,14 @@ private:
 
             THROW_NOT_OK(arrow::MakeBuilder(arrowPool,
                                             arrowSchema->field(i)->type(),
-                                            &_arrowBuilders[i]));
+                                            &arrowBuilders[i]));
             i++;
         }
         for(size_t i = nAttrs; i < nAttrs + nDims; ++i)
         {
             THROW_NOT_OK(arrow::MakeBuilder(arrowPool,
                                             arrowSchema->field(i)->type(),
-                                            &_arrowBuilders[i]));
+                                            &arrowBuilders[i]));
         }
 
         // Setup coordinates buffers
@@ -433,13 +426,13 @@ private:
                         {
                             ARROW_RETURN_NOT_OK(
                                 static_cast<arrow::BinaryBuilder*>(
-                                    _arrowBuilders[attrIdx].get())->AppendNull());
+                                    arrowBuilders[attrIdx].get())->AppendNull());
                         }
                         else
                         {
                             ARROW_RETURN_NOT_OK(
                                 static_cast<arrow::BinaryBuilder*>(
-                                    _arrowBuilders[attrIdx].get())->Append(
+                                    arrowBuilders[attrIdx].get())->Append(
                                         reinterpret_cast<const char*>(
                                             value.data()),
                                         value.size()));
@@ -489,7 +482,7 @@ private:
 
                     ARROW_RETURN_NOT_OK(
                         static_cast<arrow::StringBuilder*>(
-                            _arrowBuilders[attrIdx].get())->AppendValues(values, is_valid.data()));
+                            arrowBuilders[attrIdx].get())->AppendValues(values, is_valid.data()));
                     break;
                 }
                 case TE_CHAR:
@@ -524,7 +517,7 @@ private:
 
                     ARROW_RETURN_NOT_OK(
                         static_cast<arrow::StringBuilder*>(
-                            _arrowBuilders[attrIdx].get())->AppendValues(values, is_valid.data()));
+                            arrowBuilders[attrIdx].get())->AppendValues(values, is_valid.data()));
                     break;
                 }
                 case TE_BOOL:
@@ -533,6 +526,7 @@ private:
                         populateCell<bool,arrow::BooleanBuilder>(
                             citer,
                             &Value::getBool,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -544,6 +538,7 @@ private:
                         populateCell<int64_t,arrow::Date64Builder>(
                             citer,
                             &Value::getDateTime,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -555,6 +550,7 @@ private:
                         populateCell<double,arrow::DoubleBuilder>(
                             citer,
                             &Value::getDouble,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -566,6 +562,7 @@ private:
                         populateCell<float,arrow::FloatBuilder>(
                             citer,
                             &Value::getFloat,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -577,6 +574,7 @@ private:
                         populateCell<int8_t,arrow::Int8Builder>(
                             citer,
                             &Value::getInt8,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -588,6 +586,7 @@ private:
                         populateCell<int16_t,arrow::Int16Builder>(
                             citer,
                             &Value::getInt16,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -599,6 +598,7 @@ private:
                         populateCell<int32_t,arrow::Int32Builder>(
                             citer,
                             &Value::getInt32,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -610,6 +610,7 @@ private:
                         populateCell<int64_t,arrow::Int64Builder>(
                             citer,
                             &Value::getInt64,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -621,6 +622,7 @@ private:
                         populateCell<uint8_t,arrow::UInt8Builder>(
                             citer,
                             &Value::getUint8,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -632,6 +634,7 @@ private:
                         populateCell<uint16_t,arrow::UInt16Builder>(
                             citer,
                             &Value::getUint16,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -643,6 +646,7 @@ private:
                         populateCell<uint32_t,arrow::UInt32Builder>(
                             citer,
                             &Value::getUint32,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -654,6 +658,7 @@ private:
                         populateCell<uint64_t,arrow::UInt64Builder>(
                             citer,
                             &Value::getUint64,
+                            arrowBuilders,
                             attrIdx,
                             nDims,
                             dimValues)));
@@ -677,7 +682,7 @@ private:
                     {
                         ARROW_RETURN_NOT_OK(
                             static_cast<arrow::Int64Builder*>(
-                                _arrowBuilders[nAttrs + j].get()
+                                arrowBuilders[nAttrs + j].get()
                                 )->AppendValues(dimValues[j]));
                     }
                 }
@@ -690,12 +695,12 @@ private:
         for (size_t i = 0; i < nAttrs + nDims; ++i)
         {
             ARROW_RETURN_NOT_OK(
-                _arrowBuilders[i]->Finish(&_arrowArrays[i])); // Resets builder
+                arrowBuilders[i]->Finish(&arrowArrays[i])); // Resets builder
         }
 
         // Create Arrow Record Batch
         std::shared_ptr<arrow::RecordBatch> arrowBatch;
-        arrowBatch = arrow::RecordBatch::Make(arrowSchema, _arrowArrays[0]->length(), _arrowArrays);
+        arrowBatch = arrow::RecordBatch::Make(arrowSchema, arrowArrays[0]->length(), arrowArrays);
         ARROW_RETURN_NOT_OK(arrowBatch->Validate());
 
         // Stream Arrow Record Batch to Arrow Buffer using Arrow
@@ -718,13 +723,8 @@ private:
         ARROW_RETURN_NOT_OK(arrowWriter->WriteRecordBatch(*arrowBatch));
         ARROW_RETURN_NOT_OK(arrowWriter->Close());
 
-        std::shared_ptr<arrow::Buffer> arrowBuffer;
-        ARROW_ASSIGN_OR_RAISE(arrowBuffer, arrowStream->Finish());
-
-        LOG4CXX_DEBUG(logger, "S3SAVE >> arrowBuffer::size: " << arrowBuffer->size());
-
-        _arrowOutput = reinterpret_cast<const char*>(arrowBuffer->data());
-        _arrowOutputSize = arrowBuffer->size();
+        ARROW_ASSIGN_OR_RAISE(_arrowBuffer, arrowStream->Finish());
+        LOG4CXX_DEBUG(logger, "S3SAVE >> arrowBuffer::size: " << _arrowBuffer->size());
 
         return arrow::Status::OK();
     }
@@ -734,6 +734,7 @@ private:
               typename ValueFunc> inline
     arrow::Status populateCell(shared_ptr<ConstChunkIterator> citer,
                                ValueFunc valueGetter,
+                               std::vector<std::unique_ptr<arrow::ArrayBuilder>> &arrowBuilders,
                                const size_t attrIdx,
                                const size_t nDims,
                                std::vector<std::vector<int64_t>> &dimValues)
@@ -767,7 +768,7 @@ private:
         }
 
         return static_cast<ArrowBuilder*>(
-            _arrowBuilders[attrIdx].get())->AppendValues(values, is_valid);
+            arrowBuilders[attrIdx].get())->AppendValues(values, is_valid);
     }
 };
 
