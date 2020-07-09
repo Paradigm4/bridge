@@ -48,7 +48,7 @@ namespace scidb
 {
 
 static const char* const KW_BUCKET_NAME = "bucket_name";
-static const char* const KW_OBJECT_PATH = "object_path";
+static const char* const KW_BUCKET_PREFIX = "bucket_prefix";
 static const char* const KW_FORMAT	= "format";
 
 typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t ;
@@ -74,7 +74,7 @@ private:
     };
 
     string			_bucketName;
-    string			_objectPath;
+    string			_bucketPrefix;
     FormatType                  _format;
 
     void checkIfSet(bool alreadySet, const char* kw)
@@ -96,13 +96,13 @@ private:
         _bucketName = bucketName[0];
     }
 
-    void setParamObjectPath(vector<string> objectPath)
+    void setParamBucketPrefix(vector<string> bucketPrefix)
     {
-        if (_objectPath != "") {
+        if (_bucketPrefix != "") {
             throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal attempt to set object path multiple times";
         }
 
-        _objectPath = objectPath[0];
+        _bucketPrefix = bucketPrefix[0];
     }
 
     void setParamFormat(vector<string> format)
@@ -175,25 +175,25 @@ public:
                    bool logical,
                    shared_ptr<Query>& query):
                 _bucketName(""),
-                _objectPath(""),
+                _bucketPrefix(""),
                 _format(ARROW)
     {
-        bool  bucketNameSet  = false;
-        bool  objectPathSet  = false;
-        bool  formatSet      = false;
+        bool  bucketNameSet   = false;
+        bool  bucketPrefixSet = false;
+        bool  formatSet       = false;
 
-        setKeywordParamString(kwParams, KW_BUCKET_NAME, bucketNameSet, &S3SaveSettings::setParamBucketName);
-        setKeywordParamString(kwParams, KW_OBJECT_PATH, objectPathSet, &S3SaveSettings::setParamObjectPath);
-        setKeywordParamString(kwParams, KW_FORMAT, formatSet, &S3SaveSettings::setParamFormat);
+        setKeywordParamString(kwParams, KW_BUCKET_NAME,   bucketNameSet,   &S3SaveSettings::setParamBucketName);
+        setKeywordParamString(kwParams, KW_BUCKET_PREFIX, bucketPrefixSet, &S3SaveSettings::setParamBucketPrefix);
+        setKeywordParamString(kwParams, KW_FORMAT,        formatSet,       &S3SaveSettings::setParamFormat);
 
         if(_bucketName.size() == 0)
         {
           throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_NAME << " was not provided, or failed to parse";
         }
 
-        if(_objectPath.size() == 0)
+        if(_bucketPrefix.size() == 0)
         {
-          throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_OBJECT_PATH << " was not provided, or failed to parse";
+          throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_PREFIX << " was not provided, or failed to parse";
         }
     }
 
@@ -207,9 +207,9 @@ public:
         return _bucketName;
     }
 
-    string const& getObjectPath() const
+    string const& getBucketPrefix() const
     {
-        return _objectPath;
+        return _bucketPrefix;
     }
 };
 

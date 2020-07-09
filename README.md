@@ -120,7 +120,7 @@ Note: only single chunks arrays are currently supported.
 1. Save SciDB array in S3:
    ```
    > iquery --afl
-   AFL% s3save(apply(build(<v:int64>[i=0:9], i), w, double(v * v)), bucket_name:'p4tests', object_path:'foo');
+   AFL% s3save(apply(build(<v:int64>[i=0:9], i), w, double(v * v)), bucket_name:'p4tests', bucket_prefix:'foo');
    {chunk_no,dest_instance_id,source_instance_id} val
    ```
    The SciDB array is saved in the `p4tests` bucket in the `foo` object.

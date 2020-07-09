@@ -332,7 +332,7 @@ public:
             metadata["format"] = Aws::String("arrow");
 
             uploadS3(Aws::String(settings.getBucketName().c_str()),
-                     Aws::String(settings.getObjectPath().c_str()),
+                     Aws::String(settings.getBucketPrefix().c_str()),
                      metadata);
             Aws::ShutdownAPI(options);
         }
