@@ -34,6 +34,8 @@
 #define S3SAVE_SETTINGS
 
 #define S3BRIDGE_VERSION 1
+#define STRINGIFY(x) #x
+#define TO_STR(x) STRINGIFY(x)
 
 using boost::algorithm::trim;
 using boost::starts_with;

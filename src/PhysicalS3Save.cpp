@@ -175,118 +175,336 @@ std::shared_ptr<arrow::Schema> attributes2ArrowSchema(ArrayDesc const &arrayDesc
     return arrow::schema(arrowFields);
 }
 
-class ArrayCursor
+class ArrowPopulator
 {
 private:
-    shared_ptr<Array> _input;
-    size_t const _nAttrs;
-    vector <Value const *> _currentCell;
-    bool _end;
-    vector<shared_ptr<ConstArrayIterator> > _inputArrayIters;
-    vector<shared_ptr<ConstChunkIterator> > _inputChunkIters;
+    const size_t                                      _nAttrs;
+    const size_t                                      _nDims;
+    std::vector<TypeEnum>                             _attrTypes;
+    std::vector<std::vector<int64_t>>                 _dimValues;
+
+    const std::shared_ptr<arrow::Schema>              _arrowSchema;
+    std::vector<std::unique_ptr<arrow::ArrayBuilder>> _arrowBuilders;
+    std::vector<std::shared_ptr<arrow::Array>>        _arrowArrays;
+
+    arrow::MemoryPool*                                _arrowPool =
+        arrow::default_memory_pool();
 
 public:
-    ArrayCursor (shared_ptr<Array> const& input):
-        _input(input),
-        _nAttrs(input->getArrayDesc().getAttributes(true).size()),
-        _currentCell(_nAttrs, 0),
-        _end(false),
-        _inputArrayIters(_nAttrs, 0),
-        _inputChunkIters(_nAttrs, 0)
+    ArrowPopulator(ArrayDesc const& schema):
+        _nAttrs(schema.getAttributes(true).size()),
+        _nDims(schema.getDimensions().size()),
+        _attrTypes(_nAttrs),
+        _dimValues(_nDims),
+
+        _arrowSchema(attributes2ArrowSchema(schema)),
+        _arrowBuilders(_nAttrs + _nDims),
+        _arrowArrays(_nAttrs + _nDims)
     {
-        const auto& inputSchemaAttrs = input->getArrayDesc().getAttributes(true);
-        for (const auto& attr : inputSchemaAttrs)
+        // Create Arrow Builders
+        const Attributes& attrs = schema.getAttributes(true);
+        size_t i = 0;
+        for (const auto& attr : attrs)
         {
-            _inputArrayIters[attr.getId()] = _input->getConstIterator(attr);
+            _attrTypes[i] = typeId2TypeEnum(attr.getType(), true);
+
+            THROW_NOT_OK(arrow::MakeBuilder(_arrowPool,
+                                            _arrowSchema->field(i)->type(),
+                                            &_arrowBuilders[i]));
+            i++;
         }
-        if (_inputArrayIters[0]->end())
+        for(size_t i = _nAttrs; i < _nAttrs + _nDims; ++i)
         {
-            _end=true;
-        }
-        else
-        {
-            advance();
+            THROW_NOT_OK(arrow::MakeBuilder(_arrowPool,
+                                            _arrowSchema->field(i)->type(),
+                                            &_arrowBuilders[i]));
         }
     }
 
-    bool end() const
+   arrow::Status populateArrowBuffer(ArrayDesc const& schema,
+                                      vector<shared_ptr<ConstChunkIterator> >& chunkIters,
+                                      std::shared_ptr<arrow::Buffer>& arrowBuffer)
     {
-        return _end;
-    }
-
-    size_t nAttrs() const
-    {
-        return _nAttrs;
-    }
-
-    void advanceChunkIters()
-    {
-        if (_end)
+        // Append to Arrow Builders
+        for (size_t attrIdx = 0; attrIdx < _nAttrs; ++attrIdx)
         {
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "Internal error: iterating past end of cursor";
-        }
-        if (_inputChunkIters[0] == 0) // 1st time!
-        {
-            for(size_t i = 0; i < _nAttrs; ++i)
+            shared_ptr<ConstChunkIterator> chunkIter = chunkIters[attrIdx];
+
+            // Reset coordinate buffers
+            if (attrIdx == 0) for (size_t i = 0; i < _nDims; ++i) _dimValues[i].clear();
+
+            switch (_attrTypes[attrIdx])
             {
-                _inputChunkIters[i] = _inputArrayIters[i]->getChunk().getConstIterator(ConstChunkIterator::IGNORE_OVERLAPS);
+            case TE_BINARY:
+            {
+                while (!chunkIter->end())
+                {
+                    Value const& value = chunkIter->getItem();
+                    if(value.isNull())
+                    {
+                        ARROW_RETURN_NOT_OK(
+                            static_cast<arrow::BinaryBuilder*>(
+                                _arrowBuilders[attrIdx].get())->AppendNull());
+                    }
+                    else
+                    {
+                        ARROW_RETURN_NOT_OK(
+                            static_cast<arrow::BinaryBuilder*>(
+                                _arrowBuilders[attrIdx].get())->Append(
+                                    reinterpret_cast<const char*>(
+                                        value.data()),
+                                    value.size()));
+                    }
+
+                    // Store coordinates in the buffer
+                    if (attrIdx == 0)
+                    {
+                        Coordinates const &coords = chunkIter->getPosition();
+                        for (size_t i = 0; i < _nDims; ++i)
+                            _dimValues[i].push_back(coords[i]);
+                    }
+
+                    ++(*chunkIter);
+                }
+                break;
             }
+            case TE_STRING:
+            {
+                vector<string> values;
+                vector<uint8_t> is_valid;
+
+                while (!chunkIter->end())
+                {
+                    Value const& value = chunkIter->getItem();
+                    if(value.isNull())
+                    {
+                        values.push_back("");
+                        is_valid.push_back(0);
+                    }
+                    else
+                    {
+                        values.push_back(value.getString());
+                        is_valid.push_back(1);
+                    }
+
+                    // Store coordinates in the buffer
+                    if (attrIdx == 0)
+                    {
+                        Coordinates const &coords = chunkIter->getPosition();
+                        for (size_t i = 0; i < _nDims; ++i)
+                            _dimValues[i].push_back(coords[i]);
+                    }
+
+                    ++(*chunkIter);
+                }
+
+                ARROW_RETURN_NOT_OK(
+                    static_cast<arrow::StringBuilder*>(
+                        _arrowBuilders[attrIdx].get())->AppendValues(
+                            values, is_valid.data()));
+                break;
+            }
+            case TE_CHAR:
+            {
+                vector<string> values;
+                vector<uint8_t> is_valid;
+
+                while (!chunkIter->end())
+                {
+                    Value const& value = chunkIter->getItem();
+                    if(value.isNull())
+                    {
+                        values.push_back("");
+                        is_valid.push_back(0);
+                    }
+                    else
+                    {
+                        values.push_back(string(1, value.getChar()));
+                        is_valid.push_back(1);
+                    }
+
+                    // Store coordinates in the buffer
+                    if (attrIdx == 0)
+                    {
+                        Coordinates const &coords = chunkIter->getPosition();
+                        for (size_t i = 0; i < _nDims; ++i)
+                            _dimValues[i].push_back(coords[i]);
+                    }
+
+                    ++(*chunkIter);
+                }
+
+                ARROW_RETURN_NOT_OK(static_cast<arrow::StringBuilder*>(
+                                        _arrowBuilders[attrIdx].get())->AppendValues(
+                                            values, is_valid.data()));
+                break;
+            }
+            case TE_BOOL:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<bool,arrow::BooleanBuilder>(
+                                         chunkIter, &Value::getBool, attrIdx)));
+                break;
+            }
+            case TE_DATETIME:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<int64_t,arrow::Date64Builder>(
+                                         chunkIter, &Value::getDateTime, attrIdx)));
+                break;
+            }
+            case TE_DOUBLE:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<double,arrow::DoubleBuilder>(
+                                         chunkIter, &Value::getDouble, attrIdx)));
+                break;
+            }
+            case TE_FLOAT:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<float,arrow::FloatBuilder>(
+                                         chunkIter, &Value::getFloat, attrIdx)));
+                break;
+            }
+            case TE_INT8:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<int8_t,arrow::Int8Builder>(
+                                         chunkIter, &Value::getInt8, attrIdx)));
+                break;
+            }
+            case TE_INT16:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<int16_t,arrow::Int16Builder>(
+                                         chunkIter, &Value::getInt16, attrIdx)));
+                break;
+            }
+            case TE_INT32:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<int32_t,arrow::Int32Builder>(
+                                         chunkIter, &Value::getInt32, attrIdx)));
+                break;
+            }
+            case TE_INT64:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<int64_t,arrow::Int64Builder>(
+                                         chunkIter, &Value::getInt64, attrIdx)));
+                break;
+            }
+            case TE_UINT8:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<uint8_t,arrow::UInt8Builder>(
+                                         chunkIter, &Value::getUint8, attrIdx)));
+                break;
+            }
+            case TE_UINT16:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<uint16_t,arrow::UInt16Builder>(
+                                         chunkIter, &Value::getUint16, attrIdx)));
+                break;
+            }
+            case TE_UINT32:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<uint32_t,arrow::UInt32Builder>(
+                                         chunkIter, &Value::getUint32, attrIdx)));
+                break;
+            }
+            case TE_UINT64:
+            {
+                ARROW_RETURN_NOT_OK((populateCell<uint64_t,arrow::UInt64Builder>(
+                                         chunkIter, &Value::getUint64, attrIdx)));
+                break;
+            }
+            default:
+            {
+                ostringstream error;
+                error << "Type "
+                      << _attrTypes[attrIdx]
+                      << " not supported in arrow format";
+                throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                     SCIDB_LE_ILLEGAL_OPERATION) << error.str();
+            }
+            }
+
+            if (attrIdx == 0)
+                // Store coordinates in Arrow arrays
+                for (size_t i = 0; i < _nDims; ++i)
+                    ARROW_RETURN_NOT_OK(static_cast<arrow::Int64Builder*>(
+                                            _arrowBuilders[_nAttrs + i].get()
+                                            )->AppendValues(_dimValues[i]));
         }
-        else if (!_inputChunkIters[0]->end()) // not the first time!
-        {
-            for(size_t i = 0; i < _nAttrs; ++i)
-            {
-                ++(*_inputChunkIters[i]);
-            }
-        }
-        while(_inputChunkIters[0]->end())
-        {
-            for(size_t i =0; i < _nAttrs; ++i)
-            {
-                ++(*_inputArrayIters[i]);
-            }
-            if(_inputArrayIters[0]->end())
-            {
-                _end = true;
-                return;
-            }
-            for(size_t i =0; i < _nAttrs; ++i)
-            {
-                _inputChunkIters[i] = _inputArrayIters[i]->getChunk().getConstIterator(ConstChunkIterator::IGNORE_OVERLAPS);
-            }
-        }
+
+        // Finalize Arrow Builders and populate Arrow Arrays (resets builders)
+        for (size_t i = 0; i < _nAttrs + _nDims; ++i)
+            ARROW_RETURN_NOT_OK(
+                _arrowBuilders[i]->Finish(&_arrowArrays[i])); // Resets builder
+
+        // Create Arrow Record Batch
+        std::shared_ptr<arrow::RecordBatch> arrowBatch;
+        arrowBatch = arrow::RecordBatch::Make(
+            _arrowSchema, _arrowArrays[0]->length(), _arrowArrays);
+        ARROW_RETURN_NOT_OK(arrowBatch->Validate());
+
+        // Stream Arrow Record Batch to Arrow Buffer using Arrow
+        // Record Batch Writer and Arrow Buffer Output Stream
+        std::shared_ptr<arrow::io::BufferOutputStream> arrowStream;
+        ARROW_ASSIGN_OR_RAISE(
+            arrowStream,
+            // TODO Better initial estimate for Create
+            arrow::io::BufferOutputStream::Create(4096, _arrowPool));
+
+        std::shared_ptr<arrow::ipc::RecordBatchWriter> arrowWriter;
+        ARROW_RETURN_NOT_OK(
+            arrow::ipc::RecordBatchStreamWriter::Open(
+                &*arrowStream, _arrowSchema, &arrowWriter));
+        // Arrow >= 0.17.0
+        // ARROW_ASSIGN_OR_RAISE(
+        //     arrowWriter,
+        //     arrow::ipc::NewStreamWriter(&*arrowStream, _arrowSchema));
+
+        ARROW_RETURN_NOT_OK(arrowWriter->WriteRecordBatch(*arrowBatch));
+        ARROW_RETURN_NOT_OK(arrowWriter->Close());
+
+        ARROW_ASSIGN_OR_RAISE(arrowBuffer, arrowStream->Finish());
+        LOG4CXX_DEBUG(logger, "S3SAVE >> arrowBuffer::size: " << arrowBuffer->size());
+
+        return arrow::Status::OK();
     }
 
-    void advance()
+private:
+    template <typename SciDBType,
+              typename ArrowBuilder,
+              typename ValueFunc> inline
+    arrow::Status populateCell(shared_ptr<ConstChunkIterator> chunkIter,
+                               ValueFunc valueGetter,
+                               const size_t attrIdx)
     {
-        if (_end)
-        {
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "Internal error: iterating past end of cursor";
-        }
-        advanceChunkIters();
-        if (_end)
-        {
-            return;
-        }
-        for(size_t i = 0; i < _nAttrs; ++i)
-        {
-            _currentCell[i] = &(_inputChunkIters[i]->getItem());
-        }
-    }
+        vector<SciDBType> values;
+        vector<bool> is_valid;
 
-    vector <Value const *> const& getCell()
-    {
-        return _currentCell;
-    }
+        while (!chunkIter->end())
+        {
+            Value const& value = chunkIter->getItem();
+            if(value.isNull())
+            {
+                values.push_back(0);
+                is_valid.push_back(false);
+            }
+            else
+            {
+                values.push_back((value.*valueGetter)());
+                is_valid.push_back(true);
+            }
 
-    shared_ptr<ConstChunkIterator> getChunkIter(size_t i)
-    {
-        return _inputChunkIters[i];
-    }
+            // Store coordinates in the buffer
+            if (attrIdx == 0)
+            {
+                Coordinates const &coords = chunkIter->getPosition();
+                for (size_t i = 0; i < _nDims; ++i)
+                    _dimValues[i].push_back(coords[i]);
+            }
 
-    Coordinates const& getPosition()
-    {
-        return _inputChunkIters[0]->getPosition();
+            ++(*chunkIter);
+        }
+
+        return static_cast<ArrowBuilder*>(
+            _arrowBuilders[attrIdx].get())->AppendValues(values, is_valid);
     }
 };
 
@@ -298,9 +516,7 @@ public:
                    Parameters const& parameters,
                    ArrayDesc const& schema):
         PhysicalOperator(logicalName, physicalName, parameters, schema)
-    {
-        LOG4CXX_DEBUG(logger, "S3SAVE >> PhysicalS3Save");
-    }
+    {}
 
     std::shared_ptr<Array> execute(std::vector< std::shared_ptr<Array> >& inputArrays,
                                    std::shared_ptr<Query> query)
@@ -313,27 +529,74 @@ public:
 
         if (haveChunk(inputArray, inputSchema))
         {
+            // Init Array & Chunk Iterators
+            const size_t nAttrs = inputSchema.getAttributes(true).size();
+            const size_t nDims = inputSchema.getDimensions().size();
+            vector<shared_ptr<ConstArrayIterator> > inputArrayIters(nAttrs);
+            vector<shared_ptr<ConstChunkIterator> > inputChunkIters(nAttrs);
+            for (const auto& attr : inputSchema.getAttributes(true))
+                inputArrayIters[attr.getId()] = inputArray->getConstIterator(attr);
 
-            ArrayCursor inputCursor(inputArray);
-            THROW_NOT_OK(setArrowOutput(inputSchema, inputCursor));
+            // Init Populator
+            // if (settings.isArrowFormat())
+            ArrowPopulator populator(inputSchema);
 
+            // Init AWS
             Aws::SDKOptions options;
             Aws::InitAPI(options);
 
-            // Set Metadata
- 	    Aws::Map<Aws::String, Aws::String> metadata;
+            // Set S3 Metadata
+            Aws::Map<Aws::String, Aws::String> metadata;
             ostringstream out;
             printSchema(out, inputSchema);
             metadata["schema"] = Aws::String(out.str().c_str());
-            metadata["s3bridge_version"] = Aws::String(to_string(S3BRIDGE_VERSION).c_str());
-            metadata["attribute_mapping"] = Aws::String("UNUSED");
-
+            metadata["version"] = Aws::String(TO_STR(S3BRIDGE_VERSION));
+            metadata["attribute"] = Aws::String("ALL");
             // if (settings.isArrowFormat())
             metadata["format"] = Aws::String("arrow");
 
-            uploadS3(Aws::String(settings.getBucketName().c_str()),
-                     Aws::String(settings.getBucketPrefix().c_str()),
-                     metadata);
+            Aws::String bucketName = Aws::String(settings.getBucketName().c_str());
+            out.str("");
+            out << settings.getBucketPrefix() << "/metadata";
+            uploadToS3(bucketName,
+                       Aws::String(out.str().c_str()),
+                       metadata,
+                       NULL);
+
+            while (!inputArrayIters[0]->end())
+            {
+                // Init Iterators for Current Chunk
+                for(size_t i = 0; i < nAttrs; ++i)
+                    inputChunkIters[i] = inputArrayIters[i]->getChunk().getConstIterator(
+                        ConstChunkIterator::IGNORE_OVERLAPS);
+
+                // Set Object Name using Top-Left Coordinates
+                Coordinates const &coords = inputChunkIters[0]->getPosition();
+                ostringstream object_name;
+                object_name << settings.getBucketPrefix() << "/chunk";
+                for (size_t i = 0; i < nDims; ++i)
+                {
+                    object_name << "_" << coords[i];
+                    out.str("");
+                    out << "dim-" << i;
+                    metadata[Aws::String(out.str().c_str())] =
+                        Aws::String(to_string(coords[i]).c_str());
+                }
+
+                // TODO Can chunk iterator be empty?
+                std::shared_ptr<arrow::Buffer> arrowBuffer;
+                THROW_NOT_OK(
+                    populator.populateArrowBuffer(
+                        inputSchema, inputChunkIters, arrowBuffer));
+
+                uploadToS3(bucketName,
+                           Aws::String(object_name.str().c_str()),
+                           metadata,
+                           arrowBuffer);
+
+                // Advance Array Iterators
+                for(size_t i =0; i < nAttrs; ++i) ++(*inputArrayIters[i]);
+            }
             Aws::ShutdownAPI(options);
         }
 
@@ -341,11 +604,10 @@ public:
     }
 
 private:
-    std::shared_ptr<arrow::Buffer> _arrowBuffer;
-
-    void uploadS3(const Aws::String& bucket_name,
-                  const Aws::String& object_name,
-                  const Aws::Map<Aws::String, Aws::String> &metadata)
+    void uploadToS3(const Aws::String& bucket_name,
+                    const Aws::String& object_name,
+                    const Aws::Map<Aws::String, Aws::String>& metadata,
+                    std::shared_ptr<arrow::Buffer> arrowBuffer)
     {
         Aws::Client::ClientConfiguration clientConfig;
         Aws::S3::S3Client s3_client(clientConfig);
@@ -353,9 +615,11 @@ private:
 
         object_request.SetBucket(bucket_name);
         object_request.SetKey(object_name);
-        const std::shared_ptr<Aws::IOStream> input_data = Aws::MakeShared<Aws::StringStream>("");
-        input_data->write(reinterpret_cast<const char*>(_arrowBuffer->data()),
-                          _arrowBuffer->size());
+        const std::shared_ptr<Aws::IOStream> input_data =
+            Aws::MakeShared<Aws::StringStream>("");
+        if (arrowBuffer != NULL)
+            input_data->write(reinterpret_cast<const char*>(arrowBuffer->data()),
+                              arrowBuffer->size());
         object_request.SetBody(input_data);
         object_request.SetMetadata(metadata);
 
@@ -373,414 +637,10 @@ private:
         }
     }
 
-    arrow::Status setArrowOutput(ArrayDesc const& schema, ArrayCursor& cursor)
-    {
-        const Attributes& attrs = schema.getAttributes(true);
-        const size_t nAttrs = attrs.size();
-        const size_t nDims = schema.getDimensions().size();
-        std::vector<TypeEnum> types(nAttrs);
-
-        arrow::MemoryPool* arrowPool = arrow::default_memory_pool();
-        std::vector<std::shared_ptr<arrow::Array>> arrowArrays(nAttrs + nDims);
-        std::vector<std::unique_ptr<arrow::ArrayBuilder>> arrowBuilders(nAttrs + nDims);
-        const std::shared_ptr<arrow::Schema> arrowSchema = attributes2ArrowSchema(schema);
-
-        // Create Arrow Builders
-        size_t i = 0;
-        for (const auto& attr : attrs)
-        {
-            types[i] = typeId2TypeEnum(attr.getType(), true);
-
-            THROW_NOT_OK(arrow::MakeBuilder(arrowPool,
-                                            arrowSchema->field(i)->type(),
-                                            &arrowBuilders[i]));
-            i++;
-        }
-        for(size_t i = nAttrs; i < nAttrs + nDims; ++i)
-        {
-            THROW_NOT_OK(arrow::MakeBuilder(arrowPool,
-                                            arrowSchema->field(i)->type(),
-                                            &arrowBuilders[i]));
-        }
-
-        // Setup coordinates buffers
-        std::vector<std::vector<int64_t>> dimValues(nDims);
-
-        // Append to Arrow Builders
-        while (!cursor.end())
-        {
-            for (size_t attrIdx = 0; attrIdx < nAttrs; ++attrIdx)
-            {
-                shared_ptr<ConstChunkIterator> citer = cursor.getChunkIter(attrIdx);
-
-                // Reset coordinate buffers
-                if (attrIdx == 0)
-                {
-                    for (size_t j = 0; j < nDims; ++j)
-                    {
-                        dimValues[j].clear();
-                    }
-                }
-
-                switch (types[attrIdx])
-                {
-                case TE_BINARY:
-                {
-                    while (!citer->end())
-                    {
-                        Value const& value = citer->getItem();
-                        if(value.isNull())
-                        {
-                            ARROW_RETURN_NOT_OK(
-                                static_cast<arrow::BinaryBuilder*>(
-                                    arrowBuilders[attrIdx].get())->AppendNull());
-                        }
-                        else
-                        {
-                            ARROW_RETURN_NOT_OK(
-                                static_cast<arrow::BinaryBuilder*>(
-                                    arrowBuilders[attrIdx].get())->Append(
-                                        reinterpret_cast<const char*>(
-                                            value.data()),
-                                        value.size()));
-                        }
-
-                        // Store coordinates in the buffer
-                        if (attrIdx == 0)
-                        {
-                            Coordinates const &coords = citer->getPosition();
-                            for (size_t j = 0; j < nDims; ++j)
-                                dimValues[j].push_back(coords[j]);
-                        }
-
-                        ++(*citer);
-                    }
-                    break;
-                }
-                case TE_STRING:
-                {
-                    vector<string> values;
-                    vector<uint8_t> is_valid;
-
-                    while (!citer->end())
-                    {
-                        Value const& value = citer->getItem();
-                        if(value.isNull())
-                        {
-                            values.push_back("");
-                            is_valid.push_back(0);
-                        }
-                        else
-                        {
-                            values.push_back(value.getString());
-                            is_valid.push_back(1);
-                        }
-
-                        // Store coordinates in the buffer
-                        if (attrIdx == 0)
-                        {
-                            Coordinates const &coords = citer->getPosition();
-                            for (size_t j = 0; j < nDims; ++j)
-                                dimValues[j].push_back(coords[j]);
-                        }
-
-                        ++(*citer);
-                    }
-
-                    ARROW_RETURN_NOT_OK(
-                        static_cast<arrow::StringBuilder*>(
-                            arrowBuilders[attrIdx].get())->AppendValues(values, is_valid.data()));
-                    break;
-                }
-                case TE_CHAR:
-                {
-                    vector<string> values;
-                    vector<uint8_t> is_valid;
-
-                    while (!citer->end())
-                    {
-                        Value const& value = citer->getItem();
-                        if(value.isNull())
-                        {
-                            values.push_back("");
-                            is_valid.push_back(0);
-                        }
-                        else
-                        {
-                            values.push_back(string(1, value.getChar()));
-                            is_valid.push_back(1);
-                        }
-
-                        // Store coordinates in the buffer
-                        if (attrIdx == 0)
-                        {
-                            Coordinates const &coords = citer->getPosition();
-                            for (size_t j = 0; j < nDims; ++j)
-                                dimValues[j].push_back(coords[j]);
-                        }
-
-                        ++(*citer);
-                    }
-
-                    ARROW_RETURN_NOT_OK(
-                        static_cast<arrow::StringBuilder*>(
-                            arrowBuilders[attrIdx].get())->AppendValues(values, is_valid.data()));
-                    break;
-                }
-                case TE_BOOL:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<bool,arrow::BooleanBuilder>(
-                            citer,
-                            &Value::getBool,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                case TE_DATETIME:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<int64_t,arrow::Date64Builder>(
-                            citer,
-                            &Value::getDateTime,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                case TE_DOUBLE:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<double,arrow::DoubleBuilder>(
-                            citer,
-                            &Value::getDouble,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                case TE_FLOAT:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<float,arrow::FloatBuilder>(
-                            citer,
-                            &Value::getFloat,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                case TE_INT8:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<int8_t,arrow::Int8Builder>(
-                            citer,
-                            &Value::getInt8,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                case TE_INT16:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<int16_t,arrow::Int16Builder>(
-                            citer,
-                            &Value::getInt16,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                case TE_INT32:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<int32_t,arrow::Int32Builder>(
-                            citer,
-                            &Value::getInt32,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                case TE_INT64:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<int64_t,arrow::Int64Builder>(
-                            citer,
-                            &Value::getInt64,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                case TE_UINT8:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<uint8_t,arrow::UInt8Builder>(
-                            citer,
-                            &Value::getUint8,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                case TE_UINT16:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<uint16_t,arrow::UInt16Builder>(
-                            citer,
-                            &Value::getUint16,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                case TE_UINT32:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<uint32_t,arrow::UInt32Builder>(
-                            citer,
-                            &Value::getUint32,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                case TE_UINT64:
-                {
-                    ARROW_RETURN_NOT_OK((
-                        populateCell<uint64_t,arrow::UInt64Builder>(
-                            citer,
-                            &Value::getUint64,
-                            arrowBuilders,
-                            attrIdx,
-                            nDims,
-                            dimValues)));
-                    break;
-                }
-                default:
-                {
-                    ostringstream error;
-                    error << "Type "
-                          << types[attrIdx]
-                          << " not supported in arrow format";
-                    throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                         SCIDB_LE_ILLEGAL_OPERATION) << error.str();
-                }
-                }
-
-                if (attrIdx == 0)
-                {
-                    // Store coordinates in Arrow arrays
-                    for (size_t j = 0; j < nDims; ++j)
-                    {
-                        ARROW_RETURN_NOT_OK(
-                            static_cast<arrow::Int64Builder*>(
-                                arrowBuilders[nAttrs + j].get()
-                                )->AppendValues(dimValues[j]));
-                    }
-                }
-            }
-
-            cursor.advanceChunkIters();
-        }
-
-        // Finalize Arrow Builders and populate Arrow Arrays (resets builders)
-        for (size_t i = 0; i < nAttrs + nDims; ++i)
-        {
-            ARROW_RETURN_NOT_OK(
-                arrowBuilders[i]->Finish(&arrowArrays[i])); // Resets builder
-        }
-
-        // Create Arrow Record Batch
-        std::shared_ptr<arrow::RecordBatch> arrowBatch;
-        arrowBatch = arrow::RecordBatch::Make(arrowSchema, arrowArrays[0]->length(), arrowArrays);
-        ARROW_RETURN_NOT_OK(arrowBatch->Validate());
-
-        // Stream Arrow Record Batch to Arrow Buffer using Arrow
-        // Record Batch Writer and Arrow Buffer Output Stream
-        std::shared_ptr<arrow::io::BufferOutputStream> arrowStream;
-        ARROW_ASSIGN_OR_RAISE(
-            arrowStream,
-            // TODO Better initial estimate for Create
-            arrow::io::BufferOutputStream::Create(4096, arrowPool));
-
-        std::shared_ptr<arrow::ipc::RecordBatchWriter> arrowWriter;
-        ARROW_RETURN_NOT_OK(
-            arrow::ipc::RecordBatchStreamWriter::Open(
-                &*arrowStream, arrowSchema, &arrowWriter));
-        // Arrow >= 0.17.0
-        // ARROW_ASSIGN_OR_RAISE(
-        //     arrowWriter,
-        //     arrow::ipc::NewStreamWriter(&*arrowStream, arrowSchema));
-
-        ARROW_RETURN_NOT_OK(arrowWriter->WriteRecordBatch(*arrowBatch));
-        ARROW_RETURN_NOT_OK(arrowWriter->Close());
-
-        ARROW_ASSIGN_OR_RAISE(_arrowBuffer, arrowStream->Finish());
-        LOG4CXX_DEBUG(logger, "S3SAVE >> arrowBuffer::size: " << _arrowBuffer->size());
-
-        return arrow::Status::OK();
-    }
-
-    template <typename SciDBType,
-              typename ArrowBuilder,
-              typename ValueFunc> inline
-    arrow::Status populateCell(shared_ptr<ConstChunkIterator> citer,
-                               ValueFunc valueGetter,
-                               std::vector<std::unique_ptr<arrow::ArrayBuilder>> &arrowBuilders,
-                               const size_t attrIdx,
-                               const size_t nDims,
-                               std::vector<std::vector<int64_t>> &dimValues)
-    {
-        vector<SciDBType> values;
-        vector<bool> is_valid;
-
-        while (!citer->end())
-        {
-            Value const& value = citer->getItem();
-            if(value.isNull())
-            {
-                values.push_back(0);
-                is_valid.push_back(false);
-            }
-            else
-            {
-                values.push_back((value.*valueGetter)());
-                is_valid.push_back(true);
-            }
-
-            // Store coordinates in the buffer
-            if (attrIdx == 0)
-            {
-                Coordinates const &coords = citer->getPosition();
-                for (size_t j = 0; j < nDims; ++j)
-                    dimValues[j].push_back(coords[j]);
-            }
-
-            ++(*citer);
-        }
-
-        return static_cast<ArrowBuilder*>(
-            arrowBuilders[attrIdx].get())->AppendValues(values, is_valid);
-    }
-
     bool haveChunk(shared_ptr<Array>& array, ArrayDesc const& schema)
     {
-        shared_ptr<ConstArrayIterator> iter = array->getConstIterator(schema.getAttributes(true).firstDataAttribute());
+        shared_ptr<ConstArrayIterator> iter = array->getConstIterator(
+            schema.getAttributes(true).firstDataAttribute());
         return !(iter->end());
     }
 };
