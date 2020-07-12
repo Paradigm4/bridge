@@ -120,32 +120,37 @@ Note: only single chunks arrays are currently supported.
 1. Save SciDB array in S3:
    ```
    > iquery --afl
-   AFL% s3save(apply(build(<v:int64>[i=0:9], i), w, double(v * v)), bucket_name:'p4tests', bucket_prefix:'foo');
+   AFL% s3save(
+          apply(
+            build(<v:int64>[i=0:9:0:5; j=10:19:0:5], j + i),
+            w, double(v*v)),
+          bucket_name:'p4tests',
+          bucket_prefix:'s3bridge/foo');
    {chunk_no,dest_instance_id,source_instance_id} val
    ```
    The SciDB array is saved in the `p4tests` bucket in the `foo` object.
 1. Load SciDB array from S3 in Python:
    ```
    > python
-   >>> import boto3, pyarrow
-   >>> res = boto3.client('s3').get_object(Bucket="p4tests", Key="foo")
-   >>> res["Metadata"]
-   {'s3bridge_version' : '1',
-    'format'           : 'arrow',
-    'schema'           : 'build<v:int64,w:double> [i=0:9:0:1000000]',
-    'attribute_mapping': 'UNUSED'}
-   >>> pyarrow.ipc.open_stream(res["Body"].read()).read_all().to_pandas()
-      v     w  i
-   0  0   0.0  0
-   1  1   1.0  1
-   2  2   4.0  2
-   3  3   9.0  3
-   4  4  16.0  4
-   5  5  25.0  5
-   6  6  36.0  6
-   7  7  49.0  7
-   8  8  64.0  8
-   9  9  81.0  9
+   >>> import scidbs3
+   >>> ar = scidbs3.S3Array(bucket_name='p4tests', bucket_prefix='s3bridge/foo')
+
+   >>> ar.metadata
+   {'version': '1',
+    'format': 'arrow',
+    'schema': 'build<v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]',
+    'attribute': 'ALL'}
+
+   >>> print(ar.schema)
+   build<v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]
+
+   >>> ch = ar.get_chunk(5, 15)
+   >>> ch.to_pandas()
+        v      w  i   j
+   0   20  400.0  5  15
+   1   21  441.0  5  16
+   2   22  484.0  5  17
+   ...
    ```
 
 ### Troubleshoot
