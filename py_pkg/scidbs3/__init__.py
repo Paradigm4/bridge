@@ -70,10 +70,10 @@ class S3Chunk(object):
             raise Exception(
                 ('Number of arguments, {}, does no match the number of ' +
                  'dimensions, {}. Please specify one start coordiante for ' +
-                 'each dimension.'
-                ).format(len(argv), len(self.array.schema.dims)))
-        self.bucket_postfix = '_'.join(itertools.chain(('chunk', ),
-                                                       (str(arg) for arg in argv)))
+                 'each dimension.').format(
+                     len(argv), len(self.array.schema.dims)))
+        self.bucket_postfix = '_'.join(itertools.chain(
+            ('chunk', ), (str(arg) for arg in argv)))
 
         self._object = None
 
@@ -97,7 +97,8 @@ class S3Chunk(object):
         if self._object is None:
             self._object = self.array._client.get_object(
                 Bucket=self.array.bucket_name,
-                Key='{}/{}'.format(self.array.bucket_prefix, self.bucket_postfix))
+                Key='{}/{}'.format(self.array.bucket_prefix,
+                                   self.bucket_postfix))
         return self._object
 
     def to_pandas(self):
