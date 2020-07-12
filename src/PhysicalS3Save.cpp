@@ -523,11 +523,44 @@ public:
     {
         LOG4CXX_DEBUG(logger, "S3SAVE >> execute");
 
-        S3SaveSettings settings (_parameters, _kwParameters, false, query);
+        S3SaveSettings settings(_parameters, _kwParameters, false, query);
+        shared_ptr<Array> result(new MemArray(_schema, query));
+
         shared_ptr<Array>& inputArray = inputArrays[0];
         ArrayDesc const& inputSchema = inputArray->getArrayDesc();
+        bool haveChunk_ = haveChunk(inputArray, inputSchema);
 
-        if (haveChunk(inputArray, inputSchema))
+        // Exit Early
+        if (!haveChunk_ && !query->isCoordinator())
+            return result;
+
+        // Init AWS
+        Aws::SDKOptions options;
+        Aws::InitAPI(options);
+
+        // Set S3 Metadata
+        Aws::Map<Aws::String, Aws::String> metadata;
+        ostringstream out;
+        printSchema(out, inputSchema);
+        metadata["schema"] = Aws::String(out.str().c_str());
+        metadata["version"] = Aws::String(TO_STR(S3BRIDGE_VERSION));
+        metadata["attribute"] = Aws::String("ALL");
+        // if (settings.isArrowFormat())
+        metadata["format"] = Aws::String("arrow");
+
+        // Coordiantor Creates S3 Metadata Object
+        Aws::String bucketName = Aws::String(settings.getBucketName().c_str());
+        if (query->isCoordinator())
+        {
+            out.str("");
+            out << settings.getBucketPrefix() << "/metadata";
+            uploadToS3(bucketName,
+                       Aws::String(out.str().c_str()),
+                       metadata,
+                       NULL);
+        }
+
+        if (haveChunk_)
         {
             // Init Array & Chunk Iterators
             const size_t nAttrs = inputSchema.getAttributes(true).size();
@@ -540,28 +573,6 @@ public:
             // Init Populator
             // if (settings.isArrowFormat())
             ArrowPopulator populator(inputSchema);
-
-            // Init AWS
-            Aws::SDKOptions options;
-            Aws::InitAPI(options);
-
-            // Set S3 Metadata
-            Aws::Map<Aws::String, Aws::String> metadata;
-            ostringstream out;
-            printSchema(out, inputSchema);
-            metadata["schema"] = Aws::String(out.str().c_str());
-            metadata["version"] = Aws::String(TO_STR(S3BRIDGE_VERSION));
-            metadata["attribute"] = Aws::String("ALL");
-            // if (settings.isArrowFormat())
-            metadata["format"] = Aws::String("arrow");
-
-            Aws::String bucketName = Aws::String(settings.getBucketName().c_str());
-            out.str("");
-            out << settings.getBucketPrefix() << "/metadata";
-            uploadToS3(bucketName,
-                       Aws::String(out.str().c_str()),
-                       metadata,
-                       NULL);
 
             while (!inputArrayIters[0]->end())
             {
@@ -597,10 +608,11 @@ public:
                 // Advance Array Iterators
                 for(size_t i =0; i < nAttrs; ++i) ++(*inputArrayIters[i]);
             }
-            Aws::ShutdownAPI(options);
         }
 
-        return shared_ptr<Array>(new MemArray(_schema, query));
+        Aws::ShutdownAPI(options);
+
+        return result;
     }
 
 private:
