@@ -30,8 +30,8 @@
 #include <query/Expression.h>
 #include <util/PathUtils.h>
 
-#ifndef S3SAVE_SETTINGS
-#define S3SAVE_SETTINGS
+#ifndef S3LOAD_SETTINGS
+#define S3LOAD_SETTINGS
 
 #define S3BRIDGE_VERSION 1
 #define STRINGIFY(x) #x
@@ -44,7 +44,7 @@ using boost::bad_lexical_cast;
 using namespace std;
 
 // Logger for operator. static to prevent visibility of variable outside of file
-static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3save"));
+static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3load"));
 
 namespace scidb
 {
@@ -55,7 +55,7 @@ static const char* const KW_FORMAT	  = "format";
 
 typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t ;
 
-class S3SaveSettings
+class S3LoadSettings
 {
 public:
     static size_t chunkDataOffset()
@@ -135,7 +135,7 @@ private:
         return paramContent;
     }
 
-    bool setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, void (S3SaveSettings::* innersetter)(vector<string>) )
+    bool setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, void (S3LoadSettings::* innersetter)(vector<string>) )
     {
         vector <string> paramContent;
         bool retSet = false;
@@ -154,12 +154,12 @@ private:
             (this->*innersetter)(paramContent);
             retSet = true;
         } else {
-            LOG4CXX_DEBUG(logger, "s3save findKeyword null: " << kw);
+            LOG4CXX_DEBUG(logger, "s3load findKeyword null: " << kw);
         }
         return retSet;
     }
 
-    void setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, bool& alreadySet, void (S3SaveSettings::* innersetter)(vector<string>) )
+    void setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, bool& alreadySet, void (S3LoadSettings::* innersetter)(vector<string>) )
     {
         checkIfSet(alreadySet, kw);
         alreadySet = setKeywordParamString(kwParams, kw, innersetter);
@@ -172,7 +172,7 @@ private:
     }
 
 public:
-    S3SaveSettings(vector<shared_ptr<OperatorParam> > const& operatorParameters,
+    S3LoadSettings(vector<shared_ptr<OperatorParam> > const& operatorParameters,
                    KeywordParameters const& kwParams,
                    bool logical,
                    shared_ptr<Query>& query):
@@ -184,9 +184,9 @@ public:
         bool  bucketPrefixSet = false;
         bool  formatSet       = false;
 
-        setKeywordParamString(kwParams, KW_BUCKET_NAME,   bucketNameSet,   &S3SaveSettings::setParamBucketName);
-        setKeywordParamString(kwParams, KW_BUCKET_PREFIX, bucketPrefixSet, &S3SaveSettings::setParamBucketPrefix);
-        setKeywordParamString(kwParams, KW_FORMAT,        formatSet,       &S3SaveSettings::setParamFormat);
+        setKeywordParamString(kwParams, KW_BUCKET_NAME,   bucketNameSet,   &S3LoadSettings::setParamBucketName);
+        setKeywordParamString(kwParams, KW_BUCKET_PREFIX, bucketPrefixSet, &S3LoadSettings::setParamBucketPrefix);
+        setKeywordParamString(kwParams, KW_FORMAT,        formatSet,       &S3LoadSettings::setParamFormat);
 
         if(_bucketName.size() == 0)
         {
@@ -218,4 +218,4 @@ public:
 }
 
 
-#endif //S3SaveSettings
+#endif //S3LoadSettings

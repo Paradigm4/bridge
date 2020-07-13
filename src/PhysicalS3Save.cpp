@@ -53,7 +53,7 @@
 namespace scidb
 {
 
-static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.alt_save"));
+static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3save"));
 
 using namespace scidb;
 
