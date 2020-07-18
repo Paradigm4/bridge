@@ -130,9 +130,11 @@ Note: only single chunks arrays are currently supported.
    ```
    > iquery --afl
    AFL% s3save(
-          apply(
-            build(<v:int64>[i=0:9:0:5; j=10:19:0:5], j + i),
-            w, double(v*v)),
+          filter(
+            apply(
+              build(<v:int64>[i=0:9:0:5; j=10:19:0:5], j + i),
+              w, double(v*v)),
+            i >= 5 and w % 2 = 0),
           bucket_name:'p4tests',
           bucket_prefix:'s3bridge/foo');
    {chunk_no,dest_instance_id,source_instance_id} val
@@ -157,8 +159,18 @@ Note: only single chunks arrays are currently supported.
    >>> ch.to_pandas()
         v      w  i   j
    0   20  400.0  5  15
-   1   21  441.0  5  16
-   2   22  484.0  5  17
+   1   22  484.0  5  17
+   2   24  576.0  5  19
+   ...
+
+   >>> chunks = ar.list_chunks()
+   >>> chunks
+   ((5, 10), (5, 15))
+   >>> ar.get_chunk(*chunks[0]).to_pandas()
+        v      w  i   j
+   0   16  256.0  5  11
+   1   18  324.0  5  13
+   2   16  256.0  6  10
    ...
    ```
 

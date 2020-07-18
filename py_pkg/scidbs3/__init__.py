@@ -56,6 +56,13 @@ class S3Array(object):
             self._schema = scidbpy.Schema.fromstring(self.metadata['schema'])
         return self._schema
 
+    def list_chunks(self):
+        prefix = '{}/chunk_'.format(self.bucket_prefix)
+        result = self.client.list_objects_v2(Bucket = self.bucket_name,
+                                             Prefix = prefix)
+        return tuple(sorted(tuple(map(int, e['Key'].lstrip(prefix).split('_')))
+                            for e in result['Contents']))
+
     def get_chunk(self, *argv):
         return S3Chunk(self, *argv)
 
