@@ -521,14 +521,16 @@ public:
     std::shared_ptr<Array> execute(std::vector< std::shared_ptr<Array> >& inputArrays,
                                    std::shared_ptr<Query> query)
     {
-        LOG4CXX_DEBUG(logger, "S3SAVE >> execute");
-
         S3SaveSettings settings(_parameters, _kwParameters, false, query);
         shared_ptr<Array> result(new MemArray(_schema, query));
 
         shared_ptr<Array>& inputArray = inputArrays[0];
         ArrayDesc const& inputSchema = inputArray->getArrayDesc();
         bool haveChunk_ = haveChunk(inputArray, inputSchema);
+        LOG4CXX_DEBUG(logger,
+                      "S3SAVE >> inst " << query->getInstanceID()
+                      << " coord " << query->isCoordinator()
+                      << " haveChunk " << haveChunk_);
 
         // Exit Early
         if (!haveChunk_ && !query->isCoordinator())
@@ -576,34 +578,38 @@ public:
 
             while (!inputArrayIters[0]->end())
             {
-                // Init Iterators for Current Chunk
-                for(size_t i = 0; i < nAttrs; ++i)
-                    inputChunkIters[i] = inputArrayIters[i]->getChunk().getConstIterator(
-                        ConstChunkIterator::IGNORE_OVERLAPS);
-
-                // Set Object Name using Top-Left Coordinates
-                Coordinates const &coords = inputChunkIters[0]->getPosition();
-                ostringstream object_name;
-                object_name << settings.getBucketPrefix() << "/chunk";
-                for (size_t i = 0; i < nDims; ++i)
+                if (!inputArrayIters[0]->getChunk().getConstIterator(
+                        ConstChunkIterator::IGNORE_OVERLAPS)->end())
                 {
-                    object_name << "_" << coords[i];
-                    out.str("");
-                    out << "dim-" << i;
-                    metadata[Aws::String(out.str().c_str())] =
-                        Aws::String(to_string(coords[i]).c_str());
+                    // Init Iterators for Current Chunk
+                    for(size_t i = 0; i < nAttrs; ++i)
+                        inputChunkIters[i] = inputArrayIters[i]->getChunk(
+                            ).getConstIterator(ConstChunkIterator::IGNORE_OVERLAPS);
+
+                    // Set Object Name using Top-Left Coordinates
+                    Coordinates const &coords = inputChunkIters[0]->getFirstPosition();
+                    ostringstream object_name;
+                    object_name << settings.getBucketPrefix() << "/chunk";
+                    for (size_t i = 0; i < nDims; ++i)
+                    {
+                        object_name << "_" << coords[i];
+                        out.str("");
+                        out << "dim-" << i;
+                        metadata[Aws::String(out.str().c_str())] =
+                            Aws::String(to_string(coords[i]).c_str());
+                    }
+
+                    // TODO Can chunk iterator be empty?
+                    std::shared_ptr<arrow::Buffer> arrowBuffer;
+                    THROW_NOT_OK(
+                        populator.populateArrowBuffer(
+                            inputSchema, inputChunkIters, arrowBuffer));
+
+                    uploadToS3(bucketName,
+                               Aws::String(object_name.str().c_str()),
+                               metadata,
+                               arrowBuffer);
                 }
-
-                // TODO Can chunk iterator be empty?
-                std::shared_ptr<arrow::Buffer> arrowBuffer;
-                THROW_NOT_OK(
-                    populator.populateArrowBuffer(
-                        inputSchema, inputChunkIters, arrowBuffer));
-
-                uploadToS3(bucketName,
-                           Aws::String(object_name.str().c_str()),
-                           metadata,
-                           arrowBuffer);
 
                 // Advance Array Iterators
                 for(size_t i =0; i < nAttrs; ++i) ++(*inputArrayIters[i]);
