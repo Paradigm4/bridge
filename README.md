@@ -20,7 +20,7 @@ This document contains installation and usage instructions of the
       ```
    1. RHEL/CentOS:
       ```
-      dnf install libcurl-devel
+      yum install libcurl-devel
       ```
 1. Download and unzip the SDK:
    ```
@@ -89,6 +89,15 @@ S3 bucket used.
    wget -O- https://paradigm4.github.io/extra-scidb-libs/install.sh \
    | sudo sh -s -- --only-prereq
    ```
+1. Install Apache Arrow development library:
+   1. Ubuntu
+      ```
+      apt-get install libarrow-dev=0.16.0-1
+      ```
+   1. RHEL/CentOS
+      ```
+      yum install arrow-devel-0.16.0
+      ```
 1. Apache Arrow Python package `PyArrow` version `0.16.0` is also
    required. It can be installed by running:
    ```
