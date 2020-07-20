@@ -58,8 +58,8 @@ class S3Array(object):
 
     def list_chunks(self):
         prefix = '{}/chunk_'.format(self.bucket_prefix)
-        result = self.client.list_objects_v2(Bucket = self.bucket_name,
-                                             Prefix = prefix)
+        result = self.client.list_objects_v2(Bucket=self.bucket_name,
+                                             Prefix=prefix)
         return tuple(sorted(tuple(map(int, e['Key'].lstrip(prefix).split('_')))
                             for e in result['Contents']))
 
