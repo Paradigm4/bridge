@@ -622,31 +622,31 @@ public:
     }
 
 private:
-    void uploadToS3(const Aws::String& bucket_name,
-                    const Aws::String& object_name,
+    void uploadToS3(const Aws::String& bucketName,
+                    const Aws::String& objectName,
                     const Aws::Map<Aws::String, Aws::String>& metadata,
                     std::shared_ptr<arrow::Buffer> arrowBuffer)
     {
         Aws::Client::ClientConfiguration clientConfig;
-        Aws::S3::S3Client s3_client(clientConfig);
-        Aws::S3::Model::PutObjectRequest object_request;
+        Aws::S3::S3Client s3Client(clientConfig);
+        Aws::S3::Model::PutObjectRequest objectRequest;
 
-        object_request.SetBucket(bucket_name);
-        object_request.SetKey(object_name);
-        const std::shared_ptr<Aws::IOStream> input_data =
+        objectRequest.SetBucket(bucketName);
+        objectRequest.SetKey(objectName);
+        const std::shared_ptr<Aws::IOStream> inputData =
             Aws::MakeShared<Aws::StringStream>("");
         if (arrowBuffer != NULL)
-            input_data->write(reinterpret_cast<const char*>(arrowBuffer->data()),
-                              arrowBuffer->size());
-        object_request.SetBody(input_data);
-        object_request.SetMetadata(metadata);
+            inputData->write(reinterpret_cast<const char*>(arrowBuffer->data()),
+                             arrowBuffer->size());
+        objectRequest.SetBody(inputData);
+        objectRequest.SetMetadata(metadata);
 
-        auto put_object_outcome = s3_client.PutObject(object_request);
-        if (!put_object_outcome.IsSuccess()) {
+        auto putObjectOutcome = s3Client.PutObject(objectRequest);
+        if (!putObjectOutcome.IsSuccess()) {
             ostringstream out;
-            out << "Upload to s3://" << bucket_name << "/" << object_name
+            out << "Upload to s3://" << bucketName << "/" << objectName
                 << " failed. ";
-            auto error = put_object_outcome.GetError();
+            auto error = putObjectOutcome.GetError();
             out << error.GetMessage() << ". ";
             if (error.GetResponseCode() == Aws::Http::HttpResponseCode::FORBIDDEN)
                 out << "See https://aws.amazon.com/premiumsupport/knowledge-center/s3-troubleshoot-403/";
