@@ -627,8 +627,7 @@ private:
                     const Aws::Map<Aws::String, Aws::String>& metadata,
                     std::shared_ptr<arrow::Buffer> arrowBuffer)
     {
-        Aws::Client::ClientConfiguration clientConfig;
-        Aws::S3::S3Client s3Client(clientConfig);
+        Aws::S3::S3Client s3Client;
         Aws::S3::Model::PutObjectRequest objectRequest;
 
         objectRequest.SetBucket(bucketName);
