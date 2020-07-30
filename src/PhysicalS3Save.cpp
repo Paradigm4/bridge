@@ -525,7 +525,8 @@ public:
         shared_ptr<Array> result(new MemArray(_schema, query));
 
         shared_ptr<Array>& inputArray = inputArrays[0];
-        ArrayDesc const& inputSchema = inputArray->getArrayDesc();
+        ArrayDesc inputSchema(inputArray->getArrayDesc());
+        inputSchema.setName("");
         bool haveChunk_ = haveChunk(inputArray, inputSchema);
         LOG4CXX_DEBUG(logger,
                       "S3SAVE >> inst " << query->getInstanceID()
