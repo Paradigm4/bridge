@@ -542,15 +542,14 @@ public:
         Aws::SDKOptions options;
         Aws::InitAPI(options);
 
-        // Set S3 Metadata
-        Aws::Map<Aws::String, Aws::String> metadata;
+        // Prep Metadata
         ostringstream out;
-        printSchema(out, inputSchema);
-        metadata["schema"] = Aws::String(out.str().c_str());
-        metadata["version"] = Aws::String(TO_STR(S3BRIDGE_VERSION));
-        metadata["attribute"] = Aws::String("ALL");
-        // if (settings.isArrowFormat())
-        metadata["format"] = Aws::String("arrow");
+        out << "schema\t"; printSchema(out, inputSchema); out << "\n";
+        out << "version\t" << S3BRIDGE_VERSION << "\n";
+        out << "attribute\tALL\n";
+        out << "format\tarrow\n";
+        string metadata = out.str();
+        LOG4CXX_DEBUG(logger, "S3SAVE >> metadata " << metadata);
 
         // Coordiantor Creates S3 Metadata Object
         Aws::String bucketName = Aws::String(settings.getBucketName().c_str());
@@ -560,8 +559,8 @@ public:
             out << settings.getBucketPrefix() << "/metadata";
             uploadToS3(bucketName,
                        Aws::String(out.str().c_str()),
-                       metadata,
-                       NULL);
+                       metadata.c_str(),
+                       metadata.size());
         }
 
         if (haveChunk_)
@@ -590,15 +589,11 @@ public:
 
                     // Set Object Name using Top-Left Coordinates
                     Coordinates const &coords = inputChunkIters[0]->getFirstPosition();
-                    ostringstream object_name;
-                    object_name << settings.getBucketPrefix() << "/chunk";
+                    out.str("");
+                    out << settings.getBucketPrefix() << "/chunk";
                     for (size_t i = 0; i < nDims; ++i)
                     {
-                        object_name << "_" << coords[i];
-                        out.str("");
-                        out << "dim-" << i;
-                        metadata[Aws::String(out.str().c_str())] =
-                            Aws::String(to_string(coords[i]).c_str());
+                        out << "_" << coords[i];
                     }
 
                     // TODO Can chunk iterator be empty?
@@ -608,9 +603,9 @@ public:
                             inputSchema, inputChunkIters, arrowBuffer));
 
                     uploadToS3(bucketName,
-                               Aws::String(object_name.str().c_str()),
-                               metadata,
-                               arrowBuffer);
+                               Aws::String(out.str().c_str()),
+                               reinterpret_cast<const char*>(arrowBuffer->data()),
+                               arrowBuffer->size());
                 }
 
                 // Advance Array Iterators
@@ -626,8 +621,8 @@ public:
 private:
     void uploadToS3(const Aws::String& bucketName,
                     const Aws::String& objectName,
-                    const Aws::Map<Aws::String, Aws::String>& metadata,
-                    std::shared_ptr<arrow::Buffer> arrowBuffer)
+                    const char* data,
+                    const size_t data_size)
     {
         Aws::S3::S3Client s3Client;
         Aws::S3::Model::PutObjectRequest objectRequest;
@@ -636,12 +631,8 @@ private:
         objectRequest.SetKey(objectName);
         const std::shared_ptr<Aws::IOStream> inputData =
             Aws::MakeShared<Aws::StringStream>("");
-        if (arrowBuffer != NULL)
-            inputData->write(reinterpret_cast<const char*>(arrowBuffer->data()),
-                             arrowBuffer->size());
+        inputData->write(data, data_size);
         objectRequest.SetBody(inputData);
-        objectRequest.SetMetadata(metadata);
-
 
         auto outcome = s3Client.PutObject(objectRequest);
         S3_EXCEPTION_NOT_SUCCESS("Upload");

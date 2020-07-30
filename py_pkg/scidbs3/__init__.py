@@ -6,6 +6,10 @@ import scidbpy
 __version__ = '19.11.1'
 
 
+def metadata_from_string(input):
+    return dict(l.split('\t') for l in input.split('\n'))
+
+
 class S3Array(object):
     """Wrapper for SciDB array stored in S3"""
 
@@ -17,6 +21,7 @@ class S3Array(object):
 
         self._client = None
         self._object = None
+        self._metadata = None
         self._schema = None
 
     def __iter__(self):
@@ -48,7 +53,9 @@ class S3Array(object):
 
     @property
     def metadata(self):
-        return self.object["Metadata"]
+        if self._metadata is None:
+            self._metadata = metadata_from_string(self.object["Body"].read())
+        return self._metadata
 
     @property
     def schema(self):
