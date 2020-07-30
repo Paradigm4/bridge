@@ -35,6 +35,7 @@
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/PutObjectRequest.h>
 
+#include "S3Common.h"
 #include "S3SaveSettings.h"
 
 
@@ -641,18 +642,9 @@ private:
         objectRequest.SetBody(inputData);
         objectRequest.SetMetadata(metadata);
 
-        auto putObjectOutcome = s3Client.PutObject(objectRequest);
-        if (!putObjectOutcome.IsSuccess()) {
-            ostringstream out;
-            out << "Upload to s3://" << bucketName << "/" << objectName
-                << " failed. ";
-            auto error = putObjectOutcome.GetError();
-            out << error.GetMessage() << ". ";
-            if (error.GetResponseCode() == Aws::Http::HttpResponseCode::FORBIDDEN)
-                out << "See https://aws.amazon.com/premiumsupport/knowledge-center/s3-troubleshoot-403/";
-            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                 SCIDB_LE_UNKNOWN_ERROR) << out.str();
-        }
+
+        auto outcome = s3Client.PutObject(objectRequest);
+        S3_EXCEPTION_NOT_SUCCESS("Upload");
     }
 
     bool haveChunk(shared_ptr<Array>& array, ArrayDesc const& schema)

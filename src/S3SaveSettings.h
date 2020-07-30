@@ -33,10 +33,6 @@
 #ifndef S3SAVE_SETTINGS
 #define S3SAVE_SETTINGS
 
-#define S3BRIDGE_VERSION 1
-#define STRINGIFY(x) #x
-#define TO_STR(x) STRINGIFY(x)
-
 using boost::algorithm::trim;
 using boost::starts_with;
 using boost::lexical_cast;
@@ -154,7 +150,7 @@ private:
             (this->*innersetter)(paramContent);
             retSet = true;
         } else {
-            LOG4CXX_DEBUG(logger, "s3save findKeyword null: " << kw);
+            LOG4CXX_DEBUG(logger, "S3SAVE >> findKeyword null: " << kw);
         }
         return retSet;
     }
