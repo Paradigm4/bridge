@@ -7,7 +7,7 @@ __version__ = '19.11.1'
 
 
 def metadata_from_string(input):
-    return dict(l.split('\t') for l in input.split('\n'))
+    return dict(l.split('\t') for l in input.strip().split('\n'))
 
 
 class S3Array(object):
@@ -54,7 +54,7 @@ class S3Array(object):
     @property
     def metadata(self):
         if self._metadata is None:
-            self._metadata = metadata_from_string(self.object["Body"].read())
+            self._metadata = metadata_from_string(self.object["Body"].read().decode('utf-8'))
         return self._metadata
 
     @property

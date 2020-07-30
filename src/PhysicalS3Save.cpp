@@ -547,21 +547,22 @@ public:
         if (query->isCoordinator())
         {
             // Prep Metadata
-            ostringstream out;
-            out << "schema\t"; printSchema(out, inputSchema); out << "\n";
-            out << "version\t" << S3BRIDGE_VERSION << "\n";
-            out << "attribute\tALL\n";
-            out << "format\tarrow\n";
-            const std::shared_ptr<Aws::IOStream> inputData =
-                Aws::MakeShared<Aws::StringStream>(out.str().c_str());
+            const std::shared_ptr<Aws::IOStream> metaData =
+                Aws::MakeShared<Aws::StringStream>("");
+            *metaData << "schema\t";
+            printSchema(*metaData, inputSchema);
+            *metaData << "\n";
+            *metaData << "version\t" << S3BRIDGE_VERSION << "\n";
+            *metaData << "attribute\tALL\n";
+            *metaData << "format\tarrow\n";
 
             // Set Object Name
-            out.str("");
+            ostringstream out;
             out << settings.getBucketPrefix() << "/metadata";
 
             uploadToS3(bucketName,
                        Aws::String(out.str().c_str()),
-                       inputData);
+                       metaData);
         }
 
         if (haveChunk_)
@@ -603,14 +604,14 @@ public:
                             inputSchema, inputChunkIters, arrowBuffer));
 
                     // Set Chunk Data
-                    const std::shared_ptr<Aws::IOStream> inputData =
+                    const std::shared_ptr<Aws::IOStream> chunkData =
                         Aws::MakeShared<Aws::StringStream>("");
-                    inputData->write(reinterpret_cast<const char*>(arrowBuffer->data()),
+                    chunkData->write(reinterpret_cast<const char*>(arrowBuffer->data()),
                                      arrowBuffer->size());
 
                     uploadToS3(bucketName,
                                Aws::String(out.str().c_str()),
-                               inputData);
+                               chunkData);
 
                 }
 
