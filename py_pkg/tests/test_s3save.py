@@ -46,7 +46,7 @@ s3save(
 
     assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
     assert array.metadata == {**base_metadata,
-                              **{'schema': 'build{}'.format(
+                              **{'schema': '{}'.format(
                                   schema.replace(']', ':0:1000000]'))}}
     assert array.list_chunks() == ((0,),)
     pandas.testing.assert_frame_equal(
@@ -72,7 +72,7 @@ s3save(
 
     assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
     assert array.metadata == {**base_metadata,
-                              **{'schema': 'build{}'.format(schema)}}
+                              **{'schema': '{}'.format(schema)}}
     assert array.list_chunks() == tuple((i,) for i in range(0, 20, 5))
     pandas.testing.assert_frame_equal(
         array.get_chunk(0).to_pandas(),
@@ -100,7 +100,7 @@ s3save(
 
     assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
     assert array.metadata == {**base_metadata,
-                              **{'schema': 'build{}'.format(schema)}}
+                              **{'schema': '{}'.format(schema)}}
     assert array.list_chunks() == tuple((i, j)
                                         for i in range(0, 10, 5)
                                         for j in range(10, 20, 5))
@@ -133,7 +133,7 @@ s3save(
 
     assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
     assert array.metadata == {**base_metadata,
-                              **{'schema': 'build{}'.format(schema)}}
+                              **{'schema': '{}'.format(schema)}}
     assert array.list_chunks() == tuple((i, j)
                                         for i in range(0, 10, 5)
                                         for j in range(10, 20, 5))
@@ -165,7 +165,7 @@ s3save(
 
     assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
     assert array.metadata == {**base_metadata,
-                              **{'schema': 'build{}'.format(schema)}}
+                              **{'schema': '{}'.format(schema)}}
     assert array.list_chunks() == tuple((i, 15)
                                         for i in range(0, 10, 5))
     pandas.testing.assert_frame_equal(
