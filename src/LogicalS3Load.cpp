@@ -23,9 +23,16 @@
 * END_COPYRIGHT
 */
 
-#include <query/LogicalOperator.h>
+#include <query/LogicalQueryPlan.h>
+#include <query/Parser.h>
 
+#include <aws/core/Aws.h>
+#include <aws/s3/S3Client.h>
+#include <aws/s3/model/GetObjectRequest.h>
+
+#include "S3Common.h"
 #include "S3LoadSettings.h"
+
 
 namespace scidb
 {
@@ -41,14 +48,6 @@ public:
     static PlistSpec const* makePlistSpec()
     {
         static PlistSpec argSpec {
-            { "", // positionals
-              RE(RE::LIST, {
-                 RE(PP(PLACEHOLDER_INPUT)),
-                 RE(RE::STAR, {
-                    RE(PP(PLACEHOLDER_CONSTANT, TID_STRING))
-                 })
-              })
-            },
             { KW_BUCKET_NAME,   RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
             { KW_BUCKET_PREFIX, RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
             { KW_FORMAT,        RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) }
@@ -59,23 +58,59 @@ public:
     ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, shared_ptr< Query> query)
     {
         ArrayDesc const& inputSchema = schemas[0];
-        S3LoadSettings settings (_parameters, _kwParameters, true, query);
-        vector<DimensionDesc> dimensions(3);
-        size_t const nInstances = query->getInstancesCount();
-        dimensions[0] = DimensionDesc("chunk_no",    0, 0, CoordinateBounds::getMax(), CoordinateBounds::getMax(), 1, 0);
-        dimensions[1] = DimensionDesc("dest_instance_id",   0, 0, nInstances-1, nInstances-1, 1, 0);
-        dimensions[2] = DimensionDesc("source_instance_id", 0, 0, nInstances-1, nInstances-1, 1, 0);
-        Attributes attributes;
-        attributes.push_back(
-            AttributeDesc("val", TID_STRING, AttributeDesc::IS_NULLABLE, CompressorType::NONE));
-        return ArrayDesc(
-            "s3load",
-            attributes,
-            dimensions,
-            createDistribution(defaultDistType()),
-            query->getDefaultArrayResidency(),
-            0,
-            false);
+        S3LoadSettings settings(_parameters, _kwParameters, true, query);
+
+        // Init AWS
+        Aws::SDKOptions options;
+        Aws::InitAPI(options);
+
+        // Download Metadata
+        Aws::String bucketName = Aws::String(settings.getBucketName().c_str());
+        ostringstream out;
+        out << settings.getBucketPrefix() << "/metadata";
+        Aws::String objectName = Aws::String(out.str().c_str());
+
+        Aws::S3::S3Client s3Client;
+        Aws::S3::Model::GetObjectRequest objectRequest;
+
+        objectRequest.SetBucket(bucketName);
+        objectRequest.SetKey(objectName);
+
+        auto outcome = s3Client.GetObject(objectRequest);
+        S3_EXCEPTION_NOT_SUCCESS("Get");
+
+        // Parse Metadata
+        map<string, string> metadata;
+        auto& metadata_stream = outcome.GetResultWithOwnership().GetBody();
+        string line;
+        while (getline(metadata_stream, line)) {
+          istringstream line_stream(line);
+          string key, value;
+          if (!getline(line_stream, key, '\t'))
+            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                 SCIDB_LE_UNKNOWN_ERROR)
+              << "Invalid metadata line '" << line << "'";
+          if (!getline(line_stream, value))
+            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                 SCIDB_LE_UNKNOWN_ERROR)
+              << "Invalid metadata line '" << line << "'";
+          metadata[key] = value;
+        }
+        string schema = metadata["schema"];
+        LOG4CXX_DEBUG(logger, "S3LOAD >> schema: " << schema);
+        Aws::ShutdownAPI(options);
+
+        // Build Fake Query and Extract Schema
+        std::shared_ptr<Query> innerQuery = Query::createFakeQuery(
+                         query->getPhysicalCoordinatorID(),
+                         query->mapLogicalToPhysical(query->getInstanceID()),
+                         query->getCoordinatorLiveness());
+        out.str("");
+        out << "input(" << schema << ", '/dev/null')";
+        innerQuery->queryString = out.str();
+        innerQuery->logicalPlan = std::make_shared<LogicalPlan>(
+            parseStatement(innerQuery, true));
+        return innerQuery->logicalPlan->inferTypes(innerQuery);
     }
 };
 

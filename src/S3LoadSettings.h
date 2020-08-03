@@ -154,7 +154,7 @@ private:
             (this->*innersetter)(paramContent);
             retSet = true;
         } else {
-            LOG4CXX_DEBUG(logger, "s3load findKeyword null: " << kw);
+            LOG4CXX_DEBUG(logger, "S3LOAD >> findKeyword null: " << kw);
         }
         return retSet;
     }
