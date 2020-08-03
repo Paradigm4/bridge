@@ -27,8 +27,6 @@
 #include <query/Parser.h>
 
 #include <aws/core/Aws.h>
-#include <aws/s3/S3Client.h>
-#include <aws/s3/model/GetObjectRequest.h>
 
 #include "S3Common.h"
 #include "S3LoadSettings.h"
@@ -60,43 +58,17 @@ public:
         ArrayDesc const& inputSchema = schemas[0];
         S3LoadSettings settings(_parameters, _kwParameters, true, query);
 
-        // Init AWS
+        // Get Metadata from AWS
         Aws::SDKOptions options;
         Aws::InitAPI(options);
-
-        // Download Metadata
-        Aws::String bucketName = Aws::String(settings.getBucketName().c_str());
-        ostringstream out;
-        out << settings.getBucketPrefix() << "/metadata";
-        Aws::String objectName = Aws::String(out.str().c_str());
-
-        Aws::S3::S3Client s3Client;
-        Aws::S3::Model::GetObjectRequest objectRequest;
-
-        objectRequest.SetBucket(bucketName);
-        objectRequest.SetKey(objectName);
-
-        auto outcome = s3Client.GetObject(objectRequest);
-        S3_EXCEPTION_NOT_SUCCESS("Get");
-
-        // Parse Metadata
         map<string, string> metadata;
-        auto& metadata_stream = outcome.GetResultWithOwnership().GetBody();
-        string line;
-        while (getline(metadata_stream, line)) {
-          istringstream line_stream(line);
-          string key, value;
-          if (!getline(line_stream, key, '\t'))
-            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                 SCIDB_LE_UNKNOWN_ERROR)
-              << "Invalid metadata line '" << line << "'";
-          if (!getline(line_stream, value))
-            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                 SCIDB_LE_UNKNOWN_ERROR)
-              << "Invalid metadata line '" << line << "'";
-          metadata[key] = value;
-        }
-        string schema = metadata["schema"];
+        getMetadata(Aws::String(),//settings.getBucketName().c_str()),
+                    Aws::String()//,(settings.getBucketPrefix() +
+                    //"/metadata").c_str()),
+                    //metadata
+            );
+        string schema = "<x:int64>[i=0:9]";
+        // string schema = metadata["schema"];
         LOG4CXX_DEBUG(logger, "S3LOAD >> schema: " << schema);
         Aws::ShutdownAPI(options);
 
@@ -105,7 +77,7 @@ public:
                          query->getPhysicalCoordinatorID(),
                          query->mapLogicalToPhysical(query->getInstanceID()),
                          query->getCoordinatorLiveness());
-        out.str("");
+        ostringstream out;
         out << "input(" << schema << ", '/dev/null')";
         innerQuery->queryString = out.str();
         innerQuery->logicalPlan = std::make_shared<LogicalPlan>(
@@ -116,4 +88,4 @@ public:
 
 REGISTER_LOGICAL_OPERATOR_FACTORY(LogicalS3Load, "s3load");
 
-} // emd namespace scidb
+} // end namespace scidb

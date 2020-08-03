@@ -1,10 +1,15 @@
 #ifndef S3_COMMON
 #define S3_COMMON
 
+#include <map>
+#include <system/UserException.h>
+#include <aws/core/Aws.h>
+
+
 #define S3BRIDGE_VERSION 1
 
-#define S3_EXCEPTION_NOT_SUCCESS(operation)                                             \
-  {                                                                                     \
+#define S3_EXCEPTION_NOT_SUCCESS(operation)                             \
+  {                                                                     \
       if (!outcome.IsSuccess()) {                                                       \
           ostringstream exception_output;                                               \
           exception_output << (operation) << " operation on s3://"                      \
@@ -18,5 +23,14 @@
                                SCIDB_LE_UNKNOWN_ERROR) << exception_output.str();       \
       }                                                                                 \
   }
+
+
+using namespace std;
+
+
+void getMetadata(const Aws::String bucketName,
+                 const Aws::String objectName//,
+                 //map<string, string> metadata
+                 );
 
 #endif //S3Common

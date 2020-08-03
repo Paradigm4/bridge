@@ -31,8 +31,8 @@ INC     += -I/opt/aws/include
 LIBS    := -shared -Wl,-soname,libs3backer.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
 LIBS    += -rdynamic /opt/aws/lib/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,/opt/aws/lib
 
-SRCS    := plugin.cpp LogicalS3Save.cpp PhysicalS3Save.cpp LogicalS3Load.cpp PhysicalS3Load.cpp
-HEADERS := S3SaveSettings.h S3LoadSettings.h
+SRCS    := plugin.cpp S3Common.cpp LogicalS3Save.cpp PhysicalS3Save.cpp LogicalS3Load.cpp PhysicalS3Load.cpp
+HEADERS := S3Common.h S3SaveSettings.h S3LoadSettings.h
 OBJS    := $(SRCS:%.cpp=%.o)
 
 
