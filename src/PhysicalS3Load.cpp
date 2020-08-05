@@ -28,13 +28,12 @@
 
 #include <arrow/builder.h>
 #include <arrow/io/memory.h>
-#include <arrow/ipc/writer.h>
+#include <arrow/ipc/reader.h>
 #include <arrow/record_batch.h>
 
-#include <aws/core/Aws.h>
-#include <aws/s3/S3Client.h>
-#include <aws/s3/model/PutObjectRequest.h>
+#include <aws/s3/model/ListObjectsRequest.h>
 
+#include "S3Common.h"
 #include "S3LoadSettings.h"
 
 
@@ -58,7 +57,11 @@ public:
                    std::string const& physicalName,
                    Parameters const& parameters,
                    ArrayDesc const& schema):
-        PhysicalOperator(logicalName, physicalName, parameters, schema)
+        PhysicalOperator(logicalName, physicalName, parameters, schema),
+        _nDims(schema.getDimensions().size()),
+        _nAtts(schema.getAttributes(true).size()),
+        _arrayIterators(_nAtts),
+        _chunkIterators(_nDims)
     {}
 
     std::shared_ptr<Array> execute(std::vector< std::shared_ptr<Array> >& inputArrays,
@@ -67,16 +70,139 @@ public:
         LOG4CXX_DEBUG(logger, "S3LOAD >> execute");
 
         S3LoadSettings settings(_parameters, _kwParameters, false, query);
-        shared_ptr<Array> result(new MemArray(_schema, query));
+        Aws::String bucketName(settings.getBucketName().c_str());
+
+        // Init Output
+        shared_ptr<Array> array = std::make_shared<MemArray>(_schema, query);
+        for (const auto& attr : _schema.getAttributes(true))
+            _arrayIterators[attr.getId()] = array->getIterator(attr);
+
 
         // Init AWS
         Aws::SDKOptions options;
         Aws::InitAPI(options);
+        Aws::S3::S3Client s3Client;
 
+        // Get Metadata
+        // map<string, string> metadata;
+        // getMetadata(s3Client,
+        //             bucketName,
+        //             Aws::String((settings.getBucketPrefix() +
+        //                          "/metadata").c_str()),
+        //             metadata);
+
+        Aws::S3::Model::ListObjectsRequest request;
+        request.WithBucket(bucketName);
+        Aws::String objectName((settings.getBucketPrefix() + "/chunk_").c_str());
+        request.WithPrefix(objectName);
+
+        auto outcome = s3Client.ListObjects(request);
+        S3_EXCEPTION_NOT_SUCCESS("List");
+
+        Aws::Vector<Aws::S3::Model::Object> objects = outcome.GetResult().GetContents();
+        Coordinates pos(_nDims);
+
+        for (Aws::S3::Model::Object& object : objects) {
+            objectName = object.GetKey();
+            long long objectSize = object.GetSize();
+            LOG4CXX_DEBUG(
+                logger,
+                "S3LOAD >> list: " << objectName << " (" << objectSize << ")");
+
+            // Parse Object Name and Extract Dimensions
+            istringstream objectNameStream(objectName.c_str());
+            string chunk;
+            if (!getline(objectNameStream, chunk, '_'))
+                S3_EXCEPTION_OBJECT_NAME;
+
+            size_t i = 0;
+            for (int coord; objectNameStream >> coord;) {
+                pos[i] = coord;
+                i++;
+                if (objectNameStream.peek() == '_')
+                    objectNameStream.ignore();
+            }
+            if (i != _nDims)
+                S3_EXCEPTION_OBJECT_NAME;
+
+            if (_schema.getPrimaryInstanceId(
+                    pos, query->getInstancesCount()) == query->getInstanceID()) {
+                for (i = 0; i < _nDims; i++)
+                    LOG4CXX_DEBUG(
+                        logger,
+                        "S3LOAD >> inst: " << query->getInstanceID() << " dim: " << i << " coord: " << pos[i]);
+                readChunk(query, pos, s3Client, bucketName, objectName, objectSize);
+            }
+        }
 
         Aws::ShutdownAPI(options);
 
-        return result;
+        // Finalize Array
+        for(AttributeID i =0; i< _nAtts; ++i) {
+            if(_chunkIterators[i].get())
+                _chunkIterators[i]->flush();
+            _chunkIterators[i].reset();
+            _arrayIterators[i].reset();
+        }
+
+        return array;
+    }
+
+private:
+    const size_t _nDims;
+    const size_t _nAtts;
+    vector<shared_ptr<ArrayIterator> > _arrayIterators;
+    vector<shared_ptr<ChunkIterator> > _chunkIterators;
+
+    arrow::Status readChunk(std::shared_ptr<Query> query,
+                            Coordinates& pos,
+                            Aws::S3::S3Client& s3Client,
+                            const Aws::String& bucketName,
+                            const Aws::String& objectName,
+                            const long long objectSize) {
+        // Download Chunk
+        Aws::S3::Model::GetObjectRequest objectRequest;
+        objectRequest.SetBucket(bucketName);
+        objectRequest.SetKey(objectName);
+
+        auto outcome = s3Client.GetObject(objectRequest);
+        S3_EXCEPTION_NOT_SUCCESS("Get");
+
+        auto& data_stream = outcome.GetResultWithOwnership().GetBody();
+        char data[objectSize];
+        // TODO check objectSize before converting it
+        data_stream.read(data, (streamsize)objectSize);
+
+        arrow::io::BufferReader arrowBufferReader(
+            reinterpret_cast<const uint8_t*>(data), objectSize); // zero copy
+
+        // Read Record Batch using Stream Reader
+        std::shared_ptr<arrow::RecordBatchReader> arrowReader;
+        ARROW_RETURN_NOT_OK(
+            arrow::ipc::RecordBatchStreamReader::Open(
+                &arrowBufferReader, &arrowReader));
+
+        std::shared_ptr<arrow::RecordBatch> arrowBatch;
+        // Arrow >= 0.17.0
+        // ARROW_ASSIGN_OR_RAISE(
+        //     arrowReader,
+        //     arrow::ipc::RecordBatchStreamReader::Open(&arrowBufferReader));
+        ARROW_RETURN_NOT_OK(arrowReader->ReadNext(&arrowBatch));
+
+        // Set Chunk Iterators
+        for (AttributeID i = 0; i < _nAtts; ++i) {
+            if (_chunkIterators[i].get())
+                _chunkIterators[i]->flush();
+            _chunkIterators[i] = _arrayIterators[i]->newChunk(pos).getIterator(
+                query,
+                i == 0 ?
+                ChunkIterator::SEQUENTIAL_WRITE :
+                ChunkIterator::SEQUENTIAL_WRITE | ChunkIterator::NO_EMPTY_CHECK);
+        }
+
+        // std::shared_ptr<arrow::Array> array = arrowBatch->column(0);
+
+        return arrow::Status::OK();
     }
 };
 

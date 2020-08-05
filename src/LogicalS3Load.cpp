@@ -26,8 +26,6 @@
 #include <query/LogicalQueryPlan.h>
 #include <query/Parser.h>
 
-#include <aws/core/Aws.h>
-
 #include "S3Common.h"
 #include "S3LoadSettings.h"
 
@@ -61,15 +59,15 @@ public:
         // Get Metadata from AWS
         Aws::SDKOptions options;
         Aws::InitAPI(options);
-        map<string, string> metadata;
-        getMetadata(Aws::String(),//settings.getBucketName().c_str()),
-                    Aws::String()//,(settings.getBucketPrefix() +
-                    //"/metadata").c_str()),
-                    //metadata
-            );
-        string schema = "<x:int64>[i=0:9]";
-        // string schema = metadata["schema"];
-        LOG4CXX_DEBUG(logger, "S3LOAD >> schema: " << schema);
+        Aws::S3::S3Client s3Client;
+
+        std::map<std::string, std::string> metadata;
+        getMetadata(s3Client,
+                    Aws::String(settings.getBucketName().c_str()),
+                    Aws::String((settings.getBucketPrefix() +
+                                 "/metadata").c_str()),
+                    metadata);
+        LOG4CXX_DEBUG(logger, "S3LOAD >> schema: " << metadata["schema"]);
         Aws::ShutdownAPI(options);
 
         // Build Fake Query and Extract Schema
@@ -77,12 +75,16 @@ public:
                          query->getPhysicalCoordinatorID(),
                          query->mapLogicalToPhysical(query->getInstanceID()),
                          query->getCoordinatorLiveness());
-        ostringstream out;
-        out << "input(" << schema << ", '/dev/null')";
+        std::ostringstream out;
+        out << "input(" << metadata["schema"] << ", '/dev/null')";
         innerQuery->queryString = out.str();
         innerQuery->logicalPlan = std::make_shared<LogicalPlan>(
             parseStatement(innerQuery, true));
-        return innerQuery->logicalPlan->inferTypes(innerQuery);
+
+        // Extract Schema and Set Distribution
+        ArrayDesc schema = innerQuery->logicalPlan->inferTypes(innerQuery);
+        schema.setDistribution(createDistribution(defaultDistType()));
+        return schema;
     }
 };
 
