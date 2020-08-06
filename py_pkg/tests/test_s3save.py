@@ -4,13 +4,7 @@ import pytest
 import scidbpy
 import scidbs3
 
-
-bucket_name = 'p4tests'
-base_prefix = 's3bridge-tests'
-base_metadata = {'version':   '1',
-                 'format':    'arrow',
-                 'attribute': 'ALL'}
-
+from common import *
 
 @pytest.fixture
 def scidb_con():

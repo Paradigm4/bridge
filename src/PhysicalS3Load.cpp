@@ -64,8 +64,9 @@ public:
         _chunkIterators(_nDims)
     {}
 
-    std::shared_ptr<Array> execute(std::vector< std::shared_ptr<Array> >& inputArrays,
-                                   std::shared_ptr<Query> query)
+    std::shared_ptr<Array> execute(
+        std::vector< std::shared_ptr<Array> >& inputArrays,
+        std::shared_ptr<Query> query)
     {
         LOG4CXX_DEBUG(logger, "S3LOAD >> execute");
 
@@ -110,12 +111,13 @@ public:
                 "S3LOAD >> list: " << objectName << " (" << objectSize << ")");
 
             // Parse Object Name and Extract Dimensions
-            istringstream objectNameStream(objectName.c_str());
-            string chunk;
-            if (!getline(objectNameStream, chunk, '_'))
+            size_t idx = objectName.find_last_of("_");
+            if (idx == string::npos)
                 S3_EXCEPTION_OBJECT_NAME;
 
             size_t i = 0;
+            istringstream objectNameStream(objectName.c_str());
+            objectNameStream.seekg(idx + 1);
             for (int coord; objectNameStream >> coord;) {
                 pos[i] = coord;
                 i++;
@@ -155,7 +157,7 @@ private:
     vector<shared_ptr<ChunkIterator> > _chunkIterators;
 
     arrow::Status readChunk(std::shared_ptr<Query> query,
-                            Coordinates& pos,
+                            Coordinates& posStart,
                             Aws::S3::S3Client& s3Client,
                             const Aws::String& bucketName,
                             const Aws::String& objectName,
@@ -193,14 +195,45 @@ private:
         for (AttributeID i = 0; i < _nAtts; ++i) {
             if (_chunkIterators[i].get())
                 _chunkIterators[i]->flush();
-            _chunkIterators[i] = _arrayIterators[i]->newChunk(pos).getIterator(
+            _chunkIterators[i] = _arrayIterators[i]->newChunk(posStart).getIterator(
                 query,
                 i == 0 ?
                 ChunkIterator::SEQUENTIAL_WRITE :
                 ChunkIterator::SEQUENTIAL_WRITE | ChunkIterator::NO_EMPTY_CHECK);
         }
 
-        // std::shared_ptr<arrow::Array> array = arrowBatch->column(0);
+        const int64_t* coordArrow[_nDims];
+        for (size_t i = 0; i < _nDims; ++i)
+            coordArrow[i] = std::static_pointer_cast<arrow::Int64Array>(
+                arrowBatch->column(_nAtts + i))->raw_values();
+        Coordinates pos(_nDims);
+        Value val, nullVal;
+        nullVal.setNull();
+
+        for (AttributeID i = 0; i < _nAtts; ++i) {
+            std::shared_ptr<arrow::Array> array = arrowBatch->column(i);
+            const int64_t* arrayData =
+                std::static_pointer_cast<arrow::Int64Array>(
+                    array)->raw_values();
+            const int64_t nullCount = array->null_count();
+            const uint8_t* nullBitmap = array->null_bitmap_data();
+
+            for (int64_t j = 0; j < array->length(); ++j) {
+                // Set Position
+                for (size_t k = 0; k < _nDims; ++k)
+                    pos[k] = coordArrow[k][j];
+                _chunkIterators[i]->setPosition(pos);
+
+                // Set Value
+                if (nullCount != 0 && ! (nullBitmap[j / 8] & 1 << j % 8))
+                    _chunkIterators[i]->writeItem(nullVal);
+                else {
+                    val.setInt64(arrayData[j]);
+                    _chunkIterators[i]->writeItem(val);
+                }
+            }
+
+        }
 
         return arrow::Status::OK();
     }
