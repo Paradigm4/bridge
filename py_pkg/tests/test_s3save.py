@@ -6,6 +6,7 @@ import scidbs3
 
 from common import *
 
+
 @pytest.fixture
 def scidb_con():
     return scidbpy.connect()

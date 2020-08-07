@@ -111,14 +111,17 @@ public:
                 "S3LOAD >> list: " << objectName << " (" << objectSize << ")");
 
             // Parse Object Name and Extract Dimensions
-            size_t idx = objectName.find_last_of("_");
+            size_t idx = objectName.find_last_of("/");
             if (idx == string::npos)
                 S3_EXCEPTION_OBJECT_NAME;
 
             size_t i = 0;
             istringstream objectNameStream(objectName.c_str());
-            objectNameStream.seekg(idx + 1);
+            objectNameStream.seekg(idx + 7); // "/chunk_"
             for (int coord; objectNameStream >> coord;) {
+                LOG4CXX_DEBUG(
+                    logger,
+                    "S3LOAD >> list: " << objectName << " coord: " << coord);
                 pos[i] = coord;
                 i++;
                 if (objectNameStream.peek() == '_')
