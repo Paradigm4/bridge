@@ -25,6 +25,7 @@
 
 #include <query/LogicalQueryPlan.h>
 #include <query/Parser.h>
+#include <util/OnScopeExit.h>
 
 #include "S3Common.h"
 #include "S3LoadSettings.h"
@@ -75,11 +76,21 @@ public:
                          query->getPhysicalCoordinatorID(),
                          query->mapLogicalToPhysical(query->getInstanceID()),
                          query->getCoordinatorLiveness());
-        std::ostringstream out;
-        out << "input(" << metadata["schema"] << ", '/dev/null')";
-        innerQuery->queryString = out.str();
-        innerQuery->logicalPlan = std::make_shared<LogicalPlan>(
-            parseStatement(innerQuery, true));
+
+        // Create a scope where the query's arena is responsible for
+        // memory allocation.
+        {
+            arena::ScopedArenaTLS arenaTLS(innerQuery->getArena());
+
+            OnScopeExit fqd([&innerQuery] () {
+                                Query::destroyFakeQuery(innerQuery.get()); });
+
+            std::ostringstream out;
+            out << "input(" << metadata["schema"] << ", '/dev/null')";
+            innerQuery->queryString = out.str();
+            innerQuery->logicalPlan = std::make_shared<LogicalPlan>(
+                parseStatement(innerQuery, true));
+        }
 
         // Extract Schema and Set Distribution
         ArrayDesc schema = innerQuery->logicalPlan->inferTypes(innerQuery);
