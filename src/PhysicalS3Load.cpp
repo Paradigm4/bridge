@@ -218,17 +218,78 @@ private:
             std::shared_ptr<arrow::Array> arrowArray = arrowBatch->column(i);
 
             switch(_typeAtts[i]) {
+            case TE_INT8:
+            {
+                populateColumn<int8_t, arrow::Int8Array>(arrowArray,
+                                                         arrowCoord,
+                                                         i,
+                                                         &Value::setInt8);
+                break;
+            }
+            case TE_INT16:
+            {
+                populateColumn<int16_t, arrow::Int16Array>(arrowArray,
+                                                           arrowCoord,
+                                                           i,
+                                                           &Value::setInt16);
+                break;
+            }
+            case TE_INT32:
+            {
+                populateColumn<int32_t, arrow::Int32Array>(arrowArray,
+                                                           arrowCoord,
+                                                           i,
+                                                           &Value::setInt32);
+                break;
+            }
             case TE_INT64:
             {
-                populateColumn<int64_t, arrow::Int64Array>(
-                    arrowArray,
-                    arrowCoord,
-                    i,
-                    &Value::setInt64);
+                populateColumn<int64_t, arrow::Int64Array>(arrowArray,
+                                                           arrowCoord,
+                                                           i,
+                                                           &Value::setInt64);
+                break;
+            }
+            case TE_UINT8:
+            {
+                populateColumn<uint8_t, arrow::UInt8Array>(arrowArray,
+                                                           arrowCoord,
+                                                           i,
+                                                           &Value::setUint8);
+                break;
+            }
+            case TE_UINT16:
+            {
+                populateColumn<uint16_t, arrow::UInt16Array>(arrowArray,
+                                                             arrowCoord,
+                                                             i,
+                                                             &Value::setUint16);
+                break;
+            }
+            case TE_UINT32:
+            {
+                populateColumn<uint32_t, arrow::UInt32Array>(arrowArray,
+                                                             arrowCoord,
+                                                             i,
+                                                             &Value::setUint32);
+                break;
+            }
+            case TE_UINT64:
+            {
+                populateColumn<uint64_t, arrow::UInt64Array>(arrowArray,
+                                                             arrowCoord,
+                                                             i,
+                                                             &Value::setUint64);
                 break;
             }
             default:
             {
+                ostringstream out;
+                out << "Type "
+                    << _schema.getAttributes(true).findattr(i).getType()
+                    << " not supported";
+                throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                     SCIDB_LE_ILLEGAL_OPERATION) << out.str();
             }
             }
         }
