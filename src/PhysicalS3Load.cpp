@@ -60,6 +60,7 @@ public:
         PhysicalOperator(logicalName, physicalName, parameters, schema),
         _nDims(schema.getDimensions().size()),
         _nAtts(schema.getAttributes(true).size()),
+        _typeAtts(_nAtts),
         _arrayIterators(_nAtts),
         _chunkIterators(_nDims)
     {}
@@ -75,9 +76,11 @@ public:
 
         // Init Output
         shared_ptr<Array> array = std::make_shared<MemArray>(_schema, query);
-        for (const auto& attr : _schema.getAttributes(true))
+        size_t i = 0;
+        for (const auto& attr : _schema.getAttributes(true)) {
+            _typeAtts[i++] = typeId2TypeEnum(attr.getType(), true);
             _arrayIterators[attr.getId()] = array->getIterator(attr);
-
+        }
 
         // Init AWS
         Aws::SDKOptions options;
@@ -156,8 +159,9 @@ public:
 private:
     const size_t _nDims;
     const size_t _nAtts;
-    vector<shared_ptr<ArrayIterator> > _arrayIterators;
-    vector<shared_ptr<ChunkIterator> > _chunkIterators;
+    std::vector<TypeEnum> _typeAtts;
+    std::vector<std::shared_ptr<ArrayIterator> > _arrayIterators;
+    std::vector<std::shared_ptr<ChunkIterator> > _chunkIterators;
 
     arrow::Status readChunk(std::shared_ptr<Query> query,
                             Coordinates& posStart,
@@ -205,40 +209,62 @@ private:
                 ChunkIterator::SEQUENTIAL_WRITE | ChunkIterator::NO_EMPTY_CHECK);
         }
 
-        const int64_t* coordArrow[_nDims];
+        const int64_t* arrowCoord[_nDims];
         for (size_t i = 0; i < _nDims; ++i)
-            coordArrow[i] = std::static_pointer_cast<arrow::Int64Array>(
+            arrowCoord[i] = std::static_pointer_cast<arrow::Int64Array>(
                 arrowBatch->column(_nAtts + i))->raw_values();
-        Coordinates pos(_nDims);
-        Value val, nullVal;
-        nullVal.setNull();
 
         for (AttributeID i = 0; i < _nAtts; ++i) {
-            std::shared_ptr<arrow::Array> array = arrowBatch->column(i);
-            const int64_t* arrayData =
-                std::static_pointer_cast<arrow::Int64Array>(
-                    array)->raw_values();
-            const int64_t nullCount = array->null_count();
-            const uint8_t* nullBitmap = array->null_bitmap_data();
+            std::shared_ptr<arrow::Array> arrowArray = arrowBatch->column(i);
 
-            for (int64_t j = 0; j < array->length(); ++j) {
-                // Set Position
-                for (size_t k = 0; k < _nDims; ++k)
-                    pos[k] = coordArrow[k][j];
-                _chunkIterators[i]->setPosition(pos);
-
-                // Set Value
-                if (nullCount != 0 && ! (nullBitmap[j / 8] & 1 << j % 8))
-                    _chunkIterators[i]->writeItem(nullVal);
-                else {
-                    val.setInt64(arrayData[j]);
-                    _chunkIterators[i]->writeItem(val);
-                }
+            switch(_typeAtts[i]) {
+            case TE_INT64:
+            {
+                populateColumn<int64_t, arrow::Int64Array>(
+                    arrowArray,
+                    arrowCoord,
+                    i,
+                    &Value::setInt64);
+                break;
             }
-
+            default:
+            {
+            }
+            }
         }
 
         return arrow::Status::OK();
+    }
+
+    template <typename Type,
+              typename ArrowArray,
+              typename ValueFunc> inline
+    void populateColumn(std::shared_ptr<arrow::Array> arrowArray,
+                        const int64_t** arrowCoord,
+                        const size_t i,
+                        ValueFunc valueSetter) {
+        Coordinates pos(_nDims);
+        const Type* arrayData =
+            std::static_pointer_cast<ArrowArray>(arrowArray)->raw_values();
+        const int64_t nullCount = arrowArray->null_count();
+        const uint8_t* nullBitmap = arrowArray->null_bitmap_data();
+        Value val, nullVal;
+        nullVal.setNull();
+
+        for (int64_t j = 0; j < arrowArray->length(); ++j) {
+            // Set Position
+            for (size_t k = 0; k < _nDims; ++k)
+                pos[k] = arrowCoord[k][j];
+            _chunkIterators[i]->setPosition(pos);
+
+            // Set Value
+            if (nullCount != 0 && ! (nullBitmap[j / 8] & 1 << j % 8))
+                _chunkIterators[i]->writeItem(nullVal);
+            else {
+                (val.*valueSetter)(arrayData[j]);
+                _chunkIterators[i]->writeItem(val);
+            }
+        }
     }
 };
 
