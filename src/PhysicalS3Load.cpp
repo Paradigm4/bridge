@@ -60,9 +60,7 @@ public:
         PhysicalOperator(logicalName, physicalName, parameters, schema),
         _nDims(schema.getDimensions().size()),
         _nAtts(schema.getAttributes(true).size()),
-        _typeAtts(_nAtts),
-        _arrayIterators(_nAtts),
-        _chunkIterators(_nDims)
+        _typeAtts(_nAtts)
     {}
 
     std::shared_ptr<Array> execute(
@@ -76,10 +74,12 @@ public:
 
         // Init Output
         shared_ptr<Array> array = std::make_shared<MemArray>(_schema, query);
+        std::vector<std::shared_ptr<ArrayIterator> > arrayIterators(_nAtts);
+        std::vector<std::shared_ptr<ChunkIterator> > chunkIterators(_nDims);
         size_t i = 0;
         for (const auto& attr : _schema.getAttributes(true)) {
             _typeAtts[i++] = typeId2TypeEnum(attr.getType(), true);
-            _arrayIterators[attr.getId()] = array->getIterator(attr);
+            arrayIterators[attr.getId()] = array->getIterator(attr);
         }
 
         // Init AWS
@@ -139,7 +139,14 @@ public:
                     LOG4CXX_DEBUG(
                         logger,
                         "S3LOAD >> inst: " << query->getInstanceID() << " dim: " << i << " coord: " << pos[i]);
-                readChunk(query, pos, s3Client, bucketName, objectName, objectSize);
+                readChunk(query,
+                          arrayIterators,
+                          chunkIterators,
+                          pos,
+                          s3Client,
+                          bucketName,
+                          objectName,
+                          objectSize);
             }
         }
 
@@ -147,10 +154,10 @@ public:
 
         // Finalize Array
         for(AttributeID i =0; i< _nAtts; ++i) {
-            if(_chunkIterators[i].get())
-                _chunkIterators[i]->flush();
-            _chunkIterators[i].reset();
-            _arrayIterators[i].reset();
+            if(chunkIterators[i].get())
+                chunkIterators[i]->flush();
+            chunkIterators[i].reset();
+            arrayIterators[i].reset();
         }
 
         return array;
@@ -160,15 +167,17 @@ private:
     const size_t _nDims;
     const size_t _nAtts;
     std::vector<TypeEnum> _typeAtts;
-    std::vector<std::shared_ptr<ArrayIterator> > _arrayIterators;
-    std::vector<std::shared_ptr<ChunkIterator> > _chunkIterators;
 
-    arrow::Status readChunk(std::shared_ptr<Query> query,
-                            Coordinates& posStart,
-                            Aws::S3::S3Client& s3Client,
-                            const Aws::String& bucketName,
-                            const Aws::String& objectName,
-                            const long long objectSize) {
+    arrow::Status readChunk(
+        std::shared_ptr<Query> query,
+        std::vector<std::shared_ptr<ArrayIterator> >& arrayIterators,
+        std::vector<std::shared_ptr<ChunkIterator> >& chunkIterators,
+        Coordinates& posStart,
+        Aws::S3::S3Client& s3Client,
+        const Aws::String& bucketName,
+        const Aws::String& objectName,
+        const long long objectSize) {
+
         // Download Chunk
         Aws::S3::Model::GetObjectRequest objectRequest;
         objectRequest.SetBucket(bucketName);
@@ -199,10 +208,11 @@ private:
         ARROW_RETURN_NOT_OK(arrowReader->ReadNext(&arrowBatch));
 
         // Set Chunk Iterators
+        // Data is in Row Major Order
         for (AttributeID i = 0; i < _nAtts; ++i) {
-            if (_chunkIterators[i].get())
-                _chunkIterators[i]->flush();
-            _chunkIterators[i] = _arrayIterators[i]->newChunk(posStart).getIterator(
+            if (chunkIterators[i].get())
+                chunkIterators[i]->flush();
+            chunkIterators[i] = arrayIterators[i]->newChunk(posStart).getIterator(
                 query,
                 i == 0 ?
                 ChunkIterator::SEQUENTIAL_WRITE :
@@ -218,68 +228,112 @@ private:
             std::shared_ptr<arrow::Array> arrowArray = arrowBatch->column(i);
 
             switch(_typeAtts[i]) {
-            case TE_INT8:
+            case TE_BOOL:
             {
-                populateColumn<int8_t, arrow::Int8Array>(arrowArray,
+                populateValue<bool, arrow::BooleanArray>(arrowArray,
+                                                         chunkIterators,
                                                          arrowCoord,
                                                          i,
-                                                         &Value::setInt8);
+                                                         &Value::setBool);
+                break;
+            }
+            case TE_DATETIME:
+            {
+                populateRaw<int64_t, arrow::Date64Array>(arrowArray,
+                                                         chunkIterators,
+                                                         arrowCoord,
+                                                         i,
+                                                         &Value::setDateTime);
+                break;
+            }
+            case TE_FLOAT:
+            {
+                populateRaw<float, arrow::FloatArray>(arrowArray,
+                                                      chunkIterators,
+                                                      arrowCoord,
+                                                      i,
+                                                      &Value::setFloat);
+                break;
+            }
+            case TE_DOUBLE:
+            {
+                populateRaw<double, arrow::DoubleArray>(arrowArray,
+                                                        chunkIterators,
+                                                        arrowCoord,
+                                                        i,
+                                                        &Value::setDouble);
+                break;
+            }
+            case TE_INT8:
+            {
+                populateRaw<int8_t, arrow::Int8Array>(arrowArray,
+                                                      chunkIterators,
+                                                      arrowCoord,
+                                                      i,
+                                                      &Value::setInt8);
                 break;
             }
             case TE_INT16:
             {
-                populateColumn<int16_t, arrow::Int16Array>(arrowArray,
-                                                           arrowCoord,
-                                                           i,
-                                                           &Value::setInt16);
+                populateRaw<int16_t, arrow::Int16Array>(arrowArray,
+                                                        chunkIterators,
+                                                        arrowCoord,
+                                                        i,
+                                                        &Value::setInt16);
                 break;
             }
             case TE_INT32:
             {
-                populateColumn<int32_t, arrow::Int32Array>(arrowArray,
-                                                           arrowCoord,
-                                                           i,
-                                                           &Value::setInt32);
+                populateRaw<int32_t, arrow::Int32Array>(arrowArray,
+                                                        chunkIterators,
+                                                        arrowCoord,
+                                                        i,
+                                                        &Value::setInt32);
                 break;
             }
             case TE_INT64:
             {
-                populateColumn<int64_t, arrow::Int64Array>(arrowArray,
-                                                           arrowCoord,
-                                                           i,
-                                                           &Value::setInt64);
+                populateRaw<int64_t, arrow::Int64Array>(arrowArray,
+                                                        chunkIterators,
+                                                        arrowCoord,
+                                                        i,
+                                                        &Value::setInt64);
                 break;
             }
             case TE_UINT8:
             {
-                populateColumn<uint8_t, arrow::UInt8Array>(arrowArray,
-                                                           arrowCoord,
-                                                           i,
-                                                           &Value::setUint8);
+                populateRaw<uint8_t, arrow::UInt8Array>(arrowArray,
+                                                        chunkIterators,
+                                                        arrowCoord,
+                                                        i,
+                                                        &Value::setUint8);
                 break;
             }
             case TE_UINT16:
             {
-                populateColumn<uint16_t, arrow::UInt16Array>(arrowArray,
-                                                             arrowCoord,
-                                                             i,
-                                                             &Value::setUint16);
+                populateRaw<uint16_t, arrow::UInt16Array>(arrowArray,
+                                                          chunkIterators,
+                                                          arrowCoord,
+                                                          i,
+                                                          &Value::setUint16);
                 break;
             }
             case TE_UINT32:
             {
-                populateColumn<uint32_t, arrow::UInt32Array>(arrowArray,
-                                                             arrowCoord,
-                                                             i,
-                                                             &Value::setUint32);
+                populateRaw<uint32_t, arrow::UInt32Array>(arrowArray,
+                                                          chunkIterators,
+                                                          arrowCoord,
+                                                          i,
+                                                          &Value::setUint32);
                 break;
             }
             case TE_UINT64:
             {
-                populateColumn<uint64_t, arrow::UInt64Array>(arrowArray,
-                                                             arrowCoord,
-                                                             i,
-                                                             &Value::setUint64);
+                populateRaw<uint64_t, arrow::UInt64Array>(arrowArray,
+                                                          chunkIterators,
+                                                          arrowCoord,
+                                                          i,
+                                                          &Value::setUint64);
                 break;
             }
             default:
@@ -300,10 +354,13 @@ private:
     template <typename Type,
               typename ArrowArray,
               typename ValueFunc> inline
-    void populateColumn(std::shared_ptr<arrow::Array> arrowArray,
-                        const int64_t** arrowCoord,
-                        const size_t i,
-                        ValueFunc valueSetter) {
+    void populateRaw(
+        std::shared_ptr<arrow::Array> arrowArray,
+        std::vector<std::shared_ptr<ChunkIterator> >& chunkIterators,
+        const int64_t** arrowCoord,
+        const size_t i,
+        ValueFunc valueSetter) {
+
         Coordinates pos(_nDims);
         const Type* arrayData =
             std::static_pointer_cast<ArrowArray>(arrowArray)->raw_values();
@@ -316,14 +373,48 @@ private:
             // Set Position
             for (size_t k = 0; k < _nDims; ++k)
                 pos[k] = arrowCoord[k][j];
-            _chunkIterators[i]->setPosition(pos);
+            chunkIterators[i]->setPosition(pos);
 
             // Set Value
             if (nullCount != 0 && ! (nullBitmap[j / 8] & 1 << j % 8))
-                _chunkIterators[i]->writeItem(nullVal);
+                chunkIterators[i]->writeItem(nullVal);
             else {
                 (val.*valueSetter)(arrayData[j]);
-                _chunkIterators[i]->writeItem(val);
+                chunkIterators[i]->writeItem(val);
+            }
+        }
+    }
+
+    template <typename Type,
+              typename ArrowArray,
+              typename ValueFunc> inline
+    void populateValue(
+        std::shared_ptr<arrow::Array> arrowArray,
+        std::vector<std::shared_ptr<ChunkIterator> >& chunkIterators,
+        const int64_t** arrowCoord,
+        const size_t i,
+        ValueFunc valueSetter) {
+
+        Coordinates pos(_nDims);
+        const int64_t nullCount = arrowArray->null_count();
+        const uint8_t* nullBitmap = arrowArray->null_bitmap_data();
+        Value val, nullVal;
+        nullVal.setNull();
+
+        for (int64_t j = 0; j < arrowArray->length(); ++j) {
+            // Set Position
+            for (size_t k = 0; k < _nDims; ++k)
+                pos[k] = arrowCoord[k][j];
+            chunkIterators[i]->setPosition(pos);
+
+            // Set Value
+            if (nullCount != 0 && ! (nullBitmap[j / 8] & 1 << j % 8))
+                chunkIterators[i]->writeItem(nullVal);
+            else {
+                (val.*valueSetter)(
+                    std::static_pointer_cast<ArrowArray>(
+                        arrowArray)->Value(j));
+                chunkIterators[i]->writeItem(val);
             }
         }
     }

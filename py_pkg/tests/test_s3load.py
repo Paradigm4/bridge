@@ -84,15 +84,18 @@ s3load(
     delete_prefix(s3_con, prefix)
 
 
-@pytest.mark.parametrize('type_name,type_numpy',
-                         (('int8', numpy.float16),
-                          ('int16', numpy.float32),
-                          ('int32', numpy.float64),
-                          ('int64', numpy.float64),
-                          ('uint8', numpy.float16),
-                          ('uint16', numpy.float32),
-                          ('uint32', numpy.float64),
-                          ('uint64', numpy.float64)))
+@pytest.mark.parametrize('type_name,type_numpy', (('bool', numpy.object),
+                                                  ('datetime', None),
+                                                  ('float', numpy.float32),
+                                                  ('double', numpy.float64),
+                                                  ('int8', numpy.float16),
+                                                  ('int16', numpy.float32),
+                                                  ('int32', numpy.float64),
+                                                  ('int64', numpy.float64),
+                                                  ('uint8', numpy.float16),
+                                                  ('uint16', numpy.float32),
+                                                  ('uint32', numpy.float64),
+                                                  ('uint64', numpy.float64)))
 def test_type(scidb_con, s3_con, type_name, type_numpy):
     max_val = 5
     prefix = 'type_{}'.format(type_name)
@@ -114,8 +117,14 @@ s3load(
                              fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
-    assert array.equals(
-        pandas.DataFrame({'i': range(max_val),
-                          'v': type_numpy(range(max_val))}))
+    if type_name.startswith('datetime'):
+        v = (pandas.Timestamp(i * 10 ** 9) for i in range(max_val))
+    elif type_name == 'bool':
+        v = pandas.Series((bool(i) for i in range(max_val)),
+                          dtype=numpy.object)
+    else:
+        v = type_numpy(range(max_val))
+
+    assert array.equals(pandas.DataFrame({'i': range(max_val), 'v': v}))
 
     delete_prefix(s3_con, prefix)
