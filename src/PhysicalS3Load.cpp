@@ -224,17 +224,91 @@ private:
             arrowCoord[i] = std::static_pointer_cast<arrow::Int64Array>(
                 arrowBatch->column(_nAtts + i))->raw_values();
 
+        // Common Variables when a Populator is not Used
+        Coordinates pos(_nDims);
+        Value val, nullVal;
+        nullVal.setNull();
+
         for (AttributeID i = 0; i < _nAtts; ++i) {
             std::shared_ptr<arrow::Array> arrowArray = arrowBatch->column(i);
 
+            // Common Variables when a Populator is not Used
+            const int64_t nullCount = arrowArray->null_count();
+            const uint8_t* nullBitmap = arrowArray->null_bitmap_data();
+
             switch(_typeAtts[i]) {
+                // Arrow Binary & String length is int32_t
+                // Long Binary length is int64_t
+            case TE_BINARY:
+            {
+                for (int64_t j = 0; j < arrowArray->length(); ++j) {
+                    // Set Position
+                    for (size_t k = 0; k < _nDims; ++k)
+                        pos[k] = arrowCoord[k][j];
+                    chunkIterators[i]->setPosition(pos);
+
+                    // Set Value
+                    if (nullCount != 0 && ! (nullBitmap[j / 8] & 1 << j % 8))
+                        chunkIterators[i]->writeItem(nullVal);
+                    else {
+                        const uint8_t* ptr_val;
+                        int32_t size_val;
+                        ptr_val = std::static_pointer_cast<arrow::BinaryArray>(
+                            arrowArray)->GetValue(j, &size_val);
+                        val.setData(ptr_val, size_val);
+                        chunkIterators[i]->writeItem(val);
+                    }
+                }
+                break;
+            }
+            case TE_STRING:
+            {
+                for (int64_t j = 0; j < arrowArray->length(); ++j) {
+                    // Set Position
+                    for (size_t k = 0; k < _nDims; ++k)
+                        pos[k] = arrowCoord[k][j];
+                    chunkIterators[i]->setPosition(pos);
+
+                    // Set Value
+                    if (nullCount != 0 && ! (nullBitmap[j / 8] & 1 << j % 8))
+                        chunkIterators[i]->writeItem(nullVal);
+                    else {
+                        val.setString(
+                            std::static_pointer_cast<arrow::StringArray>(
+                                arrowArray)->GetString(j));
+                        chunkIterators[i]->writeItem(val);
+                    }
+                }
+                break;
+            }
+            case TE_CHAR:
+            {
+                for (int64_t j = 0; j < arrowArray->length(); ++j) {
+                    // Set Position
+                    for (size_t k = 0; k < _nDims; ++k)
+                        pos[k] = arrowCoord[k][j];
+                    chunkIterators[i]->setPosition(pos);
+
+                    // Set Value
+                    if (nullCount != 0 && ! (nullBitmap[j / 8] & 1 << j % 8))
+                        chunkIterators[i]->writeItem(nullVal);
+                    else {
+                        val.setChar(
+                            std::static_pointer_cast<arrow::StringArray>(
+                                arrowArray)->GetString(j)[0]);
+                        chunkIterators[i]->writeItem(val);
+                    }
+                }
+                break;
+            }
             case TE_BOOL:
             {
-                populateValue<bool, arrow::BooleanArray>(arrowArray,
-                                                         chunkIterators,
-                                                         arrowCoord,
-                                                         i,
-                                                         &Value::setBool);
+                populateValue<arrow::BooleanArray>(arrowArray,
+                                                   chunkIterators,
+                                                   arrowCoord,
+                                                   i,
+                                                   &arrow::BooleanArray::Value,
+                                                   &Value::setBool);
                 break;
             }
             case TE_DATETIME:
@@ -385,15 +459,16 @@ private:
         }
     }
 
-    template <typename Type,
-              typename ArrowArray,
-              typename ValueFunc> inline
+    template <typename ArrowArray,
+              typename GetValueFunc,
+              typename SetValueFunc> inline
     void populateValue(
         std::shared_ptr<arrow::Array> arrowArray,
         std::vector<std::shared_ptr<ChunkIterator> >& chunkIterators,
         const int64_t** arrowCoord,
         const size_t i,
-        ValueFunc valueSetter) {
+        GetValueFunc valueGetter,
+        SetValueFunc valueSetter) {
 
         Coordinates pos(_nDims);
         const int64_t nullCount = arrowArray->null_count();
@@ -412,8 +487,8 @@ private:
                 chunkIterators[i]->writeItem(nullVal);
             else {
                 (val.*valueSetter)(
-                    std::static_pointer_cast<ArrowArray>(
-                        arrowArray)->Value(j));
+                    (*std::static_pointer_cast<ArrowArray>(
+                        arrowArray).*valueGetter)(j));
                 chunkIterators[i]->writeItem(val);
             }
         }

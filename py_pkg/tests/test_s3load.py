@@ -84,7 +84,10 @@ s3load(
     delete_prefix(s3_con, prefix)
 
 
-@pytest.mark.parametrize('type_name,type_numpy', (('bool', numpy.object),
+@pytest.mark.parametrize('type_name,type_numpy', (('binary', numpy.object),
+                                                  ('string', numpy.object),
+                                                  ('char', numpy.object),
+                                                  ('bool', numpy.object),
                                                   ('datetime', None),
                                                   ('float', numpy.float32),
                                                   ('double', numpy.float64),
@@ -103,11 +106,17 @@ def test_type(scidb_con, s3_con, type_name, type_numpy):
 
     # Store
     bucket_prefix = '/'.join((base_prefix, prefix))
-    scidb_con.iquery("""
-s3save(
-  build({}, {}(i)),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, type_name, bucket_name, bucket_prefix))
+    if type_name == 'binary':
+        que = scidb_con.input(
+            schema.replace('binary', 'binary not null'),
+            upload_data=numpy.array([bytes([i]) for i in range(max_val)],
+                                    dtype='object')).redimension(
+                                        schema)
+    else:
+        que = scidb_con.build(schema, '{}(i)'.format(type_name))
+    que = que.s3save("bucket_name:'{}'".format(bucket_name),
+                     "bucket_prefix:'{}'".format(bucket_prefix))
+    res = que.fetch()
 
     # Load
     array = scidb_con.iquery("""
@@ -121,6 +130,14 @@ s3load(
         v = (pandas.Timestamp(i * 10 ** 9) for i in range(max_val))
     elif type_name == 'bool':
         v = pandas.Series((bool(i) for i in range(max_val)),
+                          dtype=numpy.object)
+    elif type_name in ('char', 'binary')bibicycle:
+        v = pandas.Series((bytes([i]) if i != 0 or type_name == 'binary'
+                           else bytes()
+                           for i in range(max_val)),
+                          dtype=numpy.object)
+    elif type_name == 'string':
+        v = pandas.Series((str(i) for i in range(max_val)),
                           dtype=numpy.object)
     else:
         v = type_numpy(range(max_val))
