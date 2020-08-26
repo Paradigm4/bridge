@@ -1,4 +1,5 @@
 import boto3
+import itertools
 import numpy
 import pandas
 import pytest
@@ -84,34 +85,47 @@ s3load(
     delete_prefix(s3_con, prefix)
 
 
-@pytest.mark.parametrize('type_name,type_numpy', (('binary', numpy.object),
-                                                  ('string', numpy.object),
-                                                  ('char', numpy.object),
-                                                  ('bool', numpy.object),
-                                                  ('datetime', None),
-                                                  ('float', numpy.float32),
-                                                  ('double', numpy.float64),
-                                                  ('int8', numpy.float16),
-                                                  ('int16', numpy.float32),
-                                                  ('int32', numpy.float64),
-                                                  ('int64', numpy.float64),
-                                                  ('uint8', numpy.float16),
-                                                  ('uint16', numpy.float32),
-                                                  ('uint32', numpy.float64),
-                                                  ('uint64', numpy.float64)))
-def test_type(scidb_con, s3_con, type_name, type_numpy):
+@pytest.mark.parametrize(
+    'type_name, is_null, type_numpy',
+    itertools.chain(((t, n, numpy.object)
+                     for n in (True, False)
+                     for t in ('binary', 'string', 'char')),
+
+                    (('datetime', n, None)
+                     for n in (True, False)),
+
+                    (('bool', ) + p
+                     for p in ((True, numpy.object),
+                               (False, numpy.bool))),
+
+                    ((t, n, tn)
+                     for (t, tn) in (('float', numpy.float32),
+                                     ('double', numpy.float64))
+                     for n in (True, False)),
+
+                    (('{}int{}'.format(g, s),
+                      n,
+                      numpy.dtype(
+                          'float{}'.format(min(s * 2, 64)) if n
+                          else '{}int{}'.format(g, s)).type)
+                     for g in ('', 'u')
+                     for s in (8, 16, 32, 64)
+                     for n in (True, False))))
+def test_type(scidb_con, s3_con, type_name, is_null, type_numpy):
     max_val = 5
     prefix = 'type_{}'.format(type_name)
-    schema = '<v:{}> [i=0:{}:0:5]'.format(type_name, max_val - 1)
+    schema = '<v:{} {}NULL> [i=0:{}:0:5]'.format(
+        type_name, '' if is_null else 'NOT ', max_val - 1)
 
     # Store
     bucket_prefix = '/'.join((base_prefix, prefix))
     if type_name == 'binary':
         que = scidb_con.input(
-            schema.replace('binary', 'binary not null'),
+            schema.replace('binary NULL', 'binary NOT NULL'),
             upload_data=numpy.array([bytes([i]) for i in range(max_val)],
-                                    dtype='object')).redimension(
-                                        schema)
+                                    dtype='object'))
+        if is_null:
+            que = que.redimension(schema)
     else:
         que = scidb_con.build(schema, '{}(i)'.format(type_name))
     que = que.s3save("bucket_name:'{}'".format(bucket_name),
@@ -126,12 +140,7 @@ s3load(
                              fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
-    if type_name.startswith('datetime'):
-        v = (pandas.Timestamp(i * 10 ** 9) for i in range(max_val))
-    elif type_name == 'bool':
-        v = pandas.Series((bool(i) for i in range(max_val)),
-                          dtype=numpy.object)
-    elif type_name in ('char', 'binary')bibicycle:
+    if type_name in ('binary', 'char'):
         v = pandas.Series((bytes([i]) if i != 0 or type_name == 'binary'
                            else bytes()
                            for i in range(max_val)),
@@ -139,6 +148,14 @@ s3load(
     elif type_name == 'string':
         v = pandas.Series((str(i) for i in range(max_val)),
                           dtype=numpy.object)
+    elif type_name.startswith('datetime'):
+        v = (pandas.Timestamp(i * 10 ** 9) for i in range(max_val))
+    elif type_name == 'bool':
+        if is_null:
+            v = pandas.Series((bool(i) for i in range(max_val)),
+                              dtype=numpy.object)
+        else:
+            v = pandas.Series((bool(i) for i in range(max_val)))
     else:
         v = type_numpy(range(max_val))
 
