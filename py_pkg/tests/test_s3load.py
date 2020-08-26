@@ -86,36 +86,39 @@ s3load(
 
 
 @pytest.mark.parametrize(
-    'type_name, is_null, type_numpy',
-    itertools.chain(((t, n, numpy.object)
-                     for n in (True, False)
-                     for t in ('binary', 'string', 'char')),
+    'type_name, is_null, type_numpy, chunk_size',
+    ((t, n, p, c)
+     for (t, n, p) in itertools.chain(
+             ((t, n, numpy.object)
+              for n in (True, False)
+              for t in ('binary', 'string', 'char')),
 
-                    (('datetime', n, None)
-                     for n in (True, False)),
+             (('datetime', n, None)
+              for n in (True, False)),
 
-                    (('bool', ) + p
-                     for p in ((True, numpy.object),
-                               (False, numpy.bool))),
+             (('bool', ) + p
+              for p in ((True, numpy.object),
+                        (False, numpy.bool))),
 
-                    ((t, n, tn)
-                     for (t, tn) in (('float', numpy.float32),
-                                     ('double', numpy.float64))
-                     for n in (True, False)),
+             ((t, n, tn)
+              for (t, tn) in (('float', numpy.float32),
+                              ('double', numpy.float64))
+              for n in (True, False)),
 
-                    (('{}int{}'.format(g, s),
-                      n,
-                      numpy.dtype(
-                          'float{}'.format(min(s * 2, 64)) if n
-                          else '{}int{}'.format(g, s)).type)
-                     for g in ('', 'u')
-                     for s in (8, 16, 32, 64)
-                     for n in (True, False))))
-def test_type(scidb_con, s3_con, type_name, is_null, type_numpy):
-    max_val = 5
+             (('{}int{}'.format(g, s),
+               n,
+               numpy.dtype(
+                   'float{}'.format(min(s * 2, 64)) if n
+                   else '{}int{}'.format(g, s)).type)
+              for g in ('', 'u')
+              for s in (8, 16, 32, 64)
+              for n in (True, False)))
+     for c in (5, 10, 20)))
+def test_type(scidb_con, s3_con, type_name, is_null, type_numpy, chunk_size):
+    max_val = 20
     prefix = 'type_{}'.format(type_name)
-    schema = '<v:{} {}NULL> [i=0:{}:0:5]'.format(
-        type_name, '' if is_null else 'NOT ', max_val - 1)
+    schema = '<v:{} {}NULL> [i=0:{}:0:{}]'.format(
+        type_name, '' if is_null else 'NOT ', max_val - 1, chunk_size)
 
     # Store
     bucket_prefix = '/'.join((base_prefix, prefix))
