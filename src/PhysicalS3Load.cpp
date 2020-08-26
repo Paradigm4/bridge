@@ -251,11 +251,10 @@ private:
                     if (nullCount != 0 && ! (nullBitmap[j / 8] & 1 << j % 8))
                         chunkIterators[i]->writeItem(nullVal);
                     else {
-                        const uint8_t* ptr_val;
-                        int32_t size_val;
-                        ptr_val = std::static_pointer_cast<arrow::BinaryArray>(
-                            arrowArray)->GetValue(j, &size_val);
-                        val.setData(ptr_val, size_val);
+                        int32_t valSize;
+                        const uint8_t* valPtr = std::static_pointer_cast<arrow::BinaryArray>(
+                            arrowArray)->GetValue(j, &valSize);
+                        val.setData(valPtr, valSize);
                         chunkIterators[i]->writeItem(val);
                     }
                 }
@@ -293,9 +292,16 @@ private:
                     if (nullCount != 0 && ! (nullBitmap[j / 8] & 1 << j % 8))
                         chunkIterators[i]->writeItem(nullVal);
                     else {
-                        val.setChar(
-                            std::static_pointer_cast<arrow::StringArray>(
-                                arrowArray)->GetString(j)[0]);
+                        string valStr = std::static_pointer_cast<arrow::StringArray>(
+                            arrowArray)->GetString(j);
+                        if (valStr.length() != 1) {
+                            ostringstream out;
+                            out << "Invalid value for attribute "
+                                << _schema.getAttributes(true).findattr(i).getName();
+                            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                                 SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+                        }
+                        val.setChar(valStr[0]);
                         chunkIterators[i]->writeItem(val);
                     }
                 }
