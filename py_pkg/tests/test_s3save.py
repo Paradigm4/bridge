@@ -68,12 +68,12 @@ s3save(
     assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
-    assert array.list_chunks() == tuple((i,) for i in range(0, 20, 5))
+    assert array.list_chunks() == tuple((i,) for i in range(0, 4))
     pandas.testing.assert_frame_equal(
         array.get_chunk(0).to_pandas(),
         pandas.DataFrame(data={'v': range(5), 'i': range(5)}))
     pandas.testing.assert_frame_equal(
-        array.get_chunk(10).to_pandas(),
+        array.get_chunk(2).to_pandas(),
         pandas.DataFrame(data={'v': range(10, 15), 'i': range(10, 15)}))
 
     delete_prefix(s3_con, prefix)
@@ -97,10 +97,10 @@ s3save(
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     assert array.list_chunks() == tuple((i, j)
-                                        for i in range(0, 10, 5)
-                                        for j in range(10, 20, 5))
+                                        for i in range(0, 2)
+                                        for j in range(2, 4))
     pandas.testing.assert_frame_equal(
-        array.get_chunk(0, 10).to_pandas(),
+        array.get_chunk(0, 2).to_pandas(),
         pandas.DataFrame(data=((i, i, j)
                                for i in range(5)
                                for j in range(10, 15)),
@@ -130,10 +130,10 @@ s3save(
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     assert array.list_chunks() == tuple((i, j)
-                                        for i in range(0, 10, 5)
-                                        for j in range(10, 20, 5))
+                                        for i in range(0, 2)
+                                        for j in range(2, 4))
     pandas.testing.assert_frame_equal(
-        array.get_chunk(0, 10).to_pandas(),
+        array.get_chunk(0, 2).to_pandas(),
         pandas.DataFrame(data=((i, float(i * i), i, j)
                                for i in range(5)
                                for j in range(10, 15)),
@@ -161,16 +161,16 @@ s3save(
     assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
-    assert array.list_chunks() == tuple((i, 15)
-                                        for i in range(0, 10, 5))
+    assert array.list_chunks() == tuple((i, 3)
+                                        for i in range(0, 2))
     pandas.testing.assert_frame_equal(
-        array.get_chunk(0, 15).to_pandas(),
+        array.get_chunk(0, 3).to_pandas(),
         pandas.DataFrame(data=((i, i, j)
                                for i in range(3)
                                for j in range(16, 20)),
                          columns=('v', 'i', 'j')))
     pandas.testing.assert_frame_equal(
-        array.get_chunk(5, 15).to_pandas(),
+        array.get_chunk(1, 3).to_pandas(),
         pandas.DataFrame(data=((i, i, j)
                                for i in range(6, 10)
                                for j in range(16, 20)),

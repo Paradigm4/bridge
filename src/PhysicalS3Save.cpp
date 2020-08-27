@@ -569,7 +569,8 @@ public:
         {
             // Init Array & Chunk Iterators
             const size_t nAttrs = inputSchema.getAttributes(true).size();
-            const size_t nDims = inputSchema.getDimensions().size();
+            const Dimensions &dims = inputSchema.getDimensions();
+            const size_t nDims = dims.size();
             vector<shared_ptr<ConstArrayIterator> > inputArrayIters(nAttrs);
             vector<shared_ptr<ConstChunkIterator> > inputChunkIters(nAttrs);
             for (const auto& attr : inputSchema.getAttributes(true))
@@ -592,11 +593,9 @@ public:
                     // Set Object Name using Top-Left Coordinates
                     Coordinates const &coords = inputChunkIters[0]->getFirstPosition();
                     ostringstream out;
-                    out << settings.getBucketPrefix() << "/chunk";
+                    out << settings.getBucketPrefix() << "/c";
                     for (size_t i = 0; i < nDims; ++i)
-                    {
-                        out << "_" << coords[i];
-                    }
+                        out << "_" << coords[i] / dims[i].getChunkInterval();
 
                     std::shared_ptr<arrow::Buffer> arrowBuffer;
                     THROW_NOT_OK(

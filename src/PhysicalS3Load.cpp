@@ -97,13 +97,14 @@ public:
 
         Aws::S3::Model::ListObjectsRequest request;
         request.WithBucket(bucketName);
-        Aws::String objectName((settings.getBucketPrefix() + "/chunk_").c_str());
+        Aws::String objectName((settings.getBucketPrefix() + "/c_").c_str());
         request.WithPrefix(objectName);
 
         auto outcome = s3Client.ListObjects(request);
         S3_EXCEPTION_NOT_SUCCESS("List");
 
         Aws::Vector<Aws::S3::Model::Object> objects = outcome.GetResult().GetContents();
+        const Dimensions &dims = _schema.getDimensions();
         Coordinates pos(_nDims);
 
         for (Aws::S3::Model::Object& object : objects) {
@@ -120,12 +121,12 @@ public:
 
             size_t i = 0;
             istringstream objectNameStream(objectName.c_str());
-            objectNameStream.seekg(idx + 7); // "/chunk_"
+            objectNameStream.seekg(idx + 3); // "/c_"
             for (int coord; objectNameStream >> coord;) {
                 LOG4CXX_DEBUG(
                     logger,
                     "S3LOAD >> list: " << objectName << " coord: " << coord);
-                pos[i] = coord;
+                pos[i] = coord * dims[i].getChunkInterval();
                 i++;
                 if (objectNameStream.peek() == '_')
                     objectNameStream.ignore();
@@ -206,6 +207,7 @@ private:
         //     arrowReader,
         //     arrow::ipc::RecordBatchStreamReader::Open(&arrowBufferReader));
         ARROW_RETURN_NOT_OK(arrowReader->ReadNext(&arrowBatch));
+        // One SciDB Chunk equals one Arrow Batch
 
         // Set Chunk Iterators
         // Data is in Row Major Order

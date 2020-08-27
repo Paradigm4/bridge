@@ -65,10 +65,10 @@ class S3Array(object):
         return self._schema
 
     def list_chunks(self):
-        prefix = '{}/chunk_'.format(self.bucket_prefix)
+        prefix = '{}/c_'.format(self.bucket_prefix)
         result = self.client.list_objects_v2(Bucket=self.bucket_name,
                                              Prefix=prefix)
-        return tuple(sorted(tuple(map(int, e['Key'].lstrip(prefix).split('_')))
+        return tuple(sorted(tuple(map(int, e['Key'][len(prefix):].split('_')))
                             for e in result['Contents']))
 
     def get_chunk(self, *argv):
@@ -88,7 +88,7 @@ class S3Chunk(object):
                  'each dimension.').format(
                      len(argv), len(self.array.schema.dims)))
         self.bucket_postfix = '_'.join(itertools.chain(
-            ('chunk', ), (str(arg) for arg in argv)))
+            ('c', ), (str(arg) for arg in argv)))
 
         self._object = None
 
