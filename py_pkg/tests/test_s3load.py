@@ -16,7 +16,9 @@ def scidb_con():
 
 @pytest.fixture
 def s3_con():
-    return boto3.client('s3')
+    con = boto3.client('s3')
+    yield con
+    delete_prefix(con, '')
 
 
 @pytest.mark.parametrize('chunk_size', (5, 10, 20))
@@ -46,11 +48,15 @@ s3load(
     delete_prefix(s3_con, prefix)
 
 
-@pytest.mark.parametrize('chunk_size', (5, 10, 20))
-def test_many_dim(scidb_con, s3_con, chunk_size):
+@pytest.mark.parametrize('dim_start, dim_end, chunk_size',
+                         ((s, e, c)
+                          for s in (-21, -13, -10)
+                          for e in (10, 15, 20)
+                          for c in (5, 10, 20)))
+def test_many_dim(scidb_con, s3_con, dim_start, dim_end, chunk_size):
     prefix = 'many_dim_{}'.format(chunk_size)
-    schema = '<v:int64> [i=0:19:0:{}; j=0:19:0:{}]'.format(chunk_size,
-                                                           chunk_size)
+    schema = '<v:int64> [i={s}:{e}:0:{c}; j=-15:14:0:{c}]'.format(
+        s=dim_start, e=dim_end - 1, c=chunk_size)
 
     # Store
     bucket_prefix = '/'.join((base_prefix, prefix))
@@ -71,8 +77,8 @@ s3load(
     i_lst = []
     j_lst = []
     v_lst = []
-    for i in range(20):
-        for j in range(20):
+    for i in range(dim_start, dim_end):
+        for j in range(-15, 15):
             i_lst.append(i)
             j_lst.append(j)
             v_lst.append(float(i))
@@ -116,7 +122,7 @@ s3load(
      for c in (5, 10, 20)))
 def test_type(scidb_con, s3_con, type_name, is_null, type_numpy, chunk_size):
     max_val = 20
-    prefix = 'type_{}'.format(type_name)
+    prefix = 'test_{}_{}_{}'.format(type_name, is_null, chunk_size)
     schema = '<v:{} {}NULL> [i=0:{}:0:{}]'.format(
         type_name, '' if is_null else 'NOT ', max_val - 1, chunk_size)
 

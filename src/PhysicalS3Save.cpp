@@ -591,11 +591,18 @@ public:
                             ).getConstIterator(ConstChunkIterator::IGNORE_OVERLAPS);
 
                     // Set Object Name using Top-Left Coordinates
-                    Coordinates const &coords = inputChunkIters[0]->getFirstPosition();
+                    Coordinates const &pos = inputChunkIters[0]->getFirstPosition();
+                    for (size_t i = 0; i < nDims; ++i)
+                        LOG4CXX_DEBUG(logger,
+                                      "S3SAVE >> dim " << i
+                                      << " st " << dims[i].getStartMin()
+                                      << " pos " << pos[i]
+                                      << " res " << (pos[i] - dims[i].getStartMin()) / dims[i].getChunkInterval());
                     ostringstream out;
                     out << settings.getBucketPrefix() << "/c";
                     for (size_t i = 0; i < nDims; ++i)
-                        out << "_" << coords[i] / dims[i].getChunkInterval();
+                        out << "_" << (pos[i] -
+                                       dims[i].getStartMin()) / dims[i].getChunkInterval();
 
                     std::shared_ptr<arrow::Buffer> arrowBuffer;
                     THROW_NOT_OK(

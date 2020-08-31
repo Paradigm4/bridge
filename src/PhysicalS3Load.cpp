@@ -122,11 +122,11 @@ public:
             size_t i = 0;
             istringstream objectNameStream(objectName.c_str());
             objectNameStream.seekg(idx + 3); // "/c_"
-            for (int coord; objectNameStream >> coord;) {
+            for (int val; objectNameStream >> val;) {
                 LOG4CXX_DEBUG(
                     logger,
-                    "S3LOAD >> list: " << objectName << " coord: " << coord);
-                pos[i] = coord * dims[i].getChunkInterval();
+                    "S3LOAD >> list: " << objectName << " val: " << val);
+                pos[i] = val * dims[i].getChunkInterval() + dims[i].getStartMin();
                 i++;
                 if (objectNameStream.peek() == '_')
                     objectNameStream.ignore();
