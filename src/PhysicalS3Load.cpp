@@ -95,61 +95,65 @@ public:
         //                          "/metadata").c_str()),
         //             metadata);
 
-        Aws::S3::Model::ListObjectsRequest request;
-        request.WithBucket(bucketName);
-        Aws::String objectName((settings.getBucketPrefix() + "/c_").c_str());
-        request.WithPrefix(objectName);
 
-        auto outcome = s3Client.ListObjects(request);
-        S3_EXCEPTION_NOT_SUCCESS("List");
+        // Download Chunk Coordinate List
+        vector<Coordinates> chunkCoords;
+        Aws::S3::Model::GetObjectRequest objectRequest;
+        Aws::String objectName((settings.getBucketPrefix() + "/index").c_str());
+        objectRequest.SetBucket(bucketName);
+        objectRequest.SetKey(objectName);
 
-        Aws::Vector<Aws::S3::Model::Object> objects = outcome.GetResult().GetContents();
-        const Dimensions &dims = _schema.getDimensions();
-        Coordinates pos(_nDims);
+        auto outcome = s3Client.GetObject(objectRequest);
+        S3_EXCEPTION_NOT_SUCCESS("Get");
 
-        for (Aws::S3::Model::Object& object : objects) {
-            objectName = object.GetKey();
-            long long objectSize = object.GetSize();
-            LOG4CXX_DEBUG(
-                logger,
-                "S3LOAD >> list: " << objectName << " (" << objectSize << ")");
+        // Parse Index and Build Chunk Coordinate List
+        auto& chunkCoordsStream = outcome.GetResultWithOwnership().GetBody();
+        std::string chunkCoordsLine;
+        while (std::getline(chunkCoordsStream, chunkCoordsLine)) {
 
-            // Parse Object Name and Extract Dimensions
-            size_t idx = objectName.find_last_of("/");
-            if (idx == string::npos)
-                S3_EXCEPTION_OBJECT_NAME;
+            std::istringstream stm(chunkCoordsLine);
+            Coordinate coord;
+            Coordinates coords;
+            // while (getline(stm, coord, '\t'))
+            for (Coordinate coord; stm >> coord;)
+                coords.push_back(coord);
 
-            size_t i = 0;
-            istringstream objectNameStream(objectName.c_str());
-            objectNameStream.seekg(idx + 3); // "/c_"
-            for (int val; objectNameStream >> val;) {
-                LOG4CXX_DEBUG(
-                    logger,
-                    "S3LOAD >> list: " << objectName << " val: " << val);
-                pos[i] = val * dims[i].getChunkInterval() + dims[i].getStartMin();
-                i++;
-                if (objectNameStream.peek() == '_')
-                    objectNameStream.ignore();
-            }
-            if (i != _nDims)
-                S3_EXCEPTION_OBJECT_NAME;
+            if (coords.size() != _nDims)
+                throw USER_EXCEPTION(SCIDB_SE_METADATA,
+                                     SCIDB_LE_UNKNOWN_ERROR)
+                    << "Invalid index line '" << chunkCoordsLine
+                    << "', expected " << _nDims << " values";
 
+            chunkCoords.push_back(coords);
+        }
+
+        for (size_t i = 0; i < chunkCoords.size(); i++) {
+            std::stringstream s;
+            std::copy(chunkCoords[i].begin(), chunkCoords[i].end(), std::ostream_iterator<Coordinate>(s, ", "));
+            LOG4CXX_DEBUG(logger, "S3LOAD >> id: " << query->getInstanceID() << " coord[" << i << "]:" << s.str());
+        }
+
+        Dimensions const &dims = _schema.getDimensions();
+        for (auto posIt = chunkCoords.begin(); posIt != chunkCoords.end(); ++posIt)
             if (_schema.getPrimaryInstanceId(
-                    pos, query->getInstancesCount()) == query->getInstanceID()) {
-                for (i = 0; i < _nDims; i++)
-                    LOG4CXX_DEBUG(
-                        logger,
-                        "S3LOAD >> inst: " << query->getInstanceID() << " dim: " << i << " coord: " << pos[i]);
+                    *posIt, query->getInstancesCount()) == query->getInstanceID()) {
+
+                Aws::String objectName(coord2ObjectName(settings.getBucketPrefix(),
+                                                        *posIt,
+                                                        dims).c_str());
+
+                std::stringstream s;
+                std::copy(posIt->begin(), posIt->end(), std::ostream_iterator<Coordinate>(s, ", "));
+                LOG4CXX_DEBUG(logger, "S3LOAD >> id: " << query->getInstanceID() << " coord: " << s.str() << "name:" << objectName);
+
                 readChunk(query,
                           arrayIterators,
                           chunkIterators,
-                          pos,
+                          *posIt,
                           s3Client,
                           bucketName,
-                          objectName,
-                          objectSize);
+                          objectName);
             }
-        }
 
         Aws::ShutdownAPI(options);
 
@@ -176,8 +180,7 @@ private:
         Coordinates& posStart,
         Aws::S3::S3Client& s3Client,
         const Aws::String& bucketName,
-        const Aws::String& objectName,
-        const long long objectSize) {
+        const Aws::String& objectName) {
 
         // Download Chunk
         Aws::S3::Model::GetObjectRequest objectRequest;
@@ -186,10 +189,13 @@ private:
 
         auto outcome = s3Client.GetObject(objectRequest);
         S3_EXCEPTION_NOT_SUCCESS("Get");
+        const long long objectSize = outcome.GetResult().GetContentLength();
 
         auto& data_stream = outcome.GetResultWithOwnership().GetBody();
         char data[objectSize];
         // TODO check objectSize before converting it
+        // SciDB chunks < 2GB
+        // Arrow arrays can hold up to 2^31 elements
         data_stream.read(data, (streamsize)objectSize);
 
         arrow::io::BufferReader arrowBufferReader(

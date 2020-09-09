@@ -43,10 +43,10 @@ using namespace std;
 using namespace scidb;
 
 
-static void getMetadata(Aws::S3::S3Client& s3Client,
-                        const Aws::String& bucketName,
-                        const Aws::String& objectName,
-                        map<string, string>& metadata) {
+static void getMetadata(Aws::S3::S3Client const &s3Client,
+                        Aws::String const &bucketName,
+                        Aws::String const &objectName,
+                        std::map<std::string, std::string>& metadata) {
     // Download Metadata
     Aws::S3::Model::GetObjectRequest objectRequest;
 
@@ -58,16 +58,30 @@ static void getMetadata(Aws::S3::S3Client& s3Client,
 
     // Parse Metadata
     auto& metadataStream = outcome.GetResultWithOwnership().GetBody();
-    string line;
-    while (getline(metadataStream, line)) {
-        istringstream lineStream(line);
-        string key, value;
-        if (!getline(lineStream, key, '\t') || !getline(lineStream, value))
+    std::string line;
+    while (std::getline(metadataStream, line)) {
+        std::istringstream lineStream(line);
+        std::string key, value;
+        if (!std::getline(lineStream, key, '\t')
+            || !std::getline(lineStream, value))
             throw USER_EXCEPTION(SCIDB_SE_METADATA,
                                  SCIDB_LE_UNKNOWN_ERROR)
                 << "Invalid metadata line '" << line << "'";
         metadata[key] = value;
     }
 }
+
+
+static std::string coord2ObjectName(std::string const &bucketPrefix,
+                                    Coordinates const &pos,
+                                    Dimensions const &dims) {
+    std::ostringstream out;
+    out << bucketPrefix << "/c";
+    for (size_t i = 0; i < dims.size(); ++i)
+        out << "_" << (pos[i] -
+                       dims[i].getStartMin()) / dims[i].getChunkInterval();
+    return out.str();
+}
+
 
 #endif //S3Common
