@@ -648,6 +648,7 @@ public:
             // Sort Chunk Coordinate List
             std::sort(chunkCoords.begin(), chunkCoords.end(), CoordinatesLess());
 
+            // TODO Remove (debugging)
             for (size_t i = 0; i < chunkCoords.size(); i++) {
                 stringstream s;
                 std::copy(chunkCoords[i].begin(), chunkCoords[i].end(), std::ostream_iterator<Coordinate>(s, ", "));
@@ -683,6 +684,7 @@ public:
                 for (auto i = chunkCoords.begin(); i != chunkCoords.end(); ++i, ++j)
                     std::copy(i->begin(), i->end(), buf + j * nDims);
 
+                // TODO Remove (debugging)
                 for (size_t i = 0; i < chunkCoords.size(); i++) {
                     stringstream s;
                     std::copy(chunkCoords[i].begin(), chunkCoords[i].end(), std::ostream_iterator<Coordinate>(s, ", "));

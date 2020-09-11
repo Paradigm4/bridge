@@ -87,15 +87,68 @@ public:
         Aws::InitAPI(options);
         Aws::S3::S3Client s3Client;
 
-        // Get Metadata
-        // map<string, string> metadata;
-        // getMetadata(s3Client,
-        //             bucketName,
-        //             Aws::String((settings.getBucketPrefix() +
-        //                          "/metadata").c_str()),
-        //             metadata);
+
+        // -- - Using ListObjects to Get the List of Chunks - --
+        /*
+        Aws::S3::Model::ListObjectsRequest request;
+        request.WithBucket(bucketName);
+        Aws::String objectName((settings.getBucketPrefix() + "/c_").c_str());
+        request.WithPrefix(objectName);
+
+        auto outcome = s3Client.ListObjects(request);
+        S3_EXCEPTION_NOT_SUCCESS("List");
+
+        Aws::Vector<Aws::S3::Model::Object> objects = outcome.GetResult().GetContents();
+        const Dimensions &dims = _schema.getDimensions();
+        Coordinates pos(_nDims);
+
+        for (Aws::S3::Model::Object& object : objects) {
+            objectName = object.GetKey();
+            long long objectSize = object.GetSize();
+            LOG4CXX_DEBUG(
+                logger,
+                "S3LOAD >> list: " << objectName << " (" << objectSize << ")");
+
+            // Parse Object Name and Extract Dimensions
+            size_t idx = objectName.find_last_of("/");
+            if (idx == string::npos)
+                S3_EXCEPTION_OBJECT_NAME;
+
+            size_t i = 0;
+            istringstream objectNameStream(objectName.c_str());
+            objectNameStream.seekg(idx + 3); // "/c_"
+            for (int val; objectNameStream >> val;) {
+                LOG4CXX_DEBUG(
+                    logger,
+                    "S3LOAD >> list: " << objectName << " val: " << val);
+                pos[i] = val * dims[i].getChunkInterval() + dims[i].getStartMin();
+                i++;
+                if (objectNameStream.peek() == '_')
+                    objectNameStream.ignore();
+            }
+            if (i != _nDims)
+                S3_EXCEPTION_OBJECT_NAME;
+
+            if (_schema.getPrimaryInstanceId(
+                    pos, query->getInstancesCount()) == query->getInstanceID()) {
+                for (i = 0; i < _nDims; i++)
+                    LOG4CXX_DEBUG(
+                        logger,
+                        "S3LOAD >> inst: " << query->getInstanceID() << " dim: " << i << " coord: " << pos[i]);
+                readChunk(query,
+                          arrayIterators,
+                          chunkIterators,
+                          pos,
+                          s3Client,
+                          bucketName,
+                          objectName,
+                          objectSize);
+            }
+        }
+        */
 
 
+        // -- - Using Index to Get the List of Chunks - --
         // Download Chunk Coordinate List
         vector<Coordinates> chunkCoords;
         Aws::S3::Model::GetObjectRequest objectRequest;
@@ -114,7 +167,6 @@ public:
             std::istringstream stm(chunkCoordsLine);
             Coordinate coord;
             Coordinates coords;
-            // while (getline(stm, coord, '\t'))
             for (Coordinate coord; stm >> coord;)
                 coords.push_back(coord);
 
@@ -127,6 +179,7 @@ public:
             chunkCoords.push_back(coords);
         }
 
+        // TODO Remove (debugging)
         for (size_t i = 0; i < chunkCoords.size(); i++) {
             std::stringstream s;
             std::copy(chunkCoords[i].begin(), chunkCoords[i].end(), std::ostream_iterator<Coordinate>(s, ", "));
@@ -142,6 +195,7 @@ public:
                                                         *posIt,
                                                         dims).c_str());
 
+                // TODO Remove (debugging)
                 std::stringstream s;
                 std::copy(posIt->begin(), posIt->end(), std::ostream_iterator<Coordinate>(s, ", "));
                 LOG4CXX_DEBUG(logger, "S3LOAD >> id: " << query->getInstanceID() << " coord: " << s.str() << "name:" << objectName);
