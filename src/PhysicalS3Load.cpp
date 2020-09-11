@@ -176,7 +176,10 @@ public:
                     << "Invalid index line '" << chunkCoordsLine
                     << "', expected " << _nDims << " values";
 
-            chunkCoords.push_back(coords);
+            // Keep Only Chunks for this Instance
+            if (_schema.getPrimaryInstanceId(
+                    coords, query->getInstancesCount()) == query->getInstanceID())
+                chunkCoords.push_back(coords);
         }
 
         // TODO Remove (debugging)
@@ -187,27 +190,18 @@ public:
         }
 
         Dimensions const &dims = _schema.getDimensions();
-        for (auto posIt = chunkCoords.begin(); posIt != chunkCoords.end(); ++posIt)
-            if (_schema.getPrimaryInstanceId(
-                    *posIt, query->getInstancesCount()) == query->getInstanceID()) {
-
-                Aws::String objectName(coord2ObjectName(settings.getBucketPrefix(),
-                                                        *posIt,
-                                                        dims).c_str());
-
-                // TODO Remove (debugging)
-                std::stringstream s;
-                std::copy(posIt->begin(), posIt->end(), std::ostream_iterator<Coordinate>(s, ", "));
-                LOG4CXX_DEBUG(logger, "S3LOAD >> id: " << query->getInstanceID() << " coord: " << s.str() << "name:" << objectName);
-
-                readChunk(query,
-                          arrayIterators,
-                          chunkIterators,
-                          *posIt,
-                          s3Client,
-                          bucketName,
-                          objectName);
-            }
+        for (auto posIt = chunkCoords.begin(); posIt != chunkCoords.end(); ++posIt) {
+            Aws::String objectName(coord2ObjectName(settings.getBucketPrefix(),
+                                                    *posIt,
+                                                    dims).c_str());
+            readChunk(query,
+                      arrayIterators,
+                      chunkIterators,
+                      *posIt,
+                      s3Client,
+                      bucketName,
+                      objectName);
+        }
 
         Aws::ShutdownAPI(options);
 
