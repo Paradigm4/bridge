@@ -15,7 +15,7 @@
 #define S3_EXCEPTION_NOT_SUCCESS(operation)                                      \
   {                                                                              \
       if (!outcome.IsSuccess()) {                                                \
-          ostringstream exceptionOutput;                                         \
+          std::ostringstream exceptionOutput;                                         \
           exceptionOutput << (operation) << " operation on s3://"                \
                            << bucketName << "/" << objectName << " failed. ";    \
           auto error = outcome.GetError();                                       \
@@ -31,7 +31,7 @@
 
 #define S3_EXCEPTION_OBJECT_NAME                                        \
   {                                                                     \
-      ostringstream exceptionOutput;                                    \
+      std::ostringstream exceptionOutput;                                    \
       exceptionOutput << "Invalid object name '" << objectName << "'";  \
       throw USER_EXCEPTION(SCIDB_SE_METADATA,                           \
                                      SCIDB_LE_UNKNOWN_ERROR)            \
@@ -39,9 +39,7 @@
   }
 
 
-using namespace std;
-using namespace scidb;
-
+namespace scidb {
 
 static void getMetadata(Aws::S3::S3Client const &s3Client,
                         Aws::String const &bucketName,
@@ -83,5 +81,6 @@ static std::string coord2ObjectName(std::string const &bucketPrefix,
     return out.str();
 }
 
+}
 
 #endif //S3Common

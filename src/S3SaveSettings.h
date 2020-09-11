@@ -37,7 +37,6 @@ using boost::algorithm::trim;
 using boost::starts_with;
 using boost::lexical_cast;
 using boost::bad_lexical_cast;
-using namespace std;
 
 // Logger for operator. static to prevent visibility of variable outside of file
 static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3save"));
@@ -71,21 +70,21 @@ private:
         ARROW  = 0
     };
 
-    string			_bucketName;
-    string			_bucketPrefix;
+    std::string			_bucketName;
+    std::string			_bucketPrefix;
     FormatType                  _format;
 
     void checkIfSet(bool alreadySet, const char* kw)
     {
         if (alreadySet)
         {
-            ostringstream error;
+            std::ostringstream error;
             error << "illegal attempt to set " << kw << " multiple times";
             throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << error.str().c_str();
         }
     }
 
-    void setParamBucketName(vector<string> bucketName)
+    void setParamBucketName(std::vector<std::string> bucketName)
     {
         if (_bucketName != "") {
             throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal attempt to set bucket name multiple times";
@@ -94,7 +93,7 @@ private:
         _bucketName = bucketName[0];
     }
 
-    void setParamBucketPrefix(vector<string> bucketPrefix)
+    void setParamBucketPrefix(std::vector<std::string> bucketPrefix)
     {
         if (_bucketPrefix != "") {
             throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal attempt to set object path multiple times";
@@ -103,7 +102,7 @@ private:
         _bucketPrefix = bucketPrefix[0];
     }
 
-    void setParamFormat(vector<string> format)
+    void setParamFormat(std::vector<std::string> format)
     {
         if(format[0] == "arrow")
         {
@@ -115,9 +114,9 @@ private:
         }
     }
 
-    string getParamContentString(Parameter& param)
+    std::string getParamContentString(Parameter& param)
     {
-        string paramContent;
+        std::string paramContent;
 
         if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
             ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
@@ -131,9 +130,9 @@ private:
         return paramContent;
     }
 
-    bool setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, void (S3SaveSettings::* innersetter)(vector<string>) )
+    bool setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, void (S3SaveSettings::* innersetter)(std::vector<std::string>) )
     {
-        vector <string> paramContent;
+        std::vector <std::string> paramContent;
         bool retSet = false;
 
         Parameter kwParam = getKeywordParam(kwParams, kw);
@@ -155,7 +154,7 @@ private:
         return retSet;
     }
 
-    void setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, bool& alreadySet, void (S3SaveSettings::* innersetter)(vector<string>) )
+    void setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, bool& alreadySet, void (S3SaveSettings::* innersetter)(std::vector<std::string>) )
     {
         checkIfSet(alreadySet, kw);
         alreadySet = setKeywordParamString(kwParams, kw, innersetter);
@@ -168,10 +167,10 @@ private:
     }
 
 public:
-    S3SaveSettings(vector<shared_ptr<OperatorParam> > const& operatorParameters,
+    S3SaveSettings(std::vector<std::shared_ptr<OperatorParam> > const& operatorParameters,
                    KeywordParameters const& kwParams,
                    bool logical,
-                   shared_ptr<Query>& query):
+                   std::shared_ptr<Query>& query):
                 _bucketName(""),
                 _bucketPrefix(""),
                 _format(ARROW)
@@ -200,12 +199,12 @@ public:
         return _format == ARROW;
     }
 
-    string const& getBucketName() const
+    std::string const& getBucketName() const
     {
         return _bucketName;
     }
 
-    string const& getBucketPrefix() const
+    std::string const& getBucketPrefix() const
     {
         return _bucketPrefix;
     }

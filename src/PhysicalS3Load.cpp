@@ -42,8 +42,6 @@ namespace scidb
 
 static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3load"));
 
-using namespace scidb;
-
 static void EXCEPTION_ASSERT(bool cond)
 {
     if (!cond)
@@ -73,7 +71,7 @@ public:
         Aws::String bucketName(settings.getBucketName().c_str());
 
         // Init Output
-        shared_ptr<Array> array = std::make_shared<MemArray>(_schema, query);
+        std::shared_ptr<Array> array = std::make_shared<MemArray>(_schema, query);
         std::vector<std::shared_ptr<ArrayIterator> > arrayIterators(_nAtts);
         std::vector<std::shared_ptr<ChunkIterator> > chunkIterators(_nDims);
         size_t i = 0;
@@ -111,11 +109,11 @@ public:
 
             // Parse Object Name and Extract Dimensions
             size_t idx = objectName.find_last_of("/");
-            if (idx == string::npos)
+            if (idx == std::string::npos)
                 S3_EXCEPTION_OBJECT_NAME;
 
             size_t i = 0;
-            istringstream objectNameStream(objectName.c_str());
+            std::istringstream objectNameStream(objectName.c_str());
             objectNameStream.seekg(idx + 3); // "/c_"
             for (int val; objectNameStream >> val;) {
                 LOG4CXX_DEBUG(
@@ -150,7 +148,7 @@ public:
 
         // -- - Using Index to Get the List of Chunks - --
         // Download Chunk Coordinate List
-        vector<Coordinates> chunkCoords;
+        std::vector<Coordinates> chunkCoords;
         Aws::S3::Model::GetObjectRequest objectRequest;
         Aws::String objectName((settings.getBucketPrefix() + "/index").c_str());
         objectRequest.SetBucket(bucketName);
@@ -244,7 +242,7 @@ private:
         // TODO check objectSize before converting it
         // SciDB chunks < 2GB
         // Arrow arrays can hold up to 2^31 elements
-        data_stream.read(data, (streamsize)objectSize);
+        data_stream.read(data, (std::streamsize)objectSize);
 
         arrow::io::BufferReader arrowBufferReader(
             reinterpret_cast<const uint8_t*>(data), objectSize); // zero copy
@@ -348,10 +346,10 @@ private:
                     if (nullCount != 0 && ! (nullBitmap[j / 8] & 1 << j % 8))
                         chunkIterators[i]->writeItem(nullVal);
                     else {
-                        string valStr = std::static_pointer_cast<arrow::StringArray>(
+                        std::string valStr = std::static_pointer_cast<arrow::StringArray>(
                             arrowArray)->GetString(j);
                         if (valStr.length() != 1) {
-                            ostringstream out;
+                            std::ostringstream out;
                             out << "Invalid value for attribute "
                                 << _schema.getAttributes(true).findattr(i).getName();
                             throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
@@ -474,7 +472,7 @@ private:
             }
             default:
             {
-                ostringstream out;
+                std::ostringstream out;
                 out << "Type "
                     << _schema.getAttributes(true).findattr(i).getType()
                     << " not supported";

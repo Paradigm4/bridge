@@ -56,11 +56,11 @@ public:
         return &argSpec;
     }
 
-    ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, shared_ptr< Query> query)
+    ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, std::shared_ptr< Query> query)
     {
         ArrayDesc const& inputSchema = schemas[0];
         S3SaveSettings settings (_parameters, _kwParameters, true, query);
-        vector<DimensionDesc> dimensions(3);
+        std::vector<DimensionDesc> dimensions(3);
         size_t const nInstances = query->getInstancesCount();
         dimensions[0] = DimensionDesc("chunk_no",    0, 0, CoordinateBounds::getMax(), CoordinateBounds::getMax(), 1, 0);
         dimensions[1] = DimensionDesc("dest_instance_id",   0, 0, nInstances-1, nInstances-1, 1, 0);

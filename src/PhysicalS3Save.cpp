@@ -161,7 +161,7 @@ std::shared_ptr<arrow::Schema> atts2ArrowSchema(ArrayDesc const &schema)
         }
         default:
         {
-            ostringstream error;
+            std::ostringstream error;
             error << "Type " << type << " not supported in arrow format";
             throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION) << error.str();
         }
@@ -225,13 +225,13 @@ public:
     }
 
    arrow::Status populateArrowBuffer(ArrayDesc const& schema,
-                                      vector<shared_ptr<ConstChunkIterator> >& chunkIters,
+                                      std::vector<std::shared_ptr<ConstChunkIterator> >& chunkIters,
                                       std::shared_ptr<arrow::Buffer>& arrowBuffer)
     {
         // Append to Arrow Builders
         for (size_t attrIdx = 0; attrIdx < _nAttrs; ++attrIdx)
         {
-            shared_ptr<ConstChunkIterator> chunkIter = chunkIters[attrIdx];
+            std::shared_ptr<ConstChunkIterator> chunkIter = chunkIters[attrIdx];
 
             // Reset coordinate buffers
             if (attrIdx == 0) for (size_t i = 0; i < _nDims; ++i) _dimValues[i].clear();
@@ -273,8 +273,8 @@ public:
             }
             case TE_STRING:
             {
-                vector<string> values;
-                vector<uint8_t> is_valid;
+                std::vector<std::string> values;
+                std::vector<uint8_t> is_valid;
 
                 while (!chunkIter->end())
                 {
@@ -309,8 +309,8 @@ public:
             }
             case TE_CHAR:
             {
-                vector<string> values;
-                vector<uint8_t> is_valid;
+                std::vector<std::string> values;
+                std::vector<uint8_t> is_valid;
 
                 while (!chunkIter->end())
                 {
@@ -322,7 +322,7 @@ public:
                     }
                     else
                     {
-                        values.push_back(string(1, value.getChar()));
+                        values.push_back(std::string(1, value.getChar()));
                         is_valid.push_back(1);
                     }
 
@@ -416,7 +416,7 @@ public:
             }
             default:
             {
-                ostringstream error;
+                std::ostringstream error;
                 error << "Type "
                       << _attrTypes[attrIdx]
                       << " not supported in arrow format";
@@ -474,12 +474,12 @@ private:
     template <typename SciDBType,
               typename ArrowBuilder,
               typename ValueFunc> inline
-    arrow::Status populateCell(shared_ptr<ConstChunkIterator> chunkIter,
+    arrow::Status populateCell(std::shared_ptr<ConstChunkIterator> chunkIter,
                                ValueFunc valueGetter,
                                const size_t attrIdx)
     {
-        vector<SciDBType> values;
-        vector<bool> is_valid;
+        std::vector<SciDBType> values;
+        std::vector<bool> is_valid;
 
         while (!chunkIter->end())
         {
@@ -525,9 +525,9 @@ public:
                                    std::shared_ptr<Query> query)
     {
         S3SaveSettings settings(_parameters, _kwParameters, false, query);
-        shared_ptr<Array> result(new MemArray(_schema, query));
+        std::shared_ptr<Array> result(new MemArray(_schema, query));
 
-        shared_ptr<Array>& inputArray = inputArrays[0];
+        std::shared_ptr<Array>& inputArray = inputArrays[0];
         ArrayDesc inputSchema(inputArray->getArrayDesc());
         inputSchema.setName("");
         bool haveChunk_ = haveChunk(inputArray, inputSchema);
@@ -539,7 +539,7 @@ public:
         // Exit Early
         if (!haveChunk_ && !query->isCoordinator()) {
             // Send EMPTY Buffer to Coordinator
-            shared_ptr<SharedBuffer> shr(new MemoryBuffer(NULL, 1));
+            std::shared_ptr<SharedBuffer> shr(new MemoryBuffer(NULL, 1));
             BufSend(query->getCoordinatorID(), shr, query);
 
             return result;
@@ -564,7 +564,7 @@ public:
             *metaData << "format\tarrow\n";
 
             // Set Object Name
-            ostringstream out;
+            std::ostringstream out;
             out << settings.getBucketPrefix() << "/metadata";
 
             uploadToS3(bucketName,
@@ -632,7 +632,7 @@ public:
             for(InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
               if(remoteID != localID) {
                   // Receive Chunk Coordinate List
-                  shared_ptr<SharedBuffer> shr = BufReceive(remoteID, query);
+                  std::shared_ptr<SharedBuffer> shr = BufReceive(remoteID, query);
                   Coordinate* buf = static_cast<Coordinate*>(shr->getWriteData());
 
                   // De-serialize Chunk Coordinate List
@@ -650,7 +650,7 @@ public:
 
             // TODO Remove (debugging)
             for (size_t i = 0; i < chunkCoords.size(); i++) {
-                stringstream s;
+                std::stringstream s;
                 std::copy(chunkCoords[i].begin(), chunkCoords[i].end(), std::ostream_iterator<Coordinate>(s, ", "));
                 LOG4CXX_DEBUG(logger, "S3SAVE >> id: " << localID << " coord[" << i << "]:" << s.str());
             }
@@ -667,7 +667,7 @@ public:
             }
 
             // Set Object Name
-            ostringstream out;
+            std::ostringstream out;
             out << settings.getBucketPrefix() << "/index";
 
             // Upload Chunk Coordinate List to S3
@@ -686,18 +686,18 @@ public:
 
                 // TODO Remove (debugging)
                 for (size_t i = 0; i < chunkCoords.size(); i++) {
-                    stringstream s;
+                    std::stringstream s;
                     std::copy(chunkCoords[i].begin(), chunkCoords[i].end(), std::ostream_iterator<Coordinate>(s, ", "));
                     LOG4CXX_DEBUG(logger, "S3SAVE >> id: " << query->getInstanceID() << " coord[" << i << "]:" << s.str());
                 }
 
                 // Send to Coordinator
-                shared_ptr<SharedBuffer> shr(new MemoryBuffer(buf, sizeof(buf)));
+                std::shared_ptr<SharedBuffer> shr(new MemoryBuffer(buf, sizeof(buf)));
                 BufSend(query->getCoordinatorID(), shr, query);
             }
             else {
                 // Send EMPTY Buffer to Coordinator
-                shared_ptr<SharedBuffer> shr(new MemoryBuffer(NULL, 1));
+                std::shared_ptr<SharedBuffer> shr(new MemoryBuffer(NULL, 1));
                 BufSend(query->getCoordinatorID(), shr, query);
             }
 
@@ -722,9 +722,9 @@ private:
         S3_EXCEPTION_NOT_SUCCESS("Upload");
     }
 
-    bool haveChunk(shared_ptr<Array>& array, ArrayDesc const& schema)
+    bool haveChunk(std::shared_ptr<Array>& array, ArrayDesc const& schema)
     {
-        shared_ptr<ConstArrayIterator> iter = array->getConstIterator(
+        std::shared_ptr<ConstArrayIterator> iter = array->getConstIterator(
             schema.getAttributes(true).firstDataAttribute());
         return !(iter->end());
     }
