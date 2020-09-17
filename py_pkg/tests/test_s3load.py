@@ -22,8 +22,8 @@ def s3_con():
 
 
 @pytest.mark.parametrize('chunk_size', (5, 10, 20))
-def test_one_dim(scidb_con, s3_con, chunk_size):
-    prefix = 'one_dim_{}'.format(chunk_size)
+def test_one_dim_one_attr(scidb_con, s3_con, chunk_size):
+    prefix = 'one_dim_one_attr{}'.format(chunk_size)
     schema = '<v:int64> [i=0:19:0:{}]'.format(chunk_size)
 
     # Store
@@ -48,13 +48,50 @@ s3load(
     delete_prefix(s3_con, prefix)
 
 
+@pytest.mark.parametrize('chunk_size', (5, 10, 20))
+def test_multi_attr(scidb_con, s3_con, chunk_size):
+    prefix = 'multi_attr_{}'.format(chunk_size)
+    schema = '<v:int64, w:int64> [i=0:19:0:{}]'.format(chunk_size)
+
+    # Store
+    bucket_prefix = '/'.join((base_prefix, prefix))
+    scidb_con.iquery("""
+s3save(
+  redimension(
+    apply(
+      build({}, i),
+      w, v * v),
+    {}),
+  bucket_name:'{}',
+  bucket_prefix:'{}')""".format(schema.replace(', w:int64', ''),
+                                schema,
+                                bucket_name,
+                                bucket_prefix))
+
+    # Load
+    array = scidb_con.iquery("""
+s3load(
+  bucket_name:'{}',
+  bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
+                             fetch=True)
+    array = array.sort_values(by=['i']).reset_index(drop=True)
+
+    assert array.equals(
+        pandas.DataFrame({'i': range(20),
+                          'v': numpy.arange(0.0, 20.0),
+                          'w': (numpy.arange(0.0, 20.0) *
+                                numpy.arange(0.0, 20.0))}))
+
+    delete_prefix(s3_con, prefix)
+
+
 @pytest.mark.parametrize('dim_start, dim_end, chunk_size',
                          ((s, e, c)
                           for s in (-21, -13, -10)
                           for e in (10, 16, 19)
                           for c in (5, 7, 10, 20)))
-def test_many_dim(scidb_con, s3_con, dim_start, dim_end, chunk_size):
-    prefix = 'many_dim_{}_{}_{}'.format(dim_start, dim_end, chunk_size)
+def test_multi_dim(scidb_con, s3_con, dim_start, dim_end, chunk_size):
+    prefix = 'multi_dim_{}_{}_{}'.format(dim_start, dim_end, chunk_size)
     schema = '<v:int64> [i={s}:{e}:0:{c}; j=-15:14:0:{c}]'.format(
         s=dim_start, e=dim_end - 1, c=chunk_size)
 
