@@ -31,8 +31,6 @@
 #include <arrow/ipc/reader.h>
 #include <arrow/record_batch.h>
 
-#include <aws/s3/model/ListObjectsRequest.h>
-
 #include "S3Common.h"
 #include "S3LoadSettings.h"
 
@@ -65,10 +63,9 @@ public:
         std::vector< std::shared_ptr<Array> >& inputArrays,
         std::shared_ptr<Query> query)
     {
-        LOG4CXX_DEBUG(logger, "S3LOAD >> execute");
+        LOG4CXX_DEBUG(logger, "S3LOAD_EAGER >> execute");
 
         S3LoadSettings settings(_parameters, _kwParameters, false, query);
-        Aws::String bucketName(settings.getBucketName().c_str());
 
         // Init Output
         std::shared_ptr<Array> array = std::make_shared<MemArray>(_schema, query);
@@ -84,6 +81,7 @@ public:
         Aws::SDKOptions options;
         Aws::InitAPI(options);
         Aws::S3::S3Client s3Client;
+        Aws::String bucketName(settings.getBucketName().c_str());
 
 
         // -- - Using ListObjects to Get the List of Chunks - --
@@ -105,7 +103,7 @@ public:
             long long objectSize = object.GetSize();
             LOG4CXX_DEBUG(
                 logger,
-                "S3LOAD >> list: " << objectName << " (" << objectSize << ")");
+                "S3LOAD_EAGER >> list: " << objectName << " (" << objectSize << ")");
 
             // Parse Object Name and Extract Dimensions
             size_t idx = objectName.find_last_of("/");
@@ -118,7 +116,7 @@ public:
             for (int val; objectNameStream >> val;) {
                 LOG4CXX_DEBUG(
                     logger,
-                    "S3LOAD >> list: " << objectName << " val: " << val);
+                    "S3LOAD_EAGER >> list: " << objectName << " val: " << val);
                 pos[i] = val * dims[i].getChunkInterval() + dims[i].getStartMin();
                 i++;
                 if (objectNameStream.peek() == '_')
@@ -132,7 +130,7 @@ public:
                 for (i = 0; i < _nDims; i++)
                     LOG4CXX_DEBUG(
                         logger,
-                        "S3LOAD >> inst: " << query->getInstanceID() << " dim: " << i << " coord: " << pos[i]);
+                        "S3LOAD_EAGER >> inst: " << query->getInstanceID() << " dim: " << i << " coord: " << pos[i]);
                 readChunk(query,
                           arrayIterators,
                           chunkIterators,
@@ -184,7 +182,7 @@ public:
         for (size_t i = 0; i < chunkCoords.size(); i++) {
             std::stringstream s;
             std::copy(chunkCoords[i].begin(), chunkCoords[i].end(), std::ostream_iterator<Coordinate>(s, ", "));
-            LOG4CXX_DEBUG(logger, "S3LOAD >> id: " << query->getInstanceID() << " coord[" << i << "]:" << s.str());
+            LOG4CXX_DEBUG(logger, "S3LOAD_EAGER >> id: " << query->getInstanceID() << " coord[" << i << "]:" << s.str());
         }
 
         Dimensions const &dims = _schema.getDimensions();
@@ -192,6 +190,7 @@ public:
             Aws::String objectName(coord2ObjectName(settings.getBucketPrefix(),
                                                     *posIt,
                                                     dims).c_str());
+            // TODO Check returned value
             readChunk(query,
                       arrayIterators,
                       chunkIterators,

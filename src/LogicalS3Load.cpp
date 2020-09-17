@@ -54,7 +54,6 @@ public:
 
     ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, std::shared_ptr< Query> query)
     {
-        ArrayDesc const& inputSchema = schemas[0];
         S3LoadSettings settings(_parameters, _kwParameters, true, query);
 
         // Get Metadata from AWS

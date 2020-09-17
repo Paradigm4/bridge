@@ -58,7 +58,6 @@ public:
 
     ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, std::shared_ptr< Query> query)
     {
-        ArrayDesc const& inputSchema = schemas[0];
         S3SaveSettings settings (_parameters, _kwParameters, true, query);
         std::vector<DimensionDesc> dimensions(3);
         size_t const nInstances = query->getInstancesCount();

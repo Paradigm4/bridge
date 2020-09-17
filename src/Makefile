@@ -22,17 +22,17 @@ ifeq ($(SCIDB_THIRDPARTY_PREFIX),)
 endif
 
 # Debug:
-CFLAGS  := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -Wall -Wextra -Wno-long-long -Wno-strict-aliasing -Wno-system-headers -Wno-unused -Wno-unused-parameter -Wno-variadic-macros -fPIC -fno-omit-frame-pointer -g -std=c++14
+CFLAGS  := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -Wall -Wextra -Wno-long-long -Wno-strict-aliasing -Wno-system-headers -Wno-unused -Wno-unused-parameter -Wno-variadic-macros -fPIC -fno-omit-frame-pointer -g -std=c++14 # -Wfatal-errors
 CFLAGS  += -DAWS_COMMON_USE_IMPORT_EXPORT -DAWS_EVENT_STREAM_USE_IMPORT_EXPORT -DAWS_SDK_VERSION_MAJOR=1 -DAWS_SDK_VERSION_MINOR=8 -DAWS_SDK_VERSION_PATCH=3
 
 INC     := -DPROJECT_ROOT="\"$(SCIDB)\"" -I. -I"$(SCIDB)/include" -I"$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/include"
 INC     += -I/opt/aws/include
 
-LIBS    := -shared -Wl,-soname,libs3backer.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
+LIBS    := -shared -Wl,-soname,libs3bridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
 LIBS    += -rdynamic /opt/aws/lib/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,/opt/aws/lib
 
-SRCS    := plugin.cpp LogicalS3Save.cpp PhysicalS3Save.cpp LogicalS3Load.cpp PhysicalS3Load.cpp LogicalS3LoadEager.cpp PhysicalS3LoadEager.cpp
-HEADERS := S3Common.h S3SaveSettings.h S3LoadSettings.h
+SRCS    := plugin.cpp LogicalS3Save.cpp PhysicalS3Save.cpp LogicalS3Load.cpp PhysicalS3Load.cpp LogicalS3LoadEager.cpp PhysicalS3LoadEager.cpp S3Array.cpp
+HEADERS := S3Common.h S3SaveSettings.h S3LoadSettings.h S3Array.h
 OBJS    := $(SRCS:%.cpp=%.o)
 
 

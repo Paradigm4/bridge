@@ -11,6 +11,7 @@
 #define S3_COMMON
 
 #define S3BRIDGE_VERSION 1
+#define CHUNK_MAX_SIZE 2147483648
 
 #define S3_EXCEPTION_NOT_SUCCESS(operation)                                      \
   {                                                                              \
@@ -31,7 +32,7 @@
 
 #define S3_EXCEPTION_OBJECT_NAME                                        \
   {                                                                     \
-      std::ostringstream exceptionOutput;                                    \
+      std::ostringstream exceptionOutput;                               \
       exceptionOutput << "Invalid object name '" << objectName << "'";  \
       throw USER_EXCEPTION(SCIDB_SE_METADATA,                           \
                                      SCIDB_LE_UNKNOWN_ERROR)            \
