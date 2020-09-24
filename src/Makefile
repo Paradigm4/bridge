@@ -22,17 +22,20 @@ ifeq ($(SCIDB_THIRDPARTY_PREFIX),)
 endif
 
 # Debug:
-CFLAGS  := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -Wall -Wextra -Wno-long-long -Wno-strict-aliasing -Wno-system-headers -Wno-unused -Wno-unused-parameter -Wno-variadic-macros -fPIC -fno-omit-frame-pointer -g -std=c++14 # -Wfatal-errors
+CFLAGS  := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -Wall -Wextra -Wno-long-long -Wno-strict-aliasing -Wno-system-headers -Wno-unused -Wno-unused-parameter -Wno-variadic-macros -fPIC -fno-omit-frame-pointer -g -std=c++14
 CFLAGS  += -DAWS_COMMON_USE_IMPORT_EXPORT -DAWS_EVENT_STREAM_USE_IMPORT_EXPORT -DAWS_SDK_VERSION_MAJOR=1 -DAWS_SDK_VERSION_MINOR=8 -DAWS_SDK_VERSION_PATCH=3
 
 INC     := -DPROJECT_ROOT="\"$(SCIDB)\"" -I. -I"$(SCIDB)/include" -I"$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/include"
 INC     += -I/opt/aws/include
 
+CPPFLAGS := $(CFLAGS) $(INC)
+CPPFLAGS += -Wfatal-errors
+
 LIBS    := -shared -Wl,-soname,libs3bridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
 LIBS    += -rdynamic /opt/aws/lib/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,/opt/aws/lib
 
-SRCS    := plugin.cpp LogicalS3Save.cpp PhysicalS3Save.cpp LogicalS3Load.cpp PhysicalS3Load.cpp LogicalS3LoadEager.cpp PhysicalS3LoadEager.cpp S3Array.cpp
-HEADERS := S3Common.h S3SaveSettings.h S3LoadSettings.h S3Array.h
+SRCS    := plugin.cpp LogicalS3Save.cpp PhysicalS3Save.cpp LogicalS3Load.cpp PhysicalS3Load.cpp LogicalS3LoadEager.cpp PhysicalS3LoadEager.cpp S3Array.cpp S3Index.cpp
+HEADERS := S3Common.h S3SaveSettings.h S3LoadSettings.h S3Array.h S3Index.h
 OBJS    := $(SRCS:%.cpp=%.o)
 
 
@@ -47,11 +50,24 @@ else
   endif
 endif
 
-
-%.o: %.cpp $(HEADERS)
-	$(CXX) $(CFLAGS) $(INC) -c $< -o $@
-
 all: libs3bridge.so
+
+# %.o: %.cpp $(HEADERS)
+# 	$(CXX) $(CFLAGS) $(INC) -c $< -o $@
+
+plugin.o:
+
+LogicalS3Load.o: S3Common.h S3LoadSettings.h
+PhysicalS3Load.o: S3LoadSettings.h S3Array.h
+
+LogicalS3LoadEager.o: S3Common.h S3LoadSettings.h
+PhysicalS3LoadEager.o: S3Common.h S3LoadSettings.h
+
+LogicalS3Save.o: S3SaveSettings.h
+PhysicalS3Save.o: S3Common.h S3SaveSettings.h
+
+S3Array.o: S3Array.h S3Common.h S3LoadSettings.h
+S3Index.o: S3Index.h
 
 libs3bridge.so: $(OBJS)
 	@if test ! -d "$(SCIDB)"; then echo  "Error. Try:\n\nmake SCIDB=<PATH TO SCIDB INSTALL PATH>"; exit 1; fi
