@@ -23,10 +23,7 @@
 * END_COPYRIGHT
 */
 
-#include <vector>
-
 #include <SciDBAPI.h>
-#include <system/ErrorsLibrary.h>
 
 using namespace scidb;
 

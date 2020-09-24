@@ -29,7 +29,6 @@
 #include <arrow/builder.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/reader.h>
-#include <arrow/record_batch.h>
 
 #include "S3Common.h"
 #include "S3LoadSettings.h"

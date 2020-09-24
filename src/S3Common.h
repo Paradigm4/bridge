@@ -1,3 +1,31 @@
+/*
+**
+* BEGIN_COPYRIGHT
+*
+* Copyright (C) 2020 Paradigm4 Inc.
+* All Rights Reserved.
+*
+* s3bridge is a plugin for SciDB, an Open Source Array DBMS maintained
+* by Paradigm4. See http://www.paradigm4.com/
+*
+* s3bridge is free software: you can redistribute it and/or modify
+* it under the terms of the AFFERO GNU General Public License as published by
+* the Free Software Foundation.
+*
+* s3bridge is distributed "AS-IS" AND WITHOUT ANY WARRANTY OF ANY KIND,
+* INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY,
+* NON-INFRINGEMENT, OR FITNESS FOR A PARTICULAR PURPOSE. See
+* the AFFERO GNU General Public License for the complete license terms.
+*
+* You should have received a copy of the AFFERO GNU General Public License
+* along with s3bridge.  If not, see <http://www.gnu.org/licenses/agpl-3.0.html>
+*
+* END_COPYRIGHT
+*/
+
+#ifndef S3_COMMON
+#define S3_COMMON
+
 #include <map>
 
 #include <system/ErrorCodes.h>
@@ -6,9 +34,6 @@
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/GetObjectRequest.h>
 
-
-#ifndef S3_COMMON
-#define S3_COMMON
 
 #define S3BRIDGE_VERSION 1
 #define CHUNK_MAX_SIZE 2147483648

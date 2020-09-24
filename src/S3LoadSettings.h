@@ -25,6 +25,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
+
 #include <query/LogicalOperator.h>
 #include <query/Query.h>
 #include <query/Expression.h>

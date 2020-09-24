@@ -23,8 +23,6 @@
 * END_COPYRIGHT
 */
 
-#include <query/LogicalOperator.h>
-
 #include "S3SaveSettings.h"
 
 namespace scidb

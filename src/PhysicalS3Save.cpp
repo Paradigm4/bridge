@@ -23,7 +23,6 @@
 * END_COPYRIGHT
 */
 
-#include <array/SharedBuffer.h>
 #include <array/TileIteratorAdaptors.h>
 #include <network/Network.h>
 #include <query/PhysicalOperator.h>
@@ -33,8 +32,6 @@
 #include <arrow/ipc/writer.h>
 #include <arrow/record_batch.h>
 
-#include <aws/core/Aws.h>
-#include <aws/s3/S3Client.h>
 #include <aws/s3/model/PutObjectRequest.h>
 
 #include "S3Common.h"
@@ -599,6 +596,7 @@ public:
 
                     // Set Object Name using Top-Left Coordinates
                     Coordinates const &pos = inputChunkIters[0]->getFirstPosition();
+                    // Add Chunk Coordinates to the Chunk Index
                     chunkCoords.push_back(pos);
                     Aws::String objectName(coord2ObjectName(
                                                settings.getBucketPrefix(),
