@@ -215,7 +215,7 @@ s3load(
                           for s in (-13, -11, -7)
                           for e in (11, 13, 17)
                           for c in (3, 7, 11)))
-def test_filter(scidb_con, s3_con, dim_start, dim_end, chunk_size):
+def test_filter_before(scidb_con, s3_con, dim_start, dim_end, chunk_size):
     prefix = 'filter_{}_{}_{}'.format(dim_start, dim_end, chunk_size)
     schema = '<v:int64> [i={s}:{e}:0:{c}; j=-11:13:0:{c}]'.format(
         s=dim_start, e=dim_end - 1, c=chunk_size)
@@ -233,6 +233,52 @@ s3save(
 s3load(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
+                             fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+
+    i_lst = []
+    j_lst = []
+    v_lst = []
+    for i in range(dim_start, dim_end):
+        for j in range(-11, 14):
+            if i % 3 == 0 and i > 7:
+                i_lst.append(i)
+                j_lst.append(j)
+                v_lst.append(float(i))
+
+    assert array.equals(
+        pandas.DataFrame({'i': i_lst,
+                          'j': j_lst,
+                          'v': v_lst}))
+
+    delete_prefix(s3_con, prefix)
+
+
+@pytest.mark.parametrize('dim_start, dim_end, chunk_size',
+                         ((s, e, c)
+                          for s in (-13, -11, -7)
+                          for e in (11, 13, 17)
+                          for c in (3, 7, 11)))
+def test_filter_after(scidb_con, s3_con, dim_start, dim_end, chunk_size):
+    prefix = 'filter_{}_{}_{}'.format(dim_start, dim_end, chunk_size)
+    schema = '<v:int64> [i={s}:{e}:0:{c}; j=-11:13:0:{c}]'.format(
+        s=dim_start, e=dim_end - 1, c=chunk_size)
+
+    # Store
+    bucket_prefix = '/'.join((base_prefix, prefix))
+    scidb_con.iquery("""
+s3save(
+  build({}, i),
+  bucket_name:'{}',
+  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+
+    # Load
+    array = scidb_con.iquery("""
+filter(
+  s3load(
+    bucket_name:'{}',
+    bucket_prefix:'{}'),
+  i % 3 = 0 and i > 7)""".format(bucket_name, bucket_prefix),
                              fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
 
