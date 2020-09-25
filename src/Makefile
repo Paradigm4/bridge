@@ -29,7 +29,7 @@ INC     := -DPROJECT_ROOT="\"$(SCIDB)\"" -I. -I"$(SCIDB)/include" -I"$(SCIDB_THI
 INC     += -I/opt/aws/include
 
 CPPFLAGS := $(CFLAGS) $(INC)
-CPPFLAGS += -Wfatal-errors
+# CPPFLAGS += -Wfatal-errors
 
 LIBS    := -shared -Wl,-soname,libs3bridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
 LIBS    += -rdynamic /opt/aws/lib/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,/opt/aws/lib

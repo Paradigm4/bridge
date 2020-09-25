@@ -132,16 +132,100 @@ namespace scidb {
             _value = _nullValue;
         else
             switch (_chunk->_attrType) {
+            case TE_BINARY:
+            {
+                int32_t sz;
+                const uint8_t* ptr =
+                    std::static_pointer_cast<const arrow::BinaryArray>(
+                        _arrowArray)->GetValue(_arrowIndex, &sz);
+                _value.setData(ptr, sz);
+                break;
+            }
+            case TE_STRING:
+                _value.setString(
+                    std::static_pointer_cast<const arrow::StringArray>(
+                        _arrowArray)->GetString(_arrowIndex));
+                break;
+            case TE_CHAR:
+            {
+                std::string str =
+                    std::static_pointer_cast<const arrow::StringArray>(
+                        _arrowArray)->GetString(_arrowIndex);
+                if (str.length() != 1) {
+                    std::ostringstream out;
+                    out << "Invalid value for attribute "
+                        << _chunk->getArrayDesc().getAttributes(true).findattr(_chunk->_attrID).getName();
+                    throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                         SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+                }
+                _value.setChar(str[0]);
+                break;
+            }
+            case TE_BOOL:
+                _value.setBool(
+                    std::static_pointer_cast<const arrow::BooleanArray>(
+                        _arrowArray)->Value(_arrowIndex));
+                break;
+            case TE_DATETIME:
+                _value.setDateTime(
+                    std::static_pointer_cast<const arrow::Date64Array>(
+                        _arrowArray)->Value(_arrowIndex));
+                break;
+            case TE_FLOAT:
+                _value.setFloat(
+                    std::static_pointer_cast<const arrow::FloatArray>(
+                        _arrowArray)->Value(_arrowIndex));
+                break;
+            case TE_DOUBLE:
+                _value.setDouble(
+                    std::static_pointer_cast<const arrow::DoubleArray>(
+                        _arrowArray)->Value(_arrowIndex));
+                break;
+            case TE_INT8:
+                _value.setInt8(
+                    std::static_pointer_cast<const arrow::Int8Array>(
+                        _arrowArray)->Value(_arrowIndex));
+                break;
+            case TE_INT16:
+                _value.setInt16(
+                    std::static_pointer_cast<const arrow::Int16Array>(
+                        _arrowArray)->Value(_arrowIndex));
+                break;
+            case TE_INT32:
+                _value.setInt32(
+                    std::static_pointer_cast<const arrow::Int32Array>(
+                        _arrowArray)->Value(_arrowIndex));
+                break;
             case TE_INT64:
                 _value.setInt64(
                     std::static_pointer_cast<const arrow::Int64Array>(
-                        _arrowArray)->raw_values()[_arrowIndex]);
+                        _arrowArray)->Value(_arrowIndex));
+                break;
+            case TE_UINT8:
+                _value.setInt8(
+                    std::static_pointer_cast<const arrow::Int8Array>(
+                        _arrowArray)->Value(_arrowIndex));
+                break;
+            case TE_UINT16:
+                _value.setInt16(
+                    std::static_pointer_cast<const arrow::Int16Array>(
+                        _arrowArray)->Value(_arrowIndex));
+                break;
+            case TE_UINT32:
+                _value.setInt32(
+                    std::static_pointer_cast<const arrow::Int32Array>(
+                        _arrowArray)->Value(_arrowIndex));
+                break;
+            case TE_UINT64:
+                _value.setInt64(
+                    std::static_pointer_cast<const arrow::Int64Array>(
+                        _arrowArray)->Value(_arrowIndex));
                 break;
             default:
             {
                 std::ostringstream out;
                 out << "Type "
-                    << _array._desc.getAttributes(true).findattr(_chunk->_attrID).getType()
+                    << _chunk->getArrayDesc().getAttributes(true).findattr(_chunk->_attrID).getType()
                     << " not supported";
                 throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
                                      SCIDB_LE_ILLEGAL_OPERATION) << out.str();
