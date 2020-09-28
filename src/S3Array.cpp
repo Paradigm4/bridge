@@ -352,15 +352,8 @@ namespace scidb {
         _attrID(attrID),
         _attrDesc(array._desc.getAttributes().findattr(attrID)),
         _attrType(typeId2TypeEnum(array._desc.getAttributes().findattr(attrID).getType(), true)),
-        _arrowSizeAlloc(0),
-        _arrowData(NULL)
+        _arrowSizeAlloc(0)
     {
-    }
-
-    S3Chunk::~S3Chunk()
-    {
-        if (_arrowData != NULL)
-            delete _arrowData;
     }
 
     void S3Chunk::download()
@@ -391,17 +384,21 @@ namespace scidb {
         // Check size of current buffer and re-allocate the buffer if
         // it is too small
         if (arrowSize > _arrowSizeAlloc) {
-            if (_arrowData != NULL)
-                delete _arrowData;
+            LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _attrID
+                          << " S3Chunk::download arrowSizeAlloc: " << _arrowSizeAlloc
+                          << " arrowSize: " << arrowSize);
+
             _arrowSizeAlloc = arrowSize;
-            _arrowData = new char[_arrowSizeAlloc];
+            _arrowData = std::make_unique<char[]>(_arrowSizeAlloc);
         }
 
         auto& bodyStream = outcome.GetResultWithOwnership().GetBody();
-        bodyStream.read(_arrowData, (std::streamsize)arrowSize);
+        bodyStream.read(_arrowData.get(),
+                        static_cast<std::streamsize>(arrowSize));
 
         _arrowBufferReader = std::make_shared<arrow::io::BufferReader>(
-            reinterpret_cast<const uint8_t*>(_arrowData), arrowSize); // zero copy
+            reinterpret_cast<const uint8_t*>(_arrowData.get()),
+            arrowSize); // zero copy
 
         // Read Record Batch using Stream Reader
         THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(

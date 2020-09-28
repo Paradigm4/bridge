@@ -115,7 +115,6 @@ friend class S3ChunkIterator;
 
   public:
     S3Chunk(S3Array& array, AttributeID attrID);
-    ~S3Chunk();
 
     virtual const ArrayDesc& getArrayDesc() const;
     virtual const AttributeDesc& getAttributeDesc() const;
@@ -141,7 +140,7 @@ friend class S3ChunkIterator;
     const TypeEnum _attrType;
 
     long long _arrowSizeAlloc;
-    char *_arrowData;
+    std::unique_ptr<char[]> _arrowData;
     std::shared_ptr<arrow::io::BufferReader> _arrowBufferReader;
     std::shared_ptr<arrow::RecordBatchReader> _arrowBatchReader;
     std::shared_ptr<arrow::RecordBatch> _arrowBatch;
