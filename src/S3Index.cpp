@@ -82,7 +82,12 @@ const std::vector<Coordinates>::const_iterator S3Index::end() const {
     return _values.end();
 }
 
+const std::vector<Coordinates>::const_iterator S3Index::find(const Coordinates& pos) const {
+    return std::find(begin(), end(), pos);
 }
+
+}
+
 
 namespace std {
 

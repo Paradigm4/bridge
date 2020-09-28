@@ -76,6 +76,8 @@ class S3Index {
     const std::vector<Coordinates>::const_iterator begin() const;
     const std::vector<Coordinates>::const_iterator end() const;
 
+    const std::vector<Coordinates>::const_iterator find(const Coordinates&) const;
+
   private:
     const ArrayDesc& _desc;
     const size_t _nDims;
