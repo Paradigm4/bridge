@@ -286,8 +286,8 @@ namespace scidb {
                 if (pos[i] != coord) {
                     isMatch = false;
 
-                    // An Arrow coordinate is greater, no match can be
-                    // found
+                    // The first Arrow coordinate is greater, no match
+                    // can be found
                     if (i == 0 && pos[i] < coord)
                         isPossible = false;
                     break;

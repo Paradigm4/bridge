@@ -185,7 +185,7 @@ public:
             ArrayDesc const& desc,
             std::shared_ptr<S3LoadSettings> settings);
 
-    ~S3Array();
+    virtual ~S3Array();
 
     virtual ArrayDesc const& getArrayDesc() const;
     std::shared_ptr<ConstArrayIterator> getConstIteratorImpl(const AttributeDesc& attr) const override;
