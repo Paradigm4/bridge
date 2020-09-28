@@ -165,6 +165,7 @@ private:
     const AttributeID _attrID;
     const Dimensions _dims;
     S3Chunk _chunk;
+    const std::vector<Coordinates>::const_iterator _beginChunkCoords;
     const std::vector<Coordinates>::const_iterator _endChunkCoords;
 
     Coordinates _currPos;

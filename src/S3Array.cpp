@@ -485,6 +485,7 @@ namespace scidb {
         _attrID(attrID),
         _dims(array._desc.getDimensions()),
         _chunk(array, attrID),
+        _beginChunkCoords(array._chunkCoords->begin()),
         _endChunkCoords(array._chunkCoords->end())
     {
         restart();
@@ -550,16 +551,17 @@ namespace scidb {
             }
 
         _currPos = pos;
-        Coordinates chunkPos = pos;
         // Convert cell coords to chunk coords
+        Coordinates chunkPos = pos;
         _array._desc.getChunkPositionFor(chunkPos);
 
         _chunkInitialized = false;
         _hasCurrent = false;
 
         // TODO optimize index search
-        for(; _currChunkCoords != _endChunkCoords; ++_currChunkCoords)
-            if (chunkPos == *(_currChunkCoords)) {
+        for(auto i = _beginChunkCoords; i != _endChunkCoords; ++i)
+            if (chunkPos == *(i)) {
+                _currChunkCoords = i;
                 _hasCurrent = true;
                 break;
             }
@@ -578,7 +580,7 @@ namespace scidb {
     {
         Query::getValidQueryPtr(_array._query);
 
-        _currChunkCoords = _array._chunkCoords->begin();
+        _currChunkCoords = _beginChunkCoords;
         _nextChunk();
     }
 
