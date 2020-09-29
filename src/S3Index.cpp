@@ -32,7 +32,7 @@
 
 namespace scidb {
 
-S3Index::S3Index(const ArrayDesc& desc, const Query& query):
+S3Index::S3Index(const Query& query, const ArrayDesc& desc):
     _desc(desc),
     _nDims(desc.getDimensions().size()),
     _nInst(query.getInstancesCount()),
@@ -83,6 +83,7 @@ const std::vector<Coordinates>::const_iterator S3Index::end() const {
 }
 
 const std::vector<Coordinates>::const_iterator S3Index::find(const Coordinates& pos) const {
+    // TODO optimize index search
     return std::find(begin(), end(), pos);
 }
 

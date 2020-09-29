@@ -30,6 +30,8 @@
 
 #include <aws/core/Aws.h>
 
+#include "S3Index.h"
+
 
 // Forward Declarastions to avoid including full headers - speed-up
 // compilation
@@ -165,13 +167,11 @@ private:
     const AttributeID _attrID;
     const Dimensions _dims;
     S3Chunk _chunk;
-    const std::vector<Coordinates>::const_iterator _beginChunkCoords;
-    const std::vector<Coordinates>::const_iterator _endChunkCoords;
 
     Coordinates _currPos;
     bool _hasCurrent;
     bool _chunkInitialized;
-    std::vector<Coordinates>::const_iterator _currChunkCoords;
+    std::vector<Coordinates>::const_iterator _currIndex;
 };
 
 class S3Array : public Array
@@ -202,7 +202,7 @@ private:
     const Aws::SDKOptions _awsOptions;
     std::shared_ptr<Aws::S3::S3Client> _awsClient;
     std::shared_ptr<Aws::String> _awsBucketName;
-    std::shared_ptr<std::vector<Coordinates> > _chunkCoords;
+    S3Index _index;
 };
 
 }

@@ -63,7 +63,7 @@ class S3Index {
     friend Aws::IOStream& std::operator>>(Aws::IOStream&, scidb::S3Index&);
 
   public:
-    S3Index(const ArrayDesc&, const Query&);
+    S3Index(const Query&, const ArrayDesc&);
 
     size_t size() const;
     void push_back(const Coordinates&);

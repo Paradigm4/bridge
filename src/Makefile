@@ -66,7 +66,7 @@ PhysicalS3LoadEager.o: S3Common.h S3LoadSettings.h
 LogicalS3Save.o: S3SaveSettings.h
 PhysicalS3Save.o: S3Common.h S3SaveSettings.h
 
-S3Array.o: S3Array.h S3Common.h S3LoadSettings.h
+S3Array.o: S3Array.h S3Common.h S3LoadSettings.h S3Index.h
 S3Index.o: S3Index.h
 
 libs3bridge.so: $(OBJS)

@@ -31,6 +31,7 @@
 
 #include "S3Common.h"
 #include "S3LoadSettings.h"
+#include "S3Index.h"
 
 // TODO use __builtin_expect
 #define THROW_NOT_OK(s)                                                 \
@@ -87,11 +88,9 @@ namespace scidb {
         restart();
 
         // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _chunk->_attrID
-                      << " S3ChunkIterator nAtts: " << _nAtts << " attrID: " << _chunk->_attrID
-                      << " nDims: " << _nDims << " arrowLength: " << _arrowLength << " "
-                      << std::static_pointer_cast<arrow::Int64Array>(_arrowBatch->column(1))->raw_values()[0] << " "
-                      << std::static_pointer_cast<arrow::Int64Array>(_arrowBatch->column(1))->raw_values()[4]);
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _chunk->_attrID
+                      << "|ChunkIt nAtts: " << _nAtts << " attrID: " << _chunk->_attrID
+                      << " nDims: " << _nDims << " arrowLen: " << _arrowLength);
     }
 
     void S3ChunkIterator::restart()
@@ -104,22 +103,16 @@ namespace scidb {
             _hasCurrent = false;
 
         // TODO Remove (debugging)
-        std::stringstream s1, s2, s3;
-        std::copy(_firstPos.begin(), _firstPos.end(), std::ostream_iterator<Coordinate>(s1, ", "));
-        std::copy(_currPos.begin(),  _currPos.end(),  std::ostream_iterator<Coordinate>(s2, ", "));
-        std::copy(_lastPos.begin(),  _lastPos.end(),  std::ostream_iterator<Coordinate>(s3, ", "));
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _chunk->_attrID
-                      << " S3ChunkIterator::restart firstPos: " << s1.str() << " currPos: " << s2.str() << " lastPos: " << s3.str() << " arrowLength: " << _arrowLength << " hasCurrent: " << _hasCurrent);
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _chunk->_attrID
+                      << "|ChunkIt::restart pos: " << _currPos << " [" << _firstPos << ", " << _lastPos << "] arrowLen: " << _arrowLength << " hasCurr: " << _hasCurrent);
     }
 
     Value const& S3ChunkIterator::getItem()
     {
         // TODO Remove (debugging)
-        std::stringstream s;
-        std::copy(_currPos.begin(), _currPos.end(), std::ostream_iterator<Coordinate>(s, ", "));
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _chunk->_attrID
-                      << " S3ChunkIterator::getItem  hasCurrent: " << _hasCurrent
-                      << " currPos: " << s.str());
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _chunk->_attrID
+                      << "|ChunkIt::getItem  hasCurr: " << _hasCurrent
+                      << " pos: " << _currPos);
 
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
@@ -257,10 +250,8 @@ namespace scidb {
     bool S3ChunkIterator::setPosition(Coordinates const& pos)
     {
         // TODO Remove (debugging)
-        std::stringstream s;
-        std::copy(pos.begin(), pos.end(), std::ostream_iterator<Coordinate>(s, ", "));
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _chunk->_attrID
-                      << " S3ChunkIterator::setPosition: " << s.str());
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _chunk->_attrID
+                      << "|ChunkIt::setPosition: " << pos);
 
         if (_arrowLength <= 0) {
             _hasCurrent = false;
@@ -367,8 +358,8 @@ namespace scidb {
         Aws::S3::Model::GetObjectRequest objectRequest;
         objectRequest.SetBucket(bucketName);
         objectRequest.SetKey(objectName);
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _attrID
-                      << " S3Chunk::download: " << objectName);
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                      << "|Chunk::download: " << objectName);
 
         auto outcome = _array._awsClient->GetObject(objectRequest);
         S3_EXCEPTION_NOT_SUCCESS("Get");
@@ -384,8 +375,8 @@ namespace scidb {
         // Check size of current buffer and re-allocate the buffer if
         // it is too small
         if (arrowSize > _arrowSizeAlloc) {
-            LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _attrID
-                          << " S3Chunk::download arrowSizeAlloc: " << _arrowSizeAlloc
+            LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                          << "|Chunk::download arrowSizeAlloc: " << _arrowSizeAlloc
                           << " arrowSize: " << arrowSize);
 
             _arrowSizeAlloc = arrowSize;
@@ -415,10 +406,8 @@ namespace scidb {
     void S3Chunk::setPosition(Coordinates const& pos)
     {
         // TODO Remove (debugging)
-        std::stringstream s;
-        std::copy(pos.begin(), pos.end(), std::ostream_iterator<Coordinate>(s, ", "));
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _attrID
-                      << " S3Chunk::setPosition pos: " << s.str());
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                      << "|Chunk::setPosition: " << pos);
 
         // Set _firstPos, _firstPosWithOverlap, _lastPos, and
         // _lastPosWithOverlap based on given pos
@@ -438,10 +427,6 @@ namespace scidb {
 
     std::shared_ptr<ConstChunkIterator> S3Chunk::getConstIterator(int iterationMode) const
     {
-        // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _attrID
-                      << " S3Chunk::getConstIterator");
-
         return std::shared_ptr<ConstChunkIterator>(
             new S3ChunkIterator(_array, this, iterationMode, _arrowBatch));
     }
@@ -484,9 +469,7 @@ namespace scidb {
         _array(array),
         _attrID(attrID),
         _dims(array._desc.getDimensions()),
-        _chunk(array, attrID),
-        _beginChunkCoords(array._chunkCoords->begin()),
-        _endChunkCoords(array._chunkCoords->end())
+        _chunk(array, attrID)
     {
         restart();
     }
@@ -494,52 +477,48 @@ namespace scidb {
     void S3ArrayIterator::operator ++()
     {
         // TODO Remove (debugging)
-        std::stringstream s;
-        std::copy(_currChunkCoords->begin(), _currChunkCoords->end(), std::ostream_iterator<Coordinate>(s, ", "));
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _attrID
-                      << " S3ArrayIterator::++ hasCurrent: " << _hasCurrent
-                      << " currChunkCoord: " << s.str()
-                      << " currChunkCoord==endChunkCoords: " << (_currChunkCoords == _endChunkCoords));
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                      << "|ArrayIt::++ hasCurr: " << _hasCurrent
+                      << " Index curr: " << *_currIndex
+                      << " end? " << (_currIndex == _array._index.end()));
 
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
-        if (_currChunkCoords == _endChunkCoords)
+        if (_currIndex == _array._index.end())
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
         Query::getValidQueryPtr(_array._query);
 
-        ++_currChunkCoords;
+        ++_currIndex;
         _nextChunk();
     }
 
     void S3ArrayIterator::_nextChunk()
     {
+        // TODO Remove (debugging)
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                      << "|ArrayIt::_nextChunk hasCurr: " << _hasCurrent << " end? " << (_currIndex == _array._index.end()));
+
         _chunkInitialized = false;
 
-        if (_currChunkCoords == _endChunkCoords)
+        if (_currIndex == _array._index.end())
             _hasCurrent = false;
         else {
             _hasCurrent = true;
-            _currPos = *_currChunkCoords;
+            _currPos = *_currIndex;
         }
 
         // TODO Remove (debugging)
-        std::stringstream s;
-        if (_hasCurrent)
-            std::copy(_currChunkCoords->begin(), _currChunkCoords->end(), std::ostream_iterator<Coordinate>(s, ", "));
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _attrID
-                      << " S3ArrayIterator::_nextChunk chunkCoords.size: " << _array._chunkCoords->size()
-                      << " hasCurrent: " << _hasCurrent << " currChunkCoord: " << s.str());
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                      << "|ArrayIt::_nextChunk hasCurr: " << _hasCurrent << " currPos: " << _currPos);
     }
 
     bool S3ArrayIterator::setPosition(Coordinates const& pos)
     {
         // TODO Remove (debugging)
-        std::stringstream s;
-        std::copy(pos.begin(), pos.end(), std::ostream_iterator<Coordinate>(s, ", "));
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _attrID
-                      << " S3ArrayIterator::setPosition: " << s.str());
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                      << "|ArrayIt::setPosition: " << pos);
 
         Query::getValidQueryPtr(_array._query);
 
@@ -556,22 +535,16 @@ namespace scidb {
         _array._desc.getChunkPositionFor(chunkPos);
 
         _chunkInitialized = false;
-        _hasCurrent = false;
-
-        // TODO optimize index search
-        for(auto i = _beginChunkCoords; i != _endChunkCoords; ++i)
-            if (chunkPos == *(i)) {
-                _currChunkCoords = i;
-                _hasCurrent = true;
-                break;
-            }
+        _currIndex = _array._index.find(chunkPos);
+        if (_currIndex != _array._index.end())
+            _hasCurrent = true;
+        else
+            _hasCurrent = false;
 
         // TODO Remove (debugging)
-        s.str("");
-        std::copy(chunkPos.begin(), chunkPos.end(), std::ostream_iterator<Coordinate>(s, ", "));
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _attrID
-                      << " S3ArrayIterator::setPosition chunkPos: " << s.str()
-                      << " hasCurrent: " << _hasCurrent);
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                      << "|ArrayIt::setPosition chunkPos: " << chunkPos
+                      << " hasCurr: " << _hasCurrent);
 
         return _hasCurrent;
     }
@@ -580,15 +553,15 @@ namespace scidb {
     {
         Query::getValidQueryPtr(_array._query);
 
-        _currChunkCoords = _beginChunkCoords;
+        _currIndex = _array._index.begin();
         _nextChunk();
     }
 
     ConstChunk const& S3ArrayIterator::getChunk()
     {
         // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _attrID
-                      << " S3ArrayIterator::getChunk hasCurrent: " << _hasCurrent);
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                      << "|ArrayIt::getChunk hasCurr: " << _hasCurrent);
 
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
@@ -612,8 +585,8 @@ namespace scidb {
     Coordinates const& S3ArrayIterator::getPosition()
     {
         // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _array._instanceID << "a" << _attrID
-                      << " S3ArrayIterator::getChunk hasCurrent: " << _hasCurrent);
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                      << "|ArrayIt::getChunk hasCurr: " << _hasCurrent);
 
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
@@ -630,7 +603,8 @@ namespace scidb {
         _nInstances(query->getInstancesCount()),
         _instanceID(query->getInstanceID()),
         _desc(desc),
-       _settings(settings)
+        _settings(settings),
+        _index(*query, desc)
     {
         SCIDB_ASSERT(_nInstances > 0 && _instanceID < _nInstances);
         _query = Query::getValidQueryPtr(query);
@@ -651,36 +625,12 @@ namespace scidb {
         auto outcome = _awsClient->GetObject(objectRequest);
         S3_EXCEPTION_NOT_SUCCESS("Get");
 
-        // Parse Index and Build Chunk Coordinate List
-        _chunkCoords = std::make_shared<std::vector<Coordinates> >();
-        auto& chunkCoordsStream = outcome.GetResultWithOwnership().GetBody();
-        std::string chunkCoordsLine;
-        size_t const _nDims = _desc.getDimensions().size();
-        while (std::getline(chunkCoordsStream, chunkCoordsLine)) {
-
-            std::istringstream stm(chunkCoordsLine);
-            Coordinates coords;
-            for (Coordinate coord; stm >> coord;)
-                coords.push_back(coord);
-
-            if (coords.size() != _nDims)
-                throw USER_EXCEPTION(SCIDB_SE_METADATA,
-                                     SCIDB_LE_UNKNOWN_ERROR)
-                    << "Invalid index line '" << chunkCoordsLine
-                    << "', expected " << _nDims << " values";
-
-            // Keep Only Chunks for this Instance
-            if (_desc.getPrimaryInstanceId(
-                    coords, query->getInstancesCount()) == query->getInstanceID())
-                _chunkCoords->push_back(coords);
-        }
+        // Parse S3Index
+        auto& indexStream = outcome.GetResultWithOwnership().GetBody();
+        indexStream >> _index;
 
         // TODO Remove (debugging)
-        for (size_t i = 0; i < _chunkCoords->size(); i++) {
-            std::stringstream s;
-            std::copy((*_chunkCoords)[i].begin(), (*_chunkCoords)[i].end(), std::ostream_iterator<Coordinate>(s, ", "));
-            LOG4CXX_DEBUG(logger, "S3ARRAY >> i" << _instanceID << " S3Array coord[" << i << "]:" << s.str());
-        }
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _instanceID << "|Array index:" << _index);
     }
 
     S3Array::~S3Array() {
