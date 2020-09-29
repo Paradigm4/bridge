@@ -36,6 +36,7 @@
 
 #include "S3Common.h"
 #include "S3SaveSettings.h"
+#include "S3Index.h"
 
 
 #define THROW_NOT_OK(s)                                                 \
@@ -533,12 +534,13 @@ public:
                       << " isCoord " << query->isCoordinator()
                       << " haveChunk " << haveChunk_);
 
+        // Chunk Coordinate Index
+        S3Index index(*query, inputSchema);
+
         // Exit Early
         if (!haveChunk_ && !query->isCoordinator()) {
-            // Send EMPTY Buffer to Coordinator
-            std::shared_ptr<SharedBuffer> shr(new MemoryBuffer(NULL, 1));
-            BufSend(query->getCoordinatorID(), shr, query);
-
+            // Send EMPTY Index to Coordinator
+            BufSend(query->getCoordinatorID(), index.serialize(), query);
             return result;
         }
 
@@ -569,11 +571,7 @@ public:
                        metaData);
         }
 
-        // Chunk Coordinate List
-        std::vector<Coordinates> chunkCoords;
         Dimensions const &dims = inputSchema.getDimensions();
-        size_t const nDims = dims.size();
-
         if (haveChunk_) {
             // Init Array & Chunk Iterators
             size_t const nAttrs = inputSchema.getAttributes(true).size();
@@ -597,7 +595,7 @@ public:
                     // Set Object Name using Top-Left Coordinates
                     Coordinates const &pos = inputChunkIters[0]->getFirstPosition();
                     // Add Chunk Coordinates to the Chunk Index
-                    chunkCoords.push_back(pos);
+                    index.push_back(pos);
                     Aws::String objectName(coord2ObjectName(
                                                settings.getBucketPrefix(),
                                                pos,
@@ -628,41 +626,20 @@ public:
             InstanceID localID = query->getInstanceID();
 
             for(InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
-              if(remoteID != localID) {
-                  // Receive Chunk Coordinate List
-                  std::shared_ptr<SharedBuffer> shr = BufReceive(remoteID, query);
-                  Coordinate* buf = static_cast<Coordinate*>(shr->getWriteData());
-
-                  // De-serialize Chunk Coordinate List
-                  for (size_t i = 0; i < shr->getSize() / sizeof(Coordinate) / nDims; ++i) {
-                      Coordinates coords;
-                      std::copy(buf + i * nDims,
-                                buf + (i + 1) * nDims,
-                                std::back_inserter(coords));
-                      chunkCoords.push_back(coords);
-                  }
-              }
+                if(remoteID != localID)
+                    // Receive and De-Serialize Index
+                    index.deserialize_push_back(BufReceive(remoteID, query));
 
             // Sort Chunk Coordinate List
-            std::sort(chunkCoords.begin(), chunkCoords.end(), CoordinatesLess());
+            index.sort();
 
             // TODO Remove (debugging)
-            for (size_t i = 0; i < chunkCoords.size(); i++) {
-                std::stringstream s;
-                std::copy(chunkCoords[i].begin(), chunkCoords[i].end(), std::ostream_iterator<Coordinate>(s, ", "));
-                LOG4CXX_DEBUG(logger, "S3SAVE >> id: " << localID << " coord[" << i << "]:" << s.str());
-            }
+            LOG4CXX_DEBUG(logger, "S3SAVE|" << localID << "| index: " << index);
 
             // Serialize Chunk Coordinate List
             const std::shared_ptr<Aws::IOStream> metaData =
                 Aws::MakeShared<Aws::StringStream>("");
-            for (auto i = chunkCoords.begin(); i != chunkCoords.end(); ++i) {
-                std::copy(i->begin(),
-                          i->end(),
-                          std::ostream_iterator<Coordinate>(*metaData, "\t"));
-                metaData->seekp(-1, metaData->cur);
-                *metaData << "\n";
-            }
+            (*metaData) << index;
 
             // Set Object Name
             std::ostringstream out;
@@ -672,32 +649,9 @@ public:
             uploadToS3(bucketName,
                        Aws::String(out.str().c_str()),
                        metaData);
-
         }
         else
-            if (chunkCoords.size() > 0) {
-                // Serizalize Chunk Coordinate List
-                Coordinate buf[nDims * chunkCoords.size()];
-                int j = 0;
-                for (auto i = chunkCoords.begin(); i != chunkCoords.end(); ++i, ++j)
-                    std::copy(i->begin(), i->end(), buf + j * nDims);
-
-                // TODO Remove (debugging)
-                for (size_t i = 0; i < chunkCoords.size(); i++) {
-                    std::stringstream s;
-                    std::copy(chunkCoords[i].begin(), chunkCoords[i].end(), std::ostream_iterator<Coordinate>(s, ", "));
-                    LOG4CXX_DEBUG(logger, "S3SAVE >> id: " << query->getInstanceID() << " coord[" << i << "]:" << s.str());
-                }
-
-                // Send to Coordinator
-                std::shared_ptr<SharedBuffer> shr(new MemoryBuffer(buf, sizeof(buf)));
-                BufSend(query->getCoordinatorID(), shr, query);
-            }
-            else {
-                // Send EMPTY Buffer to Coordinator
-                std::shared_ptr<SharedBuffer> shr(new MemoryBuffer(NULL, 1));
-                BufSend(query->getCoordinatorID(), shr, query);
-            }
+            BufSend(query->getCoordinatorID(), index.serialize(), query);
 
         Aws::ShutdownAPI(options);
 

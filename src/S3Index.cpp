@@ -32,6 +32,8 @@
 
 namespace scidb {
 
+// static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3index"));
+
 S3Index::S3Index(const Query& query, const ArrayDesc& desc):
     _desc(desc),
     _nDims(desc.getDimensions().size()),
@@ -49,6 +51,10 @@ void S3Index::push_back(const Coordinates& pos) {
 }
 
 void S3Index::deserialize_push_back(std::shared_ptr<SharedBuffer> buf) {
+    // A One Byte Buffer is an "Empty" Buffer
+    if (buf->getSize() == 1)
+        return;
+
     Coordinate* mem = static_cast<Coordinate*>(buf->getWriteData());
 
     // De-serialize Coordinates
@@ -65,6 +71,11 @@ void S3Index::sort() {
 }
 
 std::shared_ptr<SharedBuffer> S3Index::serialize() const {
+    // Send One Byte if Index is Empty
+    if (size() == 0)
+        return std::shared_ptr<SharedBuffer>(
+            new MemoryBuffer(static_cast<char>(0), 1));
+
     // Serizalize Coordinates
     Coordinate mem[_nDims * size()];
     int j = 0;
