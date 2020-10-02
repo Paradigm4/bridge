@@ -139,9 +139,10 @@ Aws::IOStream& operator<<(Aws::IOStream& out, const scidb::S3Index& index) {
 
 Aws::IOStream& operator>>(Aws::IOStream& in, scidb::S3Index& index) {
     std::string line;
+    scidb::Coordinates pos;
+    pos.reserve(index._nDims);
     while (std::getline(in, line)) {
         std::istringstream stm(line);
-        scidb::Coordinates pos;
         for (scidb::Coordinate coord; stm >> coord;)
             pos.push_back(coord);
 
@@ -154,6 +155,7 @@ Aws::IOStream& operator>>(Aws::IOStream& in, scidb::S3Index& index) {
         // Keep Only Chunks for this Instance
         if (index._desc.getPrimaryInstanceId(pos, index._nInst) == index._instID)
             index.push_back(pos);
+        pos.clear();
     }
     return in;
 }
