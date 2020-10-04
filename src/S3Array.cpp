@@ -109,11 +109,6 @@ namespace scidb {
 
     Value const& S3ChunkIterator::getItem()
     {
-        // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _chunk->_attrID
-                      << "|ChunkIt::getItem  hasCurr: " << _hasCurrent
-                      << " pos: " << _currPos);
-
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
@@ -628,9 +623,6 @@ namespace scidb {
         // Parse S3Index
         auto& indexStream = outcome.GetResultWithOwnership().GetBody();
         indexStream >> _index;
-
-        // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _instanceID << "|Array index:" << _index);
     }
 
     S3Array::~S3Array() {

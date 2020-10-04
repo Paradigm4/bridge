@@ -633,9 +633,6 @@ public:
             // Sort Chunk Coordinate List
             index.sort();
 
-            // TODO Remove (debugging)
-            LOG4CXX_DEBUG(logger, "S3SAVE|" << localID << "| index: " << index);
-
             // Serialize Chunk Coordinate List
             const std::shared_ptr<Aws::IOStream> metaData =
                 Aws::MakeShared<Aws::StringStream>("");

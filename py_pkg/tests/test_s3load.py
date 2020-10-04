@@ -210,13 +210,14 @@ s3load(
     delete_prefix(s3_con, prefix)
 
 
+# Test for Empty Cells
 @pytest.mark.parametrize('dim_start, dim_end, chunk_size',
                          ((s, e, c)
                           for s in (-13, -11, -7)
                           for e in (11, 13, 17)
                           for c in (3, 7, 11)))
 def test_filter_before(scidb_con, s3_con, dim_start, dim_end, chunk_size):
-    prefix = 'filter_{}_{}_{}'.format(dim_start, dim_end, chunk_size)
+    prefix = 'filter_before_{}_{}_{}'.format(dim_start, dim_end, chunk_size)
     schema = '<v:int64> [i={s}:{e}:0:{c}; j=-11:13:0:{c}]'.format(
         s=dim_start, e=dim_end - 1, c=chunk_size)
 
@@ -260,7 +261,7 @@ s3load(
                           for e in (11, 13, 17)
                           for c in (3, 7, 11)))
 def test_filter_after(scidb_con, s3_con, dim_start, dim_end, chunk_size):
-    prefix = 'filter_{}_{}_{}'.format(dim_start, dim_end, chunk_size)
+    prefix = 'filter_after_{}_{}_{}'.format(dim_start, dim_end, chunk_size)
     schema = '<v:int64> [i={s}:{e}:0:{c}; j=-11:13:0:{c}]'.format(
         s=dim_start, e=dim_end - 1, c=chunk_size)
 
@@ -295,6 +296,42 @@ filter(
     assert array.equals(
         pandas.DataFrame({'i': i_lst,
                           'j': j_lst,
+                          'v': v_lst}))
+
+    delete_prefix(s3_con, prefix)
+
+
+def test_nulls(scidb_con, s3_con):
+    prefix = 'nulls'
+    schema = '<v:int64> [i=0:99:0:5]'
+
+    # Store
+    bucket_prefix = '/'.join((base_prefix, prefix))
+    scidb_con.iquery("""
+s3save(
+  build({}, iif(i % 2 = 0, i, missing(i))),
+  bucket_name:'{}',
+  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+
+    # Load
+    array = scidb_con.iquery("""
+s3load(
+  bucket_name:'{}',
+  bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
+                             fetch=True)
+    array = array.sort_values(by=['i']).reset_index(drop=True)
+
+    i_lst = []
+    v_lst = []
+    for i in range(100):
+        i_lst.append(i)
+        if i % 2 == 0:
+            v_lst.append(float(i))
+        else:
+            v_lst.append(numpy.nan)
+
+    assert array.equals(
+        pandas.DataFrame({'i': i_lst,
                           'v': v_lst}))
 
     delete_prefix(s3_con, prefix)

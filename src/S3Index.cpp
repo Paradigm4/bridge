@@ -25,6 +25,8 @@
 
 #include "S3Index.h"
 
+#include <chrono>
+
 #include <array/MemoryBuffer.h>
 #include <query/Query.h>
 #include <system/UserException.h>
@@ -32,7 +34,7 @@
 
 namespace scidb {
 
-// static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3index"));
+static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3index"));
 
 S3Index::S3Index(const Query& query, const ArrayDesc& desc):
     _desc(desc),
@@ -67,7 +69,16 @@ void S3Index::deserialize_push_back(std::shared_ptr<SharedBuffer> buf) {
 }
 
 void S3Index::sort() {
+    // TODO Remove
+    auto start = std::chrono::high_resolution_clock::now();
+
     std::sort(_values.begin(), _values.end(), CoordinatesLess());
+
+    // TODO Remove
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+        stop - start);
+    LOG4CXX_DEBUG(logger, "S3INDEX|" << _instID << "|Sort time: " << duration.count() << " microseconds");
 }
 
 std::shared_ptr<SharedBuffer> S3Index::serialize() const {
