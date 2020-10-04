@@ -464,7 +464,8 @@ namespace scidb {
         _array(array),
         _attrID(attrID),
         _dims(array._desc.getDimensions()),
-        _chunk(array, attrID)
+        _chunk(array, attrID),
+        _hasCurrent(false)
     {
         restart();
     }
@@ -474,8 +475,8 @@ namespace scidb {
         // TODO Remove (debugging)
         LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
                       << "|ArrayIt::++ hasCurr: " << _hasCurrent
-                      << " Index curr: " << *_currIndex
-                      << " end? " << (_currIndex == _array._index.end()));
+                      << " isEnd: " << (_currIndex == _array._index.end())
+                      << " currIndex: " << *_currIndex);
 
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
@@ -491,10 +492,6 @@ namespace scidb {
 
     void S3ArrayIterator::_nextChunk()
     {
-        // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
-                      << "|ArrayIt::_nextChunk hasCurr: " << _hasCurrent << " end? " << (_currIndex == _array._index.end()));
-
         _chunkInitialized = false;
 
         if (_currIndex == _array._index.end())
@@ -506,21 +503,25 @@ namespace scidb {
 
         // TODO Remove (debugging)
         LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
-                      << "|ArrayIt::_nextChunk hasCurr: " << _hasCurrent << " currPos: " << _currPos);
+                      << "|ArrayIt::_nextChunk hasCurr: " << _hasCurrent
+                      << " isEnd: " << (_currIndex == _array._index.end())
+                      << " currPos: " << _currPos);
     }
 
     bool S3ArrayIterator::setPosition(Coordinates const& pos)
     {
-        // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
-                      << "|ArrayIt::setPosition: " << pos);
-
         Query::getValidQueryPtr(_array._query);
 
         // Check that coords are inside array
         for (size_t i = 0, n = _currPos.size(); i < n; i++)
             if (pos[i] < _dims[i].getStartMin() || pos[i] > _dims[i].getEndMax()) {
                 _hasCurrent = false;
+
+                // TODO Remove (debugging)
+                LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                              << "|ArrayIt::setPosition: " << pos
+                              << " hasCurr: " << _hasCurrent);
+
                 return _hasCurrent;
             }
 
@@ -538,7 +539,8 @@ namespace scidb {
 
         // TODO Remove (debugging)
         LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
-                      << "|ArrayIt::setPosition chunkPos: " << chunkPos
+                      << "|ArrayIt::setPosition: " << pos
+                      << " chunkPos: " << chunkPos
                       << " hasCurr: " << _hasCurrent);
 
         return _hasCurrent;
@@ -547,6 +549,10 @@ namespace scidb {
     void S3ArrayIterator::restart()
     {
         Query::getValidQueryPtr(_array._query);
+
+        // TODO Remove (debugging)
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._instanceID << ">" << _attrID
+                      << "|ArrayIt::_restart hasCurr: " << _hasCurrent);
 
         _currIndex = _array._index.begin();
         _nextChunk();
@@ -623,6 +629,9 @@ namespace scidb {
         // Parse S3Index
         auto& indexStream = outcome.GetResultWithOwnership().GetBody();
         indexStream >> _index;
+
+        // TODO Remove (debugging)
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _instanceID << "|Array index size:" << _index.size());
     }
 
     S3Array::~S3Array() {

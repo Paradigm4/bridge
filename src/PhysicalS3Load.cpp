@@ -54,7 +54,7 @@ public:
         std::vector< std::shared_ptr<Array> >& inputArrays,
         std::shared_ptr<Query> query)
     {
-        LOG4CXX_DEBUG(logger, "S3LOAD >> execute");
+        LOG4CXX_DEBUG(logger, "S3LOAD|" << query->getInstanceID() << "|Execute");
 
         std::shared_ptr<S3LoadSettings> settings = std::make_shared<S3LoadSettings>(
             _parameters, _kwParameters, false, query);
