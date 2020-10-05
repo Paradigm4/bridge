@@ -595,7 +595,7 @@ public:
                     // Set Object Name using Top-Left Coordinates
                     Coordinates const &pos = inputChunkIters[0]->getFirstPosition();
                     // Add Chunk Coordinates to the Chunk Index
-                    index.push_back(pos);
+                    index.insert(pos);
                     Aws::String objectName(coord2ObjectName(
                                                settings.getBucketPrefix(),
                                                pos,
@@ -628,7 +628,7 @@ public:
             for(InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
                 if(remoteID != localID)
                     // Receive and De-Serialize Index
-                    index.deserialize_push_back(BufReceive(remoteID, query));
+                    index.deserialize_insert(BufReceive(remoteID, query));
 
             // Sort Chunk Coordinate List
             index.sort();

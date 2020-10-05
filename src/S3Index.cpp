@@ -48,11 +48,12 @@ size_t S3Index::size() const {
     return _values.size();
 }
 
-void S3Index::push_back(const Coordinates& pos) {
+void S3Index::insert(const Coordinates& pos) {
     _values.push_back(pos);
+    // _values.insert(pos);
 }
 
-void S3Index::deserialize_push_back(std::shared_ptr<SharedBuffer> buf) {
+void S3Index::deserialize_insert(std::shared_ptr<SharedBuffer> buf) {
     // A One Byte Buffer is an "Empty" Buffer
     if (buf->getSize() == 1)
         return;
@@ -64,7 +65,7 @@ void S3Index::deserialize_push_back(std::shared_ptr<SharedBuffer> buf) {
         Coordinates pos;
         std::copy(
             mem + i * _nDims, mem + (i + 1) * _nDims, std::back_inserter(pos));
-        push_back(pos);
+        insert(pos);
     }
 }
 
@@ -96,15 +97,15 @@ std::shared_ptr<SharedBuffer> S3Index::serialize() const {
     return std::shared_ptr<SharedBuffer>(new MemoryBuffer(mem, sizeof(mem)));
 }
 
-const std::vector<Coordinates>::const_iterator S3Index::begin() const {
+const S3IndexCont::const_iterator S3Index::begin() const {
     return _values.begin();
 }
 
-const std::vector<Coordinates>::const_iterator S3Index::end() const {
+const S3IndexCont::const_iterator S3Index::end() const {
     return _values.end();
 }
 
-const std::vector<Coordinates>::const_iterator S3Index::find(const Coordinates& pos) const {
+const S3IndexCont::const_iterator S3Index::find(const Coordinates& pos) const {
     // TODO optimize index search
     return std::find(begin(), end(), pos);
 }
@@ -165,7 +166,7 @@ Aws::IOStream& operator>>(Aws::IOStream& in, scidb::S3Index& index) {
 
         // Keep Only Chunks for this Instance
         if (index._desc.getPrimaryInstanceId(pos, index._nInst) == index._instID)
-            index.push_back(pos);
+            index.insert(pos);
         pos.clear();
     }
     return in;

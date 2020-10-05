@@ -59,6 +59,11 @@ namespace scidb {
 // --
 // -- - S3Index - --
 // --
+
+// Type of S3Index Container
+typedef std::vector<Coordinates> S3IndexCont;
+// typedef std::set<Coordinates, CoordinatesLess> S3IndexCont;
+
 class S3Index {
     friend Aws::IOStream& std::operator>>(Aws::IOStream&, scidb::S3Index&);
 
@@ -66,17 +71,17 @@ class S3Index {
     S3Index(const Query&, const ArrayDesc&);
 
     size_t size() const;
-    void push_back(const Coordinates&);
+    void insert(const Coordinates&);
     void sort();
 
     // Serialize & De-serialize for inter-instance comms
     std::shared_ptr<SharedBuffer> serialize() const;
-    void deserialize_push_back(std::shared_ptr<SharedBuffer>);
+    void deserialize_insert(std::shared_ptr<SharedBuffer>);
 
-    const std::vector<Coordinates>::const_iterator begin() const;
-    const std::vector<Coordinates>::const_iterator end() const;
+    const S3IndexCont::const_iterator begin() const;
+    const S3IndexCont::const_iterator end() const;
 
-    const std::vector<Coordinates>::const_iterator find(const Coordinates&) const;
+    const S3IndexCont::const_iterator find(const Coordinates&) const;
 
   private:
     const ArrayDesc& _desc;
@@ -84,7 +89,7 @@ class S3Index {
     const size_t _nInst;
     const InstanceID _instID;
 
-    std::vector<Coordinates> _values;
+    S3IndexCont _values;
 };
 }
 

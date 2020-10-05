@@ -31,7 +31,7 @@
 
 #include "S3Common.h"
 #include "S3LoadSettings.h"
-#include "S3Index.h"
+
 
 // TODO use __builtin_expect
 #define THROW_NOT_OK(s)                                                 \
@@ -44,6 +44,7 @@
                     << _s.ToString().c_str();                           \
         }                                                               \
     }
+
 
 using namespace std;
 
@@ -631,7 +632,8 @@ namespace scidb {
         indexStream >> _index;
 
         // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _instanceID << "|Array index size:" << _index.size());
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _instanceID << "|Array index size: " << _index.size());
+        // LOG4CXX_DEBUG(logger, "S3ARRAY|" << _instanceID << "|Array index: " << _index);
     }
 
     S3Array::~S3Array() {

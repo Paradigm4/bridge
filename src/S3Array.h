@@ -171,7 +171,7 @@ private:
     Coordinates _currPos;
     bool _hasCurrent;
     bool _chunkInitialized;
-    std::vector<Coordinates>::const_iterator _currIndex;
+    S3IndexCont::const_iterator _currIndex;
 };
 
 class S3Array : public Array

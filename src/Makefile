@@ -58,7 +58,7 @@ all: libs3bridge.so
 plugin.o:
 
 LogicalS3Load.o: S3Common.h S3LoadSettings.h
-PhysicalS3Load.o: S3LoadSettings.h S3Array.h
+PhysicalS3Load.o: S3LoadSettings.h S3Array.h S3Index.h
 
 LogicalS3LoadEager.o: S3Common.h S3LoadSettings.h
 PhysicalS3LoadEager.o: S3Common.h S3LoadSettings.h
@@ -66,7 +66,7 @@ PhysicalS3LoadEager.o: S3Common.h S3LoadSettings.h
 LogicalS3Save.o: S3SaveSettings.h
 PhysicalS3Save.o: S3Common.h S3SaveSettings.h S3Index.h
 
-S3Array.o: S3Array.h S3Common.h S3LoadSettings.h S3Index.h
+S3Array.o: S3Array.h S3Index.h  S3Common.h S3LoadSettings.h
 S3Index.o: S3Index.h
 
 libs3bridge.so: $(OBJS)
