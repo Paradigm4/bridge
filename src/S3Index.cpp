@@ -58,7 +58,7 @@ void S3Index::deserialize_insert(std::shared_ptr<SharedBuffer> buf) {
     if (buf->getSize() == 1)
         return;
 
-    Coordinate* mem = static_cast<Coordinate*>(buf->getWriteData());
+    const Coordinate* mem = static_cast<const Coordinate*>(buf->getConstData());
 
     // De-serialize Coordinates
     for (size_t i = 0; i < buf->getSize() / sizeof(Coordinate) / _nDims; ++i) {
@@ -67,6 +67,26 @@ void S3Index::deserialize_insert(std::shared_ptr<SharedBuffer> buf) {
             mem + i * _nDims, mem + (i + 1) * _nDims, std::back_inserter(pos));
         insert(pos);
     }
+}
+
+std::shared_ptr<SharedBuffer> S3Index::serialize() const {
+    // Send One Byte if Index is Empty
+    if (size() == 0)
+        return std::shared_ptr<SharedBuffer>(new MemoryBuffer(NULL, 1));
+
+    // Serialize Coordinates
+    // ---
+    // MemoryBuffer will alocate the output buffer, memcopy is skipped
+    // because of the NULL. We get a pointer to the buffer and write
+    // the data in it.
+    std::shared_ptr<SharedBuffer> buf(
+        new MemoryBuffer(NULL, size() * _nDims * sizeof(Coordinate)));
+    Coordinate *mem = static_cast<Coordinate*>(buf->getWriteData());
+    int j = 0;
+    for (auto i = begin(); i != end(); ++i, ++j)
+        std::copy(i->begin(), i->end(), mem + j * _nDims);
+
+    return buf;
 }
 
 void S3Index::sort() {
@@ -80,21 +100,6 @@ void S3Index::sort() {
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
         stop - start);
     LOG4CXX_DEBUG(logger, "S3INDEX|" << _instID << "|Sort time: " << duration.count() << " microseconds");
-}
-
-std::shared_ptr<SharedBuffer> S3Index::serialize() const {
-    // Send One Byte if Index is Empty
-    if (size() == 0)
-        return std::shared_ptr<SharedBuffer>(
-            new MemoryBuffer(static_cast<char>(0), 1));
-
-    // Serizalize Coordinates
-    Coordinate mem[_nDims * size()];
-    int j = 0;
-    for (auto i = begin(); i != end(); ++i, ++j)
-        std::copy(i->begin(), i->end(), mem + j * _nDims);
-
-    return std::shared_ptr<SharedBuffer>(new MemoryBuffer(mem, sizeof(mem)));
 }
 
 const S3IndexCont::const_iterator S3Index::begin() const {
