@@ -52,7 +52,7 @@ public:
         return &argSpec;
     }
 
-    ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, std::shared_ptr< Query> query)
+    ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, std::shared_ptr<Query> query)
     {
         S3LoadSettings settings(_parameters, _kwParameters, true, query);
 
@@ -67,7 +67,7 @@ public:
                     Aws::String((settings.getBucketPrefix() +
                                  "/metadata").c_str()),
                     metadata);
-        LOG4CXX_DEBUG(logger, "S3LOAD >> schema: " << metadata["schema"]);
+        LOG4CXX_DEBUG(logger, "S3LOAD|" << query->getInstanceID() << "|schema: " << metadata["schema"]);
         Aws::ShutdownAPI(options);
 
         // Build Fake Query and Extract Schema
