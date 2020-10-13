@@ -149,7 +149,7 @@ private:
             (this->*innersetter)(paramContent);
             retSet = true;
         } else {
-            LOG4CXX_DEBUG(logger, "S3SAVE >> findKeyword null: " << kw);
+            LOG4CXX_DEBUG(logger, "S3SAVE|findKeyword null: " << kw);
         }
         return retSet;
     }

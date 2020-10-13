@@ -463,7 +463,7 @@ public:
         ARROW_RETURN_NOT_OK(arrowWriter->Close());
 
         ARROW_ASSIGN_OR_RAISE(arrowBuffer, arrowStream->Finish());
-        LOG4CXX_DEBUG(logger, "S3SAVE >> arrowBuffer::size: " << arrowBuffer->size());
+        LOG4CXX_DEBUG(logger, "S3SAVE|arrowBuffer::size: " << arrowBuffer->size());
 
         return arrow::Status::OK();
     }
@@ -530,8 +530,8 @@ public:
         inputSchema.setName("");
         bool haveChunk_ = haveChunk(inputArray, inputSchema);
         LOG4CXX_DEBUG(logger,
-                      "S3SAVE >> inst " << query->getInstanceID()
-                      << " isCoord " << query->isCoordinator()
+                      "S3SAVE|" << query->getInstanceID()
+                      << "|executed isCoord " << query->isCoordinator()
                       << " haveChunk " << haveChunk_);
 
         // Chunk Coordinate Index
