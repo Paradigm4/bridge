@@ -21,8 +21,11 @@ ifeq ($(SCIDB_THIRDPARTY_PREFIX),)
   SCIDB_THIRDPARTY_PREFIX := $(SCIDB_3RDPARTY)
 endif
 
-AWS_LIB := /opt/aws/lib64
-CURL_LIB := /opt/curl/lib
+# -- - Ubuntu - --
+AWS_LIB := /opt/aws/lib
+# -- - CentOS - --
+# AWS_LIB := /opt/aws/lib64
+# CURL_LIB := -Wl,-rpath,/opt/curl/lib
 
 # Debug:
 CFLAGS  := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -Wall -Wextra -Wno-long-long -Wno-strict-aliasing -Wno-system-headers -Wno-unused -Wno-unused-parameter -Wno-variadic-macros -fPIC -fno-omit-frame-pointer -g -std=c++14
@@ -35,7 +38,7 @@ CPPFLAGS := $(CFLAGS) $(INC)
 # CPPFLAGS += -Wfatal-errors
 
 LIBS    := -shared -Wl,-soname,libs3bridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
-LIBS    += -rdynamic $(AWS_LIB)/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,$(AWS_LIB) -Wl,-rpath,$(CURL_LIB)
+LIBS    += -rdynamic $(AWS_LIB)/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,$(AWS_LIB) $(CURL_LIB)
 
 SRCS    := plugin.cpp LogicalS3Save.cpp PhysicalS3Save.cpp LogicalS3Load.cpp PhysicalS3Load.cpp LogicalS3LoadEager.cpp PhysicalS3LoadEager.cpp S3Array.cpp S3Index.cpp
 HEADERS := S3Common.h S3SaveSettings.h S3LoadSettings.h S3Array.h S3Index.h
