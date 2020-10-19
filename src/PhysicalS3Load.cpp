@@ -59,8 +59,10 @@ public:
         std::shared_ptr<S3LoadSettings> settings = std::make_shared<S3LoadSettings>(
             _parameters, _kwParameters, false, query);
 
-        std::shared_ptr<Array> array = std::make_shared<S3Array>(
+        std::shared_ptr<S3Array> array = std::make_shared<S3Array>(
             query, _schema, settings);
+
+        array->readIndex();
 
         return array;
     }

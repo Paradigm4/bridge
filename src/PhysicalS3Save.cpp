@@ -535,7 +535,7 @@ public:
                       << " haveChunk " << haveChunk_);
 
         // Chunk Coordinate Index
-        S3Index index(*query, inputSchema);
+        S3Index index(inputSchema);
 
         // Exit Early
         if (!haveChunk_ && !query->isCoordinator()) {

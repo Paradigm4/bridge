@@ -78,7 +78,7 @@ public:
     bool setPosition(Coordinates const& pos) override;
     void restart() override;
     ConstChunk const& getChunk() override;
-    virtual std::shared_ptr<Query> getQuery() { return _query; }
+    virtual std::shared_ptr<Query> getQuery();
 
   private:
     int64_t getCoord(size_t dim, int64_t index);
@@ -92,8 +92,6 @@ public:
     Coordinates _firstPos;
     Coordinates _lastPos;
     Coordinates _currPos;
-
-    std::shared_ptr<Query> _query;
 
     Value _value;
     Value _trueValue;
@@ -181,9 +179,9 @@ friend class S3ChunkIterator;
 friend class S3Chunk;
 
 public:
-    S3Array(std::shared_ptr<Query>& query,
-            ArrayDesc const& desc,
-            std::shared_ptr<S3LoadSettings> settings);
+    S3Array(std::shared_ptr<Query> query,
+            const ArrayDesc& desc,
+            const std::shared_ptr<S3LoadSettings> settings);
 
     virtual ~S3Array();
 
@@ -193,9 +191,10 @@ public:
     /// @see Array::hasInputPipe
     bool hasInputPipe() const override { return false; }
 
+    void readIndex();
+
 private:
-    const size_t _nInstances;
-    const size_t _instanceID;
+    std::shared_ptr<Query> _query;
     const ArrayDesc _desc;
     const std::shared_ptr<const S3LoadSettings> _settings;
 

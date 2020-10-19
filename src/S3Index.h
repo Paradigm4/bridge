@@ -68,7 +68,7 @@ class S3Index {
     friend Aws::IOStream& std::operator>>(Aws::IOStream&, scidb::S3Index&);
 
   public:
-    S3Index(const Query&, const ArrayDesc&);
+    S3Index(const ArrayDesc&);
 
     size_t size() const;
     void insert(const Coordinates&);
@@ -76,18 +76,19 @@ class S3Index {
 
     // Serialize & De-serialize for inter-instance comms
     std::shared_ptr<SharedBuffer> serialize() const;
+    std::shared_ptr<SharedBuffer> filter_serialize(
+        const size_t nInst, const InstanceID instID) const;
     void deserialize_insert(std::shared_ptr<SharedBuffer>);
 
     const S3IndexCont::const_iterator begin() const;
     const S3IndexCont::const_iterator end() const;
 
     const S3IndexCont::const_iterator find(const Coordinates&) const;
+    void filter_trim(const size_t nInst, const InstanceID instID);
 
   private:
     const ArrayDesc& _desc;
     const size_t _nDims;
-    const size_t _nInst;
-    const InstanceID _instID;
 
     S3IndexCont _values;
 };

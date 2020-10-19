@@ -36,11 +36,9 @@ namespace scidb {
 
 static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3index"));
 
-S3Index::S3Index(const Query& query, const ArrayDesc& desc):
+S3Index::S3Index(const ArrayDesc& desc):
     _desc(desc),
-    _nDims(desc.getDimensions().size()),
-    _nInst(query.getInstancesCount()),
-    _instID(query.getInstanceID())
+    _nDims(desc.getDimensions().size())
 {
 }
 
@@ -70,8 +68,28 @@ void S3Index::deserialize_insert(std::shared_ptr<SharedBuffer> buf) {
 }
 
 std::shared_ptr<SharedBuffer> S3Index::serialize() const {
-    // Send One Byte if Index is Empty
-    if (size() == 0)
+    return filter_serialize(0, INVALID_INSTANCE);
+}
+
+std::shared_ptr<SharedBuffer> S3Index::filter_serialize(const size_t nInst,
+                                                        const InstanceID instID) const {
+    // Need to compute the number of matching results so we can
+    // allocate the correct size output buffer
+    size_t sz;
+    if (instID == INVALID_INSTANCE)
+        sz = size();
+    else
+        sz = std::count_if(
+            begin(),
+            end(),
+            [&](const Coordinates &pos) {
+                return _desc.getPrimaryInstanceId(pos, nInst) == instID;
+            });
+
+    // Send one byte if the size of the index to be sent is 0; either
+    // the index is empty or there will be nothing sent after the
+    // filter is applied
+    if (sz == 0)
         return std::shared_ptr<SharedBuffer>(new MemoryBuffer(NULL, 1));
 
     // Serialize Coordinates
@@ -80,11 +98,16 @@ std::shared_ptr<SharedBuffer> S3Index::serialize() const {
     // because of the NULL. We get a pointer to the buffer and write
     // the data in it.
     std::shared_ptr<SharedBuffer> buf(
-        new MemoryBuffer(NULL, size() * _nDims * sizeof(Coordinate)));
+        new MemoryBuffer(NULL, sz * _nDims * sizeof(Coordinate)));
     Coordinate *mem = static_cast<Coordinate*>(buf->getWriteData());
-    int j = 0;
-    for (auto i = begin(); i != end(); ++i, ++j)
-        std::copy(i->begin(), i->end(), mem + j * _nDims);
+    int i = 0;
+    for (auto posPtr = begin(); posPtr != end(); ++posPtr)
+        // Filter coordiantes that are serialized
+        if (instID == INVALID_INSTANCE
+            || _desc.getPrimaryInstanceId(*posPtr, nInst) == instID) {
+            std::copy(posPtr->begin(), posPtr->end(), mem + i * _nDims);
+            ++i;
+        }
 
     return buf;
 }
@@ -99,7 +122,7 @@ void S3Index::sort() {
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
         stop - start);
-    LOG4CXX_DEBUG(logger, "S3INDEX|" << _instID << "|Sort time: " << duration.count() << " microseconds");
+    LOG4CXX_DEBUG(logger, "S3INDEX| |Sort time: " << duration.count() << " microseconds");
 }
 
 const S3IndexCont::const_iterator S3Index::begin() const {
@@ -115,6 +138,18 @@ const S3IndexCont::const_iterator S3Index::find(const Coordinates& pos) const {
     return std::find(begin(), end(), pos);
 }
 
+void S3Index::filter_trim(const size_t nInst, const InstanceID instID) {
+    // Shrink container to the reduced size
+    _values.erase(
+        // Move elements so that the kept ones are first
+        std::remove_if(
+            _values.begin(),
+            _values.end(),
+            [&](const Coordinates& pos) {
+                return _desc.getPrimaryInstanceId(pos, nInst) != instID;
+            }),
+        _values.end());
+}
 }
 
 
@@ -170,8 +205,9 @@ Aws::IOStream& operator>>(Aws::IOStream& in, scidb::S3Index& index) {
                 << "', expected " << index._nDims << " values";
 
         // Keep Only Chunks for this Instance
-        if (index._desc.getPrimaryInstanceId(pos, index._nInst) == index._instID)
-            index.insert(pos);
+        // if (index._desc.getPrimaryInstanceId(pos, index._nInst) == index._instID)
+
+        index.insert(pos);
         pos.clear();
     }
     return in;
