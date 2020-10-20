@@ -25,6 +25,8 @@
 
 #include "S3Array.h"
 
+#include <chrono>
+
 #include <network/Network.h>
 
 #include <arrow/builder.h>
@@ -355,7 +357,7 @@ namespace scidb {
         objectRequest.SetBucket(bucketName);
         objectRequest.SetKey(objectName);
         LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._query->getInstanceID() << ">" << _attrID
-                      << "|Chunk::download: " << objectName);
+                      << "|download:" << objectName);
 
         auto outcome = _array._awsClient->GetObject(objectRequest);
         S3_EXCEPTION_NOT_SUCCESS("Get");
@@ -372,7 +374,7 @@ namespace scidb {
         // it is too small
         if (arrowSize > _arrowSizeAlloc) {
             LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._query->getInstanceID() << ">" << _attrID
-                          << "|Chunk::download arrowSizeAlloc: " << _arrowSizeAlloc
+                          << "|download arrowSizeAlloc: " << _arrowSizeAlloc
                           << " arrowSize: " << arrowSize);
 
             _arrowSizeAlloc = arrowSize;
@@ -606,19 +608,49 @@ namespace scidb {
             Aws::String &bucketName = *_awsBucketName;
             objectRequest.SetBucket(bucketName);
             objectRequest.SetKey(objectName);
+            LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|download:" << objectName);
+
+            // TODO Remove
+            auto start = std::chrono::high_resolution_clock::now();
 
             auto outcome = _awsClient->GetObject(objectRequest);
             S3_EXCEPTION_NOT_SUCCESS("Get");
 
             // Parse S3Index
             auto& indexStream = outcome.GetResultWithOwnership().GetBody();
+
+            // TODO Remove
+            auto stop = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                stop - start);
+            LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex download:" << duration.count() << " microseconds");
+
+
+            // TODO Remove
+            start = std::chrono::high_resolution_clock::now();
+
             indexStream >> _index;
+
+            // TODO Remove
+            stop = std::chrono::high_resolution_clock::now();
+            duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                stop - start);
+            LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex parse:" << duration.count() << " microseconds");
+
+            // TODO Remove
+            start = std::chrono::high_resolution_clock::now();
 
             for (InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
                 if (remoteID != instID)
-                    BufSend(
-                        remoteID, _index.filter_serialize(nInst, remoteID), _query);
+                    BufSend(remoteID,
+                            _index.filter_serialize(nInst, remoteID),
+                            _query);
 
+            // TODO Remove
+            stop = std::chrono::high_resolution_clock::now();
+            duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                stop - start);
+            LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex distribute:" << duration.count() << " microseconds");
             LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex full size:" << _index.size());
             _index.filter_trim(nInst, instID);
         }

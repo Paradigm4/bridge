@@ -571,7 +571,7 @@ public:
                        metaData);
         }
 
-        Dimensions const &dims = inputSchema.getDimensions();
+        const Dimensions &dims = inputSchema.getDimensions();
         if (haveChunk_) {
             // Init Array & Chunk Iterators
             size_t const nAttrs = inputSchema.getAttributes(true).size();
