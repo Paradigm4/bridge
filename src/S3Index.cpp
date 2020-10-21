@@ -38,9 +38,9 @@ static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3index"));
 
 S3Index::S3Index(const ArrayDesc& desc):
     _desc(desc),
-    _nDims(desc.getDimensions().size())
-{
-}
+    _dims(desc.getDimensions()),
+    _nDims(_dims.size())
+{}
 
 size_t S3Index::size() const {
     return _values.size();
@@ -122,7 +122,7 @@ void S3Index::sort() {
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
         stop - start);
-    LOG4CXX_DEBUG(logger, "S3INDEX| |Sort time: " << duration.count() << " microseconds");
+    LOG4CXX_DEBUG(logger, "S3INDEX| |Sort time:" << duration.count() << " microseconds");
 }
 
 const S3IndexCont::const_iterator S3Index::begin() const {
@@ -164,13 +164,6 @@ std::ostream& operator<<(std::ostream& out, const scidb::Coordinates& pos) {
     return out;
 }
 
-Aws::IOStream& operator<<(Aws::IOStream& out, const scidb::Coordinates& pos) {
-    std::copy(pos.begin(),
-              pos.end(),
-              std::ostream_iterator<scidb::Coordinate>(out, "\t"));
-    return out;
-}
-
 std::ostream& operator<<(std::ostream& out, const scidb::S3Index& index) {
     out << "[";
     std::copy(index.begin(),
@@ -181,9 +174,17 @@ std::ostream& operator<<(std::ostream& out, const scidb::S3Index& index) {
 }
 
 Aws::IOStream& operator<<(Aws::IOStream& out, const scidb::S3Index& index) {
-    for (auto i = index.begin(); i != index.end(); ++i) {
-        out << *i;
-        out.seekp(-1, out.cur); // Remove last separator
+    for (auto posPtr = index.begin(); posPtr != index.end(); ++posPtr) {
+        for (size_t i = 0; i < index._nDims; ++i) {
+            if (i > 0)
+                out << '\t';
+            out << (
+                // (
+                    (*posPtr)[i]
+                //     - index._dims[i].getStartMin())
+                // / index._dims[i].getChunkInterval()
+                );
+        }
         out << "\n";
     }
     return out;
@@ -195,8 +196,12 @@ Aws::IOStream& operator>>(Aws::IOStream& in, scidb::S3Index& index) {
     pos.reserve(index._nDims);
     while (std::getline(in, line)) {
         std::istringstream stm(line);
-        for (scidb::Coordinate coord; stm >> coord;)
-            pos.push_back(coord);
+        size_t i = 0;
+        for (scidb::Coordinate coord; stm >> coord; i++)
+            pos.push_back(coord
+                          // * index._dims[i].getChunkInterval()
+                          // + index._dims[i].getStartMin()
+                );
 
         if (pos.size() != index._nDims)
             throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,

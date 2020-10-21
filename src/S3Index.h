@@ -27,6 +27,7 @@
 #define S3_INDEX_H_
 
 #include <array/Coordinate.h>
+#include <array/Dimensions.h>
 #include <query/InstanceID.h>
 
 #include <aws/core/utils/memory/stl/AWSStreamFwd.h>
@@ -66,6 +67,7 @@ typedef std::vector<Coordinates> S3IndexCont;
 
 class S3Index {
     friend Aws::IOStream& std::operator>>(Aws::IOStream&, scidb::S3Index&);
+    friend Aws::IOStream& std::operator<<(Aws::IOStream&, const scidb::S3Index&);
 
   public:
     S3Index(const ArrayDesc&);
@@ -88,6 +90,7 @@ class S3Index {
 
   private:
     const ArrayDesc& _desc;
+    const Dimensions& _dims;
     const size_t _nDims;
 
     S3IndexCont _values;
