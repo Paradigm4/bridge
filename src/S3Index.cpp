@@ -178,12 +178,8 @@ Aws::IOStream& operator<<(Aws::IOStream& out, const scidb::S3Index& index) {
         for (size_t i = 0; i < index._nDims; ++i) {
             if (i > 0)
                 out << '\t';
-            out << (
-                // (
-                    (*posPtr)[i]
-                //     - index._dims[i].getStartMin())
-                // / index._dims[i].getChunkInterval()
-                );
+            out << (((*posPtr)[i] - index._dims[i].getStartMin())
+                    / index._dims[i].getChunkInterval());
         }
         out << "\n";
     }
@@ -198,10 +194,8 @@ Aws::IOStream& operator>>(Aws::IOStream& in, scidb::S3Index& index) {
         std::istringstream stm(line);
         size_t i = 0;
         for (scidb::Coordinate coord; stm >> coord; i++)
-            pos.push_back(coord
-                          // * index._dims[i].getChunkInterval()
-                          // + index._dims[i].getStartMin()
-                );
+            pos.push_back(coord * index._dims[i].getChunkInterval()
+                          + index._dims[i].getStartMin());
 
         if (pos.size() != index._nDims)
             throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,

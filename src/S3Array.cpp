@@ -634,7 +634,8 @@ namespace scidb {
             // indexStream >> _index;
 
             std::string line;
-            size_t nDims = _desc.getDimensions().size();
+            const Dimensions dims = _desc.getDimensions();
+            const size_t nDims = dims.size();
             scidb::Coordinates pos;
             pos.reserve(nDims);
 
@@ -646,10 +647,8 @@ namespace scidb {
                 std::istringstream stm(line);
                 size_t i = 0;
                 for (scidb::Coordinate coord; stm >> coord; i++)
-                    pos.push_back(coord
-                                  // * index._dims[i].getChunkInterval()
-                                  // + index._dims[i].getStartMin()
-                        );
+                    pos.push_back(coord * dims[i].getChunkInterval()
+                                  + dims[i].getStartMin());
 
                 if (pos.size() != nDims)
                     throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
