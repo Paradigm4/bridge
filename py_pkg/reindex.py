@@ -1,18 +1,18 @@
+#!/bin/env python3
+
 import boto3
 import os
 import sys
 
 
-INDEX_SPLIT_SIZE = 32 * 1024
-
-
-if len(sys.argv) != 3:
+if len(sys.argv) != 4:
     print('Missing arguments:')
-    print(os.path.basename(__file__), 'bucket key')
+    print(os.path.basename(__file__), 'bucket key INDEX_SPLIT_SIZE')
     sys.exit(2)
 
 bucket = sys.argv[1]
 key = sys.argv[2]
+INDEX_SPLIT_SIZE = int(sys.argv[3])
 
 
 # Delete Existing Split Index
@@ -30,7 +30,7 @@ split_sz = INDEX_SPLIT_SIZE // line_sz
 i = 0
 for split_st in range(0, len(chunks), split_sz):
     body = b'\n'.join(chunks[split_st:(split_st+split_sz)])
-    split_key = '{}/{}'.format(key, i)
+    split_key = '{}/index/{}'.format(key, i)
     print(split_key)
     client.put_object(Body=body, Bucket=bucket, Key=split_key)
     i += 1
