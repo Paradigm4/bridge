@@ -335,3 +335,31 @@ s3load(
                           'v': v_lst}))
 
     delete_prefix(s3_con, prefix)
+
+
+def test_chunk_index(scidb_con, s3_con):
+    size = 300
+    prefix = 'chunk_index'
+    schema = '<v:int64> [i=0:{}:0:5]'.format(size - 1)
+
+    # Store
+    bucket_prefix = '/'.join((base_prefix, prefix))
+    scidb_con.iquery("""
+s3save(
+  build({}, i),
+  bucket_name:'{}',
+  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+
+    # Load
+    array = scidb_con.iquery("""
+s3load(
+  bucket_name:'{}',
+  bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
+                             fetch=True)
+    array = array.sort_values(by=['i']).reset_index(drop=True)
+
+    assert array.equals(
+        pandas.DataFrame({'i': range(size),
+                          'v': numpy.arange(0.0, float(size))}))
+
+    delete_prefix(s3_con, prefix)

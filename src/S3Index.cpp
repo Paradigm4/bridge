@@ -68,6 +68,29 @@ void S3Index::deserialize_insert(std::shared_ptr<SharedBuffer> buf) {
 }
 
 std::shared_ptr<SharedBuffer> S3Index::serialize() const {
+    // Send one byte if the size of the index to be sent is 0; either
+    // the index is empty or there will be nothing sent after the
+    // filter is applied
+    if (size() == 0)
+        return std::shared_ptr<SharedBuffer>(new MemoryBuffer(NULL, 1));
+
+    // Serialize Coordinates
+    // ---
+    // MemoryBuffer will alocate the output buffer, memcopy is skipped
+    // because of the NULL. We get a pointer to the buffer and write
+    // the data in it.
+    std::shared_ptr<SharedBuffer> buf(
+        new MemoryBuffer(NULL, size() * _nDims * sizeof(Coordinate)));
+    Coordinate *mem = static_cast<Coordinate*>(buf->getWriteData());
+    int i = 0;
+    for (auto posPtr = begin(); posPtr != end(); ++posPtr, ++i)
+        std::copy(posPtr->begin(), posPtr->end(), mem + i * _nDims);
+
+    return buf;
+}
+
+/*
+std::shared_ptr<SharedBuffer> S3Index::serialize() const {
     return filter_serialize(0, INVALID_INSTANCE);
 }
 
@@ -111,6 +134,7 @@ std::shared_ptr<SharedBuffer> S3Index::filter_serialize(const size_t nInst,
 
     return buf;
 }
+*/
 
 void S3Index::sort() {
     // TODO Remove
@@ -138,6 +162,7 @@ const S3IndexCont::const_iterator S3Index::find(const Coordinates& pos) const {
     return std::find(begin(), end(), pos);
 }
 
+/*
 void S3Index::filter_trim(const size_t nInst, const InstanceID instID) {
     // Shrink container to the reduced size
     _values.erase(
@@ -150,6 +175,7 @@ void S3Index::filter_trim(const size_t nInst, const InstanceID instID) {
             }),
         _values.end());
 }
+*/
 }
 
 
@@ -173,6 +199,7 @@ std::ostream& operator<<(std::ostream& out, const scidb::S3Index& index) {
     return out;
 }
 
+/*
 Aws::IOStream& operator<<(Aws::IOStream& out, const scidb::S3Index& index) {
     for (auto posPtr = index.begin(); posPtr != index.end(); ++posPtr) {
         for (size_t i = 0; i < index._nDims; ++i) {
@@ -185,19 +212,22 @@ Aws::IOStream& operator<<(Aws::IOStream& out, const scidb::S3Index& index) {
     }
     return out;
 }
+*/
 
+/*
 Aws::IOStream& operator>>(Aws::IOStream& in, scidb::S3Index& index) {
     std::string line;
-    scidb::Coordinates pos;
-    pos.reserve(index._nDims);
+    scidb::Coordinates pos(index._nDims);
     while (std::getline(in, line)) {
         std::istringstream stm(line);
         size_t i = 0;
-        for (scidb::Coordinate coord; stm >> coord; i++)
-            pos.push_back(coord * index._dims[i].getChunkInterval()
-                          + index._dims[i].getStartMin());
+        for (scidb::Coordinate coord; stm >> coord; i++) {
+            if (i >= index._nDims) break;
+            pos[i] = (coord * index._dims[i].getChunkInterval()
+                      + index._dims[i].getStartMin());
+        }
 
-        if (pos.size() != index._nDims)
+        if (i != index._nDims)
             throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
                                  scidb::SCIDB_LE_UNKNOWN_ERROR)
                 << "Invalid index line '" << line
@@ -207,8 +237,8 @@ Aws::IOStream& operator>>(Aws::IOStream& in, scidb::S3Index& index) {
         // if (index._desc.getPrimaryInstanceId(pos, index._nInst) == index._instID)
 
         index.insert(pos);
-        pos.clear();
     }
     return in;
 }
+*/
 }

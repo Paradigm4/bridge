@@ -34,6 +34,8 @@
 #include <arrow/io/memory.h>
 #include <arrow/ipc/reader.h>
 
+#include <aws/s3/model/ListObjectsRequest.h>
+
 #include "S3Common.h"
 #include "S3LoadSettings.h"
 
@@ -598,22 +600,47 @@ namespace scidb {
     }
 
     void S3Array::readIndex() {
-        auto nInst = _query->getInstancesCount();
-        auto instID = _query->getInstanceID();
+        const InstanceID instID = _query->getInstanceID();
+        const Aws::String &bucketName = *_awsBucketName;
 
-        if (_query->isCoordinator()) {
-            // -- - Using Index to Get the List of Chunks - --
-            // Download Chunk Coordinate List
+        // -- - Get Count of Chunk Index Files - --
+        Aws::S3::Model::ListObjectsRequest listRequest;
+        listRequest.WithBucket(bucketName);
+        Aws::String objectName(
+            (_settings->getBucketPrefix() + "/index/").c_str());
+        listRequest.WithPrefix(objectName);
+
+        auto outcome = _awsClient->ListObjects(listRequest);
+        S3_EXCEPTION_NOT_SUCCESS("List");
+
+        size_t nIndex = outcome.GetResult().GetContents().size();
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex nIndex:" << nIndex);
+
+
+        // -- - Read Part of Chunk Index Files - --
+        // Divide index files among instnaces
+
+        // TODO Remove
+        auto start = std::chrono::high_resolution_clock::now();
+
+        const size_t nInst = _query->getInstancesCount();
+        const Dimensions dims = _desc.getDimensions();
+        const size_t nDims = dims.size();
+        scidb::Coordinates pos(nDims);
+
+        // One coordBuf for each instance
+        std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
+
+        for (size_t iIndex = instID; iIndex < nIndex; iIndex += nInst) {
+
+            // Download One Chunk Index
             Aws::S3::Model::GetObjectRequest objectRequest;
-            Aws::String objectName((_settings->getBucketPrefix() + "/index").c_str());
-            Aws::String &bucketName = *_awsBucketName;
+            std::ostringstream out;
+            out << _settings->getBucketPrefix() << "/index/" << iIndex;
+            Aws::String objectName(out.str().c_str());
             objectRequest.SetBucket(bucketName);
             objectRequest.SetKey(objectName);
-            LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|download:" << objectName);
-
-
-            // TODO Remove
-            auto start = std::chrono::high_resolution_clock::now();
+            LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex download:" << objectName);
 
             auto outcome = _awsClient->GetObject(objectRequest);
             S3_EXCEPTION_NOT_SUCCESS("Get");
@@ -621,36 +648,17 @@ namespace scidb {
             // Parse S3Index
             auto& indexStream = outcome.GetResultWithOwnership().GetBody();
 
-            // TODO Remove
-            auto stop = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                stop - start);
-            LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex download:" << duration.count() << " microseconds");
-
-
-            // TODO Remove
-            start = std::chrono::high_resolution_clock::now();
-
-            // indexStream >> _index;
-
             std::string line;
-            const Dimensions dims = _desc.getDimensions();
-            const size_t nDims = dims.size();
-            scidb::Coordinates pos;
-            pos.reserve(nDims);
-
-            // One coordBuf for each non-coordinator instance
-            // std::vector<Coordinate>* coordBuf = new std::vector<Coordinate>[nInst - 1];
-            std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst - 1);
-
             while (std::getline(indexStream, line)) {
                 std::istringstream stm(line);
                 size_t i = 0;
-                for (scidb::Coordinate coord; stm >> coord; i++)
-                    pos.push_back(coord * dims[i].getChunkInterval()
-                                  + dims[i].getStartMin());
+                for (scidb::Coordinate coord; stm >> coord; i++) {
+                    if (i >= nDims) break;
+                    pos[i] = (coord * dims[i].getChunkInterval()
+                              + dims[i].getStartMin());
+                }
 
-                if (pos.size() != nDims)
+                if (i != nDims)
                     throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
                                          scidb::SCIDB_LE_UNKNOWN_ERROR)
                         << "Invalid index line '" << line
@@ -659,63 +667,50 @@ namespace scidb {
                 InstanceID primaryID = _desc.getPrimaryInstanceId(pos, nInst);
                 if (primaryID == instID)
                     _index.insert(pos);
-                else {
-                    // Map to refInstID for coordBuf [0, nInst - 2]
-                    InstanceID indexID = primaryID < instID ? primaryID : (primaryID - 1);
-
+                else
                     // Serialize in the right coordBuf
-                    std::copy(pos.begin(), pos.end(), std::back_inserter(coordBuf[indexID]));
-                }
+                    std::copy(pos.begin(), pos.end(), std::back_inserter(coordBuf[primaryID]));
+            }
+        }
 
-                pos.clear();
+        // TODO Remove
+        auto stop = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+            stop - start);
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex download:" << duration.count() << " microseconds");
+
+
+        // TODO Remove
+        start = std::chrono::high_resolution_clock::now();
+
+        for (InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
+            if (remoteID != instID) {
+                // Prepare Shared Buffer
+                std::shared_ptr<SharedBuffer> buf;
+                if (coordBuf[remoteID].size() == 0)
+                    buf = std::shared_ptr<SharedBuffer>(new MemoryBuffer(NULL, 1));
+                else
+                    buf = std::shared_ptr<SharedBuffer>(
+                        // Have to copy it
+                        new MemoryBuffer(
+                            coordBuf[remoteID].data(),
+                            coordBuf[remoteID].size() * sizeof(Coordinate)));
+
+                // Send Shared Buffer
+                BufSend(remoteID, buf, _query);
             }
 
-            // TODO Remove
-            stop = std::chrono::high_resolution_clock::now();
-            duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                stop - start);
-            LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex parse:" << duration.count() << " microseconds");
+        for (InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
+            if (remoteID != instID)
+                _index.deserialize_insert(BufReceive(remoteID, _query));
 
+        // TODO Remove
+        stop = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(
+            stop - start);
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex distribute:" << duration.count() << " microseconds");
 
-            // TODO Remove
-            start = std::chrono::high_resolution_clock::now();
-
-            for (InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
-                if (remoteID != instID) {
-                    // Map to refInstID for coordBuf [0, nInst - 2]
-                    InstanceID indexID = remoteID < instID ? remoteID : (remoteID - 1);
-
-                    // LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex distribute|" << remoteID << "|" << coordBuf[indexID]);
-
-                    // Prepare Shared Buffer
-                    std::shared_ptr<SharedBuffer> buf;
-                    if (coordBuf[indexID].size() == 0)
-                        buf = std::shared_ptr<SharedBuffer>(new MemoryBuffer(NULL, 1));
-                    else
-                        buf = std::shared_ptr<SharedBuffer>(
-                            // Have to copy it
-                            new MemoryBuffer(
-                                coordBuf[indexID].data(),
-                                coordBuf[indexID].size() * sizeof(Coordinate)));
-
-                    // Send Shared Buffer
-                    BufSend(remoteID, buf, _query);
-                }
-
-            // delete[] coordBuf;
-
-            // TODO Remove
-            stop = std::chrono::high_resolution_clock::now();
-            duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                stop - start);
-            LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex distribute:" << duration.count() << " microseconds");
-
-            // LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex full size:" << _index.size());
-            // _index.filter_trim(nInst, instID);
-        }
-        else
-            _index.deserialize_insert(BufReceive(_query->getCoordinatorID(),
-                                                 _query));
+        _index.sort();
 
         LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex size:" << _index.size());
         // LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex:" << _index);

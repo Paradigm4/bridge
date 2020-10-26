@@ -51,9 +51,9 @@ namespace std {
     std::ostream& operator<<(std::ostream&, const scidb::S3Index&);
 
     // Serialize & De-serialize to S3
-    Aws::IOStream& operator<<(Aws::IOStream&, const scidb::Coordinates&);
-    Aws::IOStream& operator<<(Aws::IOStream&, const scidb::S3Index&);
-    Aws::IOStream& operator>>(Aws::IOStream&, scidb::S3Index&);
+    // Aws::IOStream& operator<<(Aws::IOStream&, const scidb::Coordinates&);
+    // Aws::IOStream& operator<<(Aws::IOStream&, const scidb::S3Index&);
+    // Aws::IOStream& operator>>(Aws::IOStream&, scidb::S3Index&);
 }
 
 namespace scidb {
@@ -66,8 +66,8 @@ typedef std::vector<Coordinates> S3IndexCont;
 // typedef std::set<Coordinates, CoordinatesLess> S3IndexCont;
 
 class S3Index {
-    friend Aws::IOStream& std::operator>>(Aws::IOStream&, scidb::S3Index&);
-    friend Aws::IOStream& std::operator<<(Aws::IOStream&, const scidb::S3Index&);
+    // friend Aws::IOStream& std::operator>>(Aws::IOStream&, scidb::S3Index&);
+    // friend Aws::IOStream& std::operator<<(Aws::IOStream&, const scidb::S3Index&);
 
   public:
     S3Index(const ArrayDesc&);
@@ -78,15 +78,15 @@ class S3Index {
 
     // Serialize & De-serialize for inter-instance comms
     std::shared_ptr<SharedBuffer> serialize() const;
-    std::shared_ptr<SharedBuffer> filter_serialize(
-        const size_t nInst, const InstanceID instID) const;
+    // std::shared_ptr<SharedBuffer> filter_serialize(
+    //     const size_t nInst, const InstanceID instID) const;
     void deserialize_insert(std::shared_ptr<SharedBuffer>);
 
     const S3IndexCont::const_iterator begin() const;
     const S3IndexCont::const_iterator end() const;
 
     const S3IndexCont::const_iterator find(const Coordinates&) const;
-    void filter_trim(const size_t nInst, const InstanceID instID);
+    // void filter_trim(const size_t nInst, const InstanceID instID);
 
   private:
     const ArrayDesc& _desc;

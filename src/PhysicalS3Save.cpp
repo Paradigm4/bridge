@@ -39,6 +39,8 @@
 #include "S3Index.h"
 
 
+#define INDEX_SPLIT_SIZE 32768
+
 #define THROW_NOT_OK(s)                                                 \
     {                                                                   \
         arrow::Status _s = (s);                                         \
@@ -634,18 +636,48 @@ public:
             index.sort();
 
             // Serialize Chunk Coordinate List
-            const std::shared_ptr<Aws::IOStream> metaData =
-                Aws::MakeShared<Aws::StringStream>("");
-            (*metaData) << index;
+            size_t nDims = dims.size();
+            size_t szSplit = static_cast<int>(INDEX_SPLIT_SIZE / nDims);
+            size_t split = 0;
 
-            // Set Object Name
-            std::ostringstream out;
-            out << settings.getBucketPrefix() << "/index";
+            LOG4CXX_DEBUG(logger, "S3SAVE|" << query->getInstanceID()
+                          << "|executed szSplit:" << szSplit);
 
-            // Upload Chunk Coordinate List to S3
-            uploadToS3(bucketName,
-                       Aws::String(out.str().c_str()),
-                       metaData);
+            auto splitPtr = index.begin();
+            while (splitPtr != index.end()) {
+                const std::shared_ptr<Aws::IOStream> metaData =
+                    Aws::MakeShared<Aws::StringStream>("");
+
+                for (auto posPtr = splitPtr;
+                     posPtr != splitPtr + szSplit && posPtr != index.end();
+                     ++posPtr) {
+                    for (size_t i = 0; i < nDims; ++i) {
+                        if (i > 0)
+                            (*metaData) << '\t';
+                        (*metaData) << (((*posPtr)[i] - dims[i].getStartMin())
+                                        / dims[i].getChunkInterval());
+                    }
+                    (*metaData) << "\n";
+                }
+
+                // Set Object Name
+                std::ostringstream out;
+                out << settings.getBucketPrefix() << "/index/" << split;
+
+                LOG4CXX_DEBUG(logger, "S3SAVE|" << query->getInstanceID()
+                              << "|executed index split:" << out.str());
+
+                // Upload Chunk Coordinate List to S3
+                uploadToS3(bucketName,
+                           Aws::String(out.str().c_str()),
+                           metaData);
+
+                // Advance to Next Index Split
+                splitPtr += std::min<size_t>(
+                    szSplit,
+                    std::distance(splitPtr, index.end()));
+                split++;
+            }
         }
         else
             BufSend(query->getCoordinatorID(), index.serialize(), query);
