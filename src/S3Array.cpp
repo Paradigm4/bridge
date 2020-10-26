@@ -677,7 +677,7 @@ namespace scidb {
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
             stop - start);
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex download:" << duration.count() << " microseconds");
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex download|parse|ser:" << duration.count() << " microseconds");
 
 
         // TODO Remove
@@ -700,15 +700,43 @@ namespace scidb {
                 BufSend(remoteID, buf, _query);
             }
 
-        for (InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
-            if (remoteID != instID)
-                _index.deserialize_insert(BufReceive(remoteID, _query));
-
         // TODO Remove
         stop = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(
             stop - start);
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex distribute:" << duration.count() << " microseconds");
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex send:" << duration.count() << " microseconds");
+
+        // TODO Remove
+        std::chrono::microseconds duration2;
+        duration = duration2;
+
+
+        for (InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
+            if (remoteID != instID) {
+
+                // TODO Remove
+                start = std::chrono::high_resolution_clock::now();
+
+                auto buf = BufReceive(remoteID, _query);
+
+                // TODO Remove
+                stop = std::chrono::high_resolution_clock::now();
+                duration += std::chrono::duration_cast<std::chrono::microseconds>(
+                    stop - start);
+                start = std::chrono::high_resolution_clock::now();
+
+                _index.deserialize_insert(buf);
+
+                // TODO Remove
+                stop = std::chrono::high_resolution_clock::now();
+                duration2 += std::chrono::duration_cast<std::chrono::microseconds>(
+                    stop - start);
+            }
+
+        // TODO Remove
+        stop = std::chrono::high_resolution_clock::now();
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex receive:" << duration.count() << " microseconds");
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex deserialize:" << duration2.count() << " microseconds");
 
         _index.sort();
 
