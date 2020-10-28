@@ -39,7 +39,7 @@
 #include "S3Index.h"
 
 
-#define INDEX_SPLIT_SIZE 32768
+#define INDEX_SPLIT_SIZE 30000
 
 #define THROW_NOT_OK(s)                                                 \
     {                                                                   \
@@ -633,7 +633,7 @@ public:
                     index.deserialize_insert(BufReceive(remoteID, query));
 
             // Sort Chunk Coordinate List
-            index.sort();
+            // index.sort();
 
             // Serialize Chunk Coordinate List
             size_t nDims = dims.size();
