@@ -22,8 +22,12 @@ bkt.objects.filter(Prefix='{}/index/'.format(key)).delete()
 
 client = boto3.client('s3')
 obj = client.get_object(Bucket=bucket, Key='{}/index'.format(key))
-data = obj['Body'].read().strip()
+data = obj['Body'].read()
 chunks = data.split(b'\n')
+
+while b'' in chunks:
+    chunks.remove(b'')
+
 line_sz = len(chunks[0].split(b'\t'))
 split_sz = INDEX_SPLIT_SIZE // line_sz
 
