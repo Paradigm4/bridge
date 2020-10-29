@@ -49,7 +49,8 @@ public:
             },
             { KW_BUCKET_NAME,   RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
             { KW_BUCKET_PREFIX, RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
-            { KW_FORMAT,        RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) }
+            { KW_FORMAT,        RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
+            { KW_INDEX_SPLIT,   RE(PP(PLACEHOLDER_CONSTANT, TID_INT64)) }
         };
         return &argSpec;
     }

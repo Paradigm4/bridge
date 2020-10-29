@@ -39,8 +39,6 @@
 #include "S3Index.h"
 
 
-#define INDEX_SPLIT_SIZE 30000
-
 #define THROW_NOT_OK(s)                                                 \
     {                                                                   \
         arrow::Status _s = (s);                                         \
@@ -637,7 +635,7 @@ public:
 
             // Serialize Chunk Coordinate List
             size_t nDims = dims.size();
-            size_t szSplit = static_cast<int>(INDEX_SPLIT_SIZE / nDims);
+            size_t szSplit = static_cast<int>(settings.getIndexSplit() / nDims);
             size_t split = 0;
 
             LOG4CXX_DEBUG(logger, "S3SAVE|" << query->getInstanceID()

@@ -41,12 +41,16 @@ using boost::bad_lexical_cast;
 // Logger for operator. static to prevent visibility of variable outside of file
 static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3save"));
 
+#define INDEX_SPLIT_MIN 100
+#define INDEX_SPLIT_DEFAULT 100000
+
 namespace scidb
 {
 
 static const char* const KW_BUCKET_NAME   = "bucket_name";
 static const char* const KW_BUCKET_PREFIX = "bucket_prefix";
 static const char* const KW_FORMAT	  = "format";
+static const char* const KW_INDEX_SPLIT	  = "index_split";
 
 typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t ;
 
@@ -73,44 +77,45 @@ private:
     std::string			_bucketName;
     std::string			_bucketPrefix;
     FormatType                  _format;
+    size_t                      _indexSplit;
 
     void checkIfSet(bool alreadySet, const char* kw)
     {
         if (alreadySet)
         {
             std::ostringstream error;
-            error << "illegal attempt to set " << kw << " multiple times";
+            error << "Illegal attempt to set " << kw << " multiple times";
             throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << error.str().c_str();
         }
     }
 
     void setParamBucketName(std::vector<std::string> bucketName)
     {
-        if (_bucketName != "") {
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal attempt to set bucket name multiple times";
-        }
-
+        if (_bucketName != "") checkIfSet(true, "bucket_name");
         _bucketName = bucketName[0];
     }
 
     void setParamBucketPrefix(std::vector<std::string> bucketPrefix)
     {
-        if (_bucketPrefix != "") {
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal attempt to set object path multiple times";
-        }
-
+        if (_bucketPrefix != "") checkIfSet(true, "bucket_prefix");
         _bucketPrefix = bucketPrefix[0];
     }
 
     void setParamFormat(std::vector<std::string> format)
     {
         if(format[0] == "arrow")
-        {
             _format = ARROW;
-        }
         else
-        {
             throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "format must be 'arrow'";
+    }
+
+    void setParamIndexSplit(std::vector<int64_t> indexSplit)
+    {
+        _indexSplit = indexSplit[0];
+        if(_indexSplit < INDEX_SPLIT_MIN) {
+            std::ostringstream err;
+            err << "index_split must be at or above " << INDEX_SPLIT_MIN;
+            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << err.str();
         }
     }
 
@@ -130,7 +135,9 @@ private:
         return paramContent;
     }
 
-    bool setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, void (S3SaveSettings::* innersetter)(std::vector<std::string>) )
+    bool setKeywordParamString(KeywordParameters const& kwParams,
+                               const char* const kw,
+                               void (S3SaveSettings::* innersetter)(std::vector<std::string>) )
     {
         std::vector <std::string> paramContent;
         bool retSet = false;
@@ -154,10 +161,69 @@ private:
         return retSet;
     }
 
-    void setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, bool& alreadySet, void (S3SaveSettings::* innersetter)(std::vector<std::string>) )
+    void setKeywordParamString(KeywordParameters const& kwParams,
+                               const char* const kw,
+                               bool& alreadySet, void (S3SaveSettings::* innersetter)(std::vector<std::string>) )
     {
         checkIfSet(alreadySet, kw);
         alreadySet = setKeywordParamString(kwParams, kw, innersetter);
+    }
+
+    int64_t getParamContentInt64(Parameter& param)
+    {
+        size_t paramContent;
+
+        if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
+            ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
+            paramContent = evaluate(paramExpr->getExpression(), TID_INT64).getInt64();
+        }
+        else {
+            OperatorParamPhysicalExpression* exp =
+                dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
+            SCIDB_ASSERT(exp != nullptr);
+            paramContent = exp->getExpression()->evaluate().getInt64();
+            LOG4CXX_DEBUG(logger, "aio_save integer param is " << paramContent)
+
+        }
+        return paramContent;
+    }
+
+    bool setKeywordParamInt64(KeywordParameters const& kwParams,
+                              const char* const kw,
+                              void (S3SaveSettings::* innersetter)(std::vector<int64_t>) )
+    {
+        std::vector<int64_t> paramContent;
+        size_t numParams;
+        bool retSet = false;
+
+        Parameter kwParam = getKeywordParam(kwParams, kw);
+        if (kwParam) {
+            if (kwParam->getParamType() == PARAM_NESTED) {
+                auto group = dynamic_cast<OperatorParamNested*>(kwParam.get());
+                Parameters& gParams = group->getParameters();
+                numParams = gParams.size();
+                for (size_t i = 0; i < numParams; ++i)
+                    paramContent.push_back(getParamContentInt64(gParams[i]));
+            }
+            else
+                paramContent.push_back(getParamContentInt64(kwParam));
+
+            (this->*innersetter)(paramContent);
+            retSet = true;
+        }
+        else
+            LOG4CXX_DEBUG(logger, "aio_save findKeyword null: " << kw);
+
+        return retSet;
+    }
+
+    void setKeywordParamInt64(KeywordParameters const& kwParams,
+                              const char* const kw,
+                              bool& alreadySet,
+                              void (S3SaveSettings::* innersetter)(std::vector<int64_t>) )
+    {
+        checkIfSet(alreadySet, kw);
+        alreadySet = setKeywordParamInt64(kwParams, kw, innersetter);
     }
 
     Parameter getKeywordParam(KeywordParameters const& kwp, const std::string& kw) const
@@ -173,25 +239,24 @@ public:
                    std::shared_ptr<Query>& query):
                 _bucketName(""),
                 _bucketPrefix(""),
-                _format(ARROW)
+                _format(ARROW),
+                _indexSplit(INDEX_SPLIT_DEFAULT)
     {
         bool  bucketNameSet   = false;
         bool  bucketPrefixSet = false;
         bool  formatSet       = false;
+        bool  indexSplit      = false;
 
         setKeywordParamString(kwParams, KW_BUCKET_NAME,   bucketNameSet,   &S3SaveSettings::setParamBucketName);
         setKeywordParamString(kwParams, KW_BUCKET_PREFIX, bucketPrefixSet, &S3SaveSettings::setParamBucketPrefix);
         setKeywordParamString(kwParams, KW_FORMAT,        formatSet,       &S3SaveSettings::setParamFormat);
+        setKeywordParamInt64(kwParams,  KW_INDEX_SPLIT,   indexSplit,      &S3SaveSettings::setParamIndexSplit);
 
         if(_bucketName.size() == 0)
-        {
-          throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_NAME << " was not provided, or failed to parse";
-        }
+            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_NAME << " was not provided, or failed to parse";
 
         if(_bucketPrefix.size() == 0)
-        {
-          throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_PREFIX << " was not provided, or failed to parse";
-        }
+            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_PREFIX << " was not provided, or failed to parse";
     }
 
     bool isArrowFormat() const
@@ -208,8 +273,12 @@ public:
     {
         return _bucketPrefix;
     }
-};
 
+    size_t getIndexSplit() const
+    {
+        return _indexSplit;
+    }
+};
 }
 
 

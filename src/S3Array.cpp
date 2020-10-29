@@ -661,7 +661,7 @@ namespace scidb {
                 if (i != nDims) {
                     out.str("");
                     out << objectName
-                        << "Invalid index line '" << line
+                        << " Invalid index line '" << line
                         << "', expected " << nDims << " values";
                     throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
                                          scidb::SCIDB_LE_UNKNOWN_ERROR)
