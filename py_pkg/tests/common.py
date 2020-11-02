@@ -1,8 +1,9 @@
 bucket_name = 'p4tests'
 base_prefix = 's3bridge-tests'
-base_metadata = {'version':   '1',
-                 'format':    'arrow',
-                 'attribute': 'ALL'}
+base_metadata = {'version':     '1',
+                 'format':      'arrow',
+                 'attribute':   'ALL',
+                 'compression': 'none'}
 
 
 def delete_prefix(s3_con, prefix):

@@ -30,6 +30,7 @@
 
 #include <aws/core/Aws.h>
 
+#include "S3Common.h"
 #include "S3Index.h"
 
 
@@ -44,6 +45,10 @@ namespace arrow {
     class RecordBatchReader;
     namespace io {
         class BufferReader;
+        class CompressedInputStream;
+    }
+    namespace util {
+        class Codec;
     }
 }
 namespace Aws {
@@ -142,6 +147,8 @@ friend class S3ChunkIterator;
     long long _arrowSizeAlloc;
     std::unique_ptr<char[]> _arrowData;
     std::shared_ptr<arrow::io::BufferReader> _arrowBufferReader;
+    std::unique_ptr<arrow::util::Codec> _arrowCodec;
+    std::shared_ptr<arrow::io::CompressedInputStream> _arrowCompressedStream;
     std::shared_ptr<arrow::RecordBatchReader> _arrowBatchReader;
     std::shared_ptr<arrow::RecordBatch> _arrowBatch;
 };
@@ -191,6 +198,8 @@ public:
     /// @see Array::hasInputPipe
     bool hasInputPipe() const override { return false; }
 
+    S3Metadata::Compression getCompression() const { return _compression; }
+
     void readIndex();
 
 private:
@@ -202,6 +211,7 @@ private:
     std::shared_ptr<Aws::S3::S3Client> _awsClient;
     std::shared_ptr<Aws::String> _awsBucketName;
     S3Index _index;
+    S3Metadata::Compression _compression;
 };
 
 }

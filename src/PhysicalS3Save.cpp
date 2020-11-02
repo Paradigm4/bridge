@@ -28,9 +28,11 @@
 #include <query/PhysicalOperator.h>
 
 #include <arrow/builder.h>
+#include <arrow/io/compressed.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/writer.h>
 #include <arrow/record_batch.h>
+#include <arrow/util/compression.h>
 
 #include <aws/s3/model/PutObjectRequest.h>
 
@@ -181,8 +183,10 @@ class ArrowPopulator
 private:
     const size_t                                      _nAttrs;
     const size_t                                      _nDims;
+    const S3Metadata::Compression                             _compression;
     std::vector<TypeEnum>                             _attrTypes;
     std::vector<std::vector<int64_t>>                 _dimValues;
+
 
     const std::shared_ptr<arrow::Schema>              _arrowSchema;
     std::vector<std::unique_ptr<arrow::ArrayBuilder>> _arrowBuilders;
@@ -192,9 +196,10 @@ private:
         arrow::default_memory_pool();
 
 public:
-    ArrowPopulator(ArrayDesc const &schema):
+    ArrowPopulator(const ArrayDesc &schema, S3Metadata::Compression compression):
         _nAttrs(schema.getAttributes(true).size()),
         _nDims(schema.getDimensions().size()),
+        _compression(compression),
         _attrTypes(_nAttrs),
         _dimValues(_nDims),
 
@@ -222,9 +227,9 @@ public:
         }
     }
 
-   arrow::Status populateArrowBuffer(ArrayDesc const& schema,
-                                      std::vector<std::shared_ptr<ConstChunkIterator> >& chunkIters,
-                                      std::shared_ptr<arrow::Buffer>& arrowBuffer)
+   arrow::Status populateArrowBuffer(const ArrayDesc &schema,
+                                     const std::vector<std::shared_ptr<ConstChunkIterator> >& chunkIters,
+                                     std::shared_ptr<arrow::Buffer>& arrowBuffer)
     {
         // Append to Arrow Builders
         for (size_t attrIdx = 0; attrIdx < _nAttrs; ++attrIdx)
@@ -444,16 +449,31 @@ public:
 
         // Stream Arrow Record Batch to Arrow Buffer using Arrow
         // Record Batch Writer and Arrow Buffer Output Stream
-        std::shared_ptr<arrow::io::BufferOutputStream> arrowStream;
+        std::shared_ptr<arrow::io::BufferOutputStream> arrowBufferStream;
         ARROW_ASSIGN_OR_RAISE(
-            arrowStream,
+            arrowBufferStream,
             // TODO Better initial estimate for Create
             arrow::io::BufferOutputStream::Create(4096, _arrowPool));
 
+        // Setup Arrow Compression, If Enabled
         std::shared_ptr<arrow::ipc::RecordBatchWriter> arrowWriter;
-        ARROW_RETURN_NOT_OK(
-            arrow::ipc::RecordBatchStreamWriter::Open(
-                &*arrowStream, _arrowSchema, &arrowWriter));
+        std::shared_ptr<arrow::io::CompressedOutputStream> arrowCompressedStream;
+        if (_compression == S3Metadata::Compression::ZLIB) {
+            std::unique_ptr<arrow::util::Codec> codec = *arrow::util::Codec::Create(
+                arrow::Compression::type::GZIP);
+            ARROW_ASSIGN_OR_RAISE(
+                arrowCompressedStream,
+                arrow::io::CompressedOutputStream::Make(codec.get(), arrowBufferStream));
+            ARROW_RETURN_NOT_OK(
+                arrow::ipc::RecordBatchStreamWriter::Open(
+                    &*arrowCompressedStream, _arrowSchema, &arrowWriter));
+        }
+        else {
+            ARROW_RETURN_NOT_OK(
+                arrow::ipc::RecordBatchStreamWriter::Open(
+                    &*arrowBufferStream, _arrowSchema, &arrowWriter));
+        }
+
         // Arrow >= 0.17.0
         // ARROW_ASSIGN_OR_RAISE(
         //     arrowWriter,
@@ -462,7 +482,12 @@ public:
         ARROW_RETURN_NOT_OK(arrowWriter->WriteRecordBatch(*arrowBatch));
         ARROW_RETURN_NOT_OK(arrowWriter->Close());
 
-        ARROW_ASSIGN_OR_RAISE(arrowBuffer, arrowStream->Finish());
+        // Close Arrow Compression Stream, If Enabled
+        if (_compression == S3Metadata::Compression::ZLIB) {
+            ARROW_RETURN_NOT_OK(arrowCompressedStream->Close());
+        }
+
+        ARROW_ASSIGN_OR_RAISE(arrowBuffer, arrowBufferStream->Finish());
         LOG4CXX_DEBUG(logger, "S3SAVE|arrowBuffer::size: " << arrowBuffer->size());
 
         return arrow::Status::OK();
@@ -523,6 +548,8 @@ public:
                                    std::shared_ptr<Query> query)
     {
         S3SaveSettings settings(_parameters, _kwParameters, false, query);
+        const std::string bucketPrefix = settings.getBucketPrefix();
+        const S3Metadata::Compression compression = settings.getCompression();
         std::shared_ptr<Array> result(new MemArray(_schema, query));
 
         std::shared_ptr<Array>& inputArray = inputArrays[0];
@@ -550,8 +577,7 @@ public:
 
         // Coordiantor Creates S3 Metadata Object
         Aws::String bucketName = Aws::String(settings.getBucketName().c_str());
-        if (query->isCoordinator())
-        {
+        if (query->isCoordinator()) {
             // Prep Metadata
             const std::shared_ptr<Aws::IOStream> metaData =
                 Aws::MakeShared<Aws::StringStream>("");
@@ -561,10 +587,11 @@ public:
             *metaData << "version\t" << S3BRIDGE_VERSION << "\n";
             *metaData << "attribute\tALL\n";
             *metaData << "format\tarrow\n";
+            *metaData << "compression\t" << S3Metadata::compression2String(compression) << "\n";
 
             // Set Object Name
             std::ostringstream out;
-            out << settings.getBucketPrefix() << "/metadata";
+            out << bucketPrefix << "/metadata";
 
             uploadToS3(bucketName,
                        Aws::String(out.str().c_str()),
@@ -582,7 +609,7 @@ public:
 
             // Init Populator
             // if (settings.isArrowFormat())
-            ArrowPopulator populator(inputSchema);
+            ArrowPopulator populator(inputSchema, settings.getCompression());
 
             while (!inputArrayIters[0]->end()) {
                 if (!inputArrayIters[0]->getChunk().getConstIterator(
@@ -596,10 +623,9 @@ public:
                     Coordinates const &pos = inputChunkIters[0]->getFirstPosition();
                     // Add Chunk Coordinates to the Chunk Index
                     index.insert(pos);
-                    Aws::String objectName(coord2ObjectName(
-                                               settings.getBucketPrefix(),
-                                               pos,
-                                               dims).c_str());
+                    Aws::String objectName(coord2ObjectName(bucketPrefix,
+                                                            pos,
+                                                            dims).c_str());
 
                     std::shared_ptr<arrow::Buffer> arrowBuffer;
                     THROW_NOT_OK(
@@ -660,7 +686,7 @@ public:
 
                 // Set Object Name
                 std::ostringstream out;
-                out << settings.getBucketPrefix() << "/index/" << split;
+                out << bucketPrefix << "/index/" << split;
 
                 LOG4CXX_DEBUG(logger, "S3SAVE|" << query->getInstanceID()
                               << "|executed index split:" << out.str());

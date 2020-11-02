@@ -69,7 +69,7 @@ PhysicalS3Load.o: S3LoadSettings.h S3Array.h S3Index.h
 LogicalS3LoadEager.o: S3Common.h S3LoadSettings.h
 PhysicalS3LoadEager.o: S3Common.h S3LoadSettings.h
 
-LogicalS3Save.o: S3SaveSettings.h
+LogicalS3Save.o:  S3Common.h S3SaveSettings.h
 PhysicalS3Save.o: S3Common.h S3SaveSettings.h S3Index.h
 
 S3Array.o: S3Array.h S3Index.h  S3Common.h S3LoadSettings.h

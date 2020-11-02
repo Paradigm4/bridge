@@ -30,6 +30,8 @@
 #include <query/Expression.h>
 #include <util/PathUtils.h>
 
+#include <S3Common.h>
+
 #ifndef S3SAVE_SETTINGS
 #define S3SAVE_SETTINGS
 
@@ -50,6 +52,7 @@ namespace scidb
 static const char* const KW_BUCKET_NAME   = "bucket_name";
 static const char* const KW_BUCKET_PREFIX = "bucket_prefix";
 static const char* const KW_FORMAT	  = "format";
+static const char* const KW_COMPRESSION	  = "compression";
 static const char* const KW_INDEX_SPLIT	  = "index_split";
 
 typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t ;
@@ -69,14 +72,10 @@ public:
 
 
 private:
-    enum FormatType
-    {
-        ARROW  = 0
-    };
-
     std::string			_bucketName;
     std::string			_bucketPrefix;
-    FormatType                  _format;
+    S3Metadata::Format          _format;
+    S3Metadata::Compression     _compression;
     size_t                      _indexSplit;
 
     void checkIfSet(bool alreadySet, const char* kw)
@@ -103,10 +102,22 @@ private:
 
     void setParamFormat(std::vector<std::string> format)
     {
-        if(format[0] == "arrow")
-            _format = ARROW;
+        if (format[0] == "arrow")
+            _format = S3Metadata::Format::ARROW;
         else
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "format must be 'arrow'";
+            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
+                << "format must be 'arrow'";
+    }
+
+    void setParamCompression(std::vector<std::string> compression)
+    {
+        if (compression[0] == "none")
+            _compression = S3Metadata::Compression::NONE;
+        else if (compression[0] == "zlib")
+            _compression = S3Metadata::Compression::ZLIB;
+        else
+            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
+                << "unsupported compression";
     }
 
     void setParamIndexSplit(std::vector<int64_t> indexSplit)
@@ -239,17 +250,20 @@ public:
                    std::shared_ptr<Query>& query):
                 _bucketName(""),
                 _bucketPrefix(""),
-                _format(ARROW),
+                _format(S3Metadata::Format::ARROW),
+                _compression(S3Metadata::Compression::NONE),
                 _indexSplit(INDEX_SPLIT_DEFAULT)
     {
         bool  bucketNameSet   = false;
         bool  bucketPrefixSet = false;
         bool  formatSet       = false;
+        bool  compressionSet  = false;
         bool  indexSplit      = false;
 
         setKeywordParamString(kwParams, KW_BUCKET_NAME,   bucketNameSet,   &S3SaveSettings::setParamBucketName);
         setKeywordParamString(kwParams, KW_BUCKET_PREFIX, bucketPrefixSet, &S3SaveSettings::setParamBucketPrefix);
         setKeywordParamString(kwParams, KW_FORMAT,        formatSet,       &S3SaveSettings::setParamFormat);
+        setKeywordParamString(kwParams, KW_COMPRESSION,   compressionSet,  &S3SaveSettings::setParamCompression);
         setKeywordParamInt64(kwParams,  KW_INDEX_SPLIT,   indexSplit,      &S3SaveSettings::setParamIndexSplit);
 
         if(_bucketName.size() == 0)
@@ -261,7 +275,7 @@ public:
 
     bool isArrowFormat() const
     {
-        return _format == ARROW;
+        return _format == S3Metadata::Format::ARROW;
     }
 
     std::string const& getBucketName() const
@@ -272,6 +286,11 @@ public:
     std::string const& getBucketPrefix() const
     {
         return _bucketPrefix;
+    }
+
+    S3Metadata::Compression getCompression() const
+    {
+        return _compression;
     }
 
     size_t getIndexSplit() const

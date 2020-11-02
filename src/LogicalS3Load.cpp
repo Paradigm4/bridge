@@ -52,7 +52,7 @@ public:
         return &argSpec;
     }
 
-    ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, std::shared_ptr<Query> query)
+    ArrayDesc inferSchema(std::vector<ArrayDesc> schemas, std::shared_ptr<Query> query)
     {
         S3LoadSettings settings(_parameters, _kwParameters, true, query);
 
@@ -62,11 +62,11 @@ public:
         Aws::S3::S3Client s3Client;
 
         std::map<std::string, std::string> metadata;
-        getMetadata(s3Client,
-                    Aws::String(settings.getBucketName().c_str()),
-                    Aws::String((settings.getBucketPrefix() +
-                                 "/metadata").c_str()),
-                    metadata);
+        S3Metadata::getMetadata(s3Client,
+                                Aws::String(settings.getBucketName().c_str()),
+                                Aws::String((settings.getBucketPrefix() +
+                                             "/metadata").c_str()),
+                                metadata);
         LOG4CXX_DEBUG(logger, "S3LOAD|" << query->getInstanceID() << "|schema: " << metadata["schema"]);
         Aws::ShutdownAPI(options);
 
@@ -85,7 +85,12 @@ public:
                                 Query::destroyFakeQuery(innerQuery.get()); });
 
             std::ostringstream out;
-            out << "input(" << metadata["schema"] << ", '/dev/null')";
+            auto schemaPair = metadata.find("schema");
+            if (schemaPair == metadata.end())
+                throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
+                                     scidb::SCIDB_LE_UNKNOWN_ERROR)
+                    << "schema missing from metadata";
+            out << "input(" << schemaPair->second << ", '/dev/null')";
             innerQuery->queryString = out.str();
             innerQuery->logicalPlan = std::make_shared<LogicalPlan>(
                 parseStatement(innerQuery, true));

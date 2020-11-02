@@ -62,11 +62,11 @@ public:
         Aws::S3::S3Client s3Client;
 
         std::map<std::string, std::string> metadata;
-        getMetadata(s3Client,
-                    Aws::String(settings.getBucketName().c_str()),
-                    Aws::String((settings.getBucketPrefix() +
-                                 "/metadata").c_str()),
-                    metadata);
+        S3Metadata::getMetadata(s3Client,
+                                Aws::String(settings.getBucketName().c_str()),
+                                Aws::String((settings.getBucketPrefix() +
+                                             "/metadata").c_str()),
+                                metadata);
         LOG4CXX_DEBUG(logger, "S3LOAD >> schema: " << metadata["schema"]);
         Aws::ShutdownAPI(options);
 

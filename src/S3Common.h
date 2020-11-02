@@ -67,34 +67,66 @@
 
 namespace scidb {
 
-static void getMetadata(Aws::S3::S3Client const &s3Client,
-                        Aws::String const &bucketName,
-                        Aws::String const &objectName,
-                        std::map<std::string, std::string>& metadata) {
-    // Download Metadata
-    Aws::S3::Model::GetObjectRequest objectRequest;
+class S3Metadata {
+public:
+    enum Format {
+        ARROW  = 0
+    };
 
-    objectRequest.SetBucket(bucketName);
-    objectRequest.SetKey(objectName);
+    enum Compression {
+        NONE  = 0,
+        ZLIB  = 1
+    };
 
-    auto outcome = s3Client.GetObject(objectRequest);
-    S3_EXCEPTION_NOT_SUCCESS("Get");
-
-    // Parse Metadata
-    auto& metadataStream = outcome.GetResultWithOwnership().GetBody();
-    std::string line;
-    while (std::getline(metadataStream, line)) {
-        std::istringstream lineStream(line);
-        std::string key, value;
-        if (!std::getline(lineStream, key, '\t')
-            || !std::getline(lineStream, value))
-            throw USER_EXCEPTION(SCIDB_SE_METADATA,
-                                 SCIDB_LE_UNKNOWN_ERROR)
-                << "Invalid metadata line '" << line << "'";
-        metadata[key] = value;
+    static std::string compression2String(Compression compression) {
+        switch (compression) {
+        case Compression::NONE:
+            return "none";
+        case Compression::ZLIB:
+            return "zlib";
+        }
+        throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
+                << "unsupported compression";
     }
-}
 
+    static Compression string2Compression(const std::string &compressionStr) {
+        if (compressionStr == "none")
+            return Compression::NONE;
+        else if (compressionStr == "zlib")
+            return Compression::ZLIB;
+        else
+            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
+                << "unsupported compression";
+    }
+
+    static void getMetadata(Aws::S3::S3Client const &s3Client,
+                            Aws::String const &bucketName,
+                            Aws::String const &objectName,
+                            std::map<std::string, std::string>& metadata) {
+        // Download Metadata
+        Aws::S3::Model::GetObjectRequest objectRequest;
+
+        objectRequest.SetBucket(bucketName);
+        objectRequest.SetKey(objectName);
+
+        auto outcome = s3Client.GetObject(objectRequest);
+        S3_EXCEPTION_NOT_SUCCESS("Get");
+
+        // Parse Metadata
+        auto& metadataStream = outcome.GetResultWithOwnership().GetBody();
+        std::string line;
+        while (std::getline(metadataStream, line)) {
+            std::istringstream lineStream(line);
+            std::string key, value;
+            if (!std::getline(lineStream, key, '\t')
+                || !std::getline(lineStream, value))
+                throw USER_EXCEPTION(SCIDB_SE_METADATA,
+                                     SCIDB_LE_UNKNOWN_ERROR)
+                    << "Invalid metadata line '" << line << "'";
+            metadata[key] = value;
+        }
+    }
+};
 
 static std::string coord2ObjectName(std::string const &bucketPrefix,
                                     Coordinates const &pos,

@@ -31,8 +31,10 @@
 #include <network/Network.h>
 
 #include <arrow/builder.h>
+#include <arrow/io/compressed.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/reader.h>
+#include <arrow/util/compression.h>
 
 #include <aws/s3/model/ListObjectsRequest.h>
 
@@ -50,6 +52,13 @@
                 SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)      \
                     << _s.ToString().c_str();                           \
         }                                                               \
+    }
+
+#define ASSIGN_OR_THROW(lhs, rexpr)                     \
+    {                                                   \
+        auto status_name = (rexpr);                     \
+        THROW_NOT_OK(status_name.status());             \
+        lhs = std::move(status_name).ValueOrDie();      \
     }
 
 
@@ -346,6 +355,9 @@ namespace scidb {
         _attrType(typeId2TypeEnum(array._desc.getAttributes().findattr(attrID).getType(), true)),
         _arrowSizeAlloc(0)
     {
+        if (_array._compression == S3Metadata::Compression::ZLIB)
+            _arrowCodec = *arrow::util::Codec::Create(
+                arrow::Compression::type::GZIP);
     }
 
     void S3Chunk::download()
@@ -392,14 +404,24 @@ namespace scidb {
             reinterpret_cast<const uint8_t*>(_arrowData.get()),
             arrowSize); // zero copy
 
-        // Read Record Batch using Stream Reader
-        THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
-                         _arrowBufferReader, &_arrowBatchReader));
-
+        // Setup Arrow Compression, If Enabled
+        if (_array._compression != S3Metadata::Compression::NONE) {
+            ASSIGN_OR_THROW(_arrowCompressedStream,
+                            arrow::io::CompressedInputStream::Make(
+                                _arrowCodec.get(), _arrowBufferReader));
+            // Read Record Batch using Stream Reader
+            THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
+                             _arrowCompressedStream, &_arrowBatchReader));
+        }
+        else {
+            THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
+                             _arrowBufferReader, &_arrowBatchReader));
+        }
         // Arrow >= 0.17.0
         // ARROW_ASSIGN_OR_RAISE(
         //     arrowReader,
         //     arrow::ipc::RecordBatchStreamReader::Open(&arrowBufferReader));
+
         THROW_NOT_OK(_arrowBatchReader->ReadNext(&_arrowBatch));
         // One SciDB Chunk equals one Arrow Batch
     }
@@ -583,6 +605,20 @@ namespace scidb {
         Aws::InitAPI(_awsOptions);
         _awsClient = std::make_shared<Aws::S3::S3Client>();
         _awsBucketName = std::make_shared<Aws::String>(_settings->getBucketName().c_str());
+
+        std::map<std::string, std::string> metadata;
+        S3Metadata::getMetadata(*_awsClient,
+                                *_awsBucketName,
+                                Aws::String((_settings->getBucketPrefix() +
+                                             "/metadata").c_str()),
+                                metadata);
+
+        auto compressionPair = metadata.find("compression");
+        if (compressionPair == metadata.end())
+            throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
+                                 scidb::SCIDB_LE_UNKNOWN_ERROR)
+                << "compression missing from metadata";
+        _compression = S3Metadata::string2Compression(compressionPair->second);
     }
 
     S3Array::~S3Array() {
