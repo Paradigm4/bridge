@@ -355,6 +355,7 @@ namespace scidb {
         _attrType(typeId2TypeEnum(array._desc.getAttributes().findattr(attrID).getType(), true)),
         _arrowSizeAlloc(0)
     {
+        // Set Compression Codex
         if (_array._compression == S3Metadata::Compression::ZLIB)
             _arrowCodec = *arrow::util::Codec::Create(
                 arrow::Compression::type::GZIP);
@@ -656,9 +657,6 @@ namespace scidb {
         // -- - Read Part of Chunk Index Files - --
         // Divide index files among instnaces
 
-        // TODO Remove
-        auto start = std::chrono::high_resolution_clock::now();
-
         const size_t nInst = _query->getInstancesCount();
         const Dimensions dims = _desc.getDimensions();
         const size_t nDims = dims.size();
@@ -666,6 +664,13 @@ namespace scidb {
 
         // One coordBuf for each instance
         std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
+
+        // TODO Remove
+        auto start = std::chrono::high_resolution_clock::now();
+        std::chrono::time_point<std::chrono::high_resolution_clock> stop;
+        std::chrono::microseconds duration, duration2;
+        duration = std::chrono::duration_values<std::chrono::microseconds>::zero();
+        duration2 = duration;
 
         for (size_t iIndex = instID; iIndex < nIndex; iIndex += nInst) {
 
@@ -680,12 +685,18 @@ namespace scidb {
 
             auto outcome = _awsClient->GetObject(objectRequest);
             S3_EXCEPTION_NOT_SUCCESS("Get");
-
-            // Parse S3Index
             auto& indexStream = outcome.GetResultWithOwnership().GetBody();
 
+            // TODO Remove
+            stop = std::chrono::high_resolution_clock::now();
+            duration += std::chrono::duration_cast<std::chrono::microseconds>(
+                stop - start);
+            start = stop;
+
+            // Parse S3Index
             std::string line;
             while (std::getline(indexStream, line)) {
+
                 std::istringstream stm(line);
                 size_t i = 0;
                 for (scidb::Coordinate coord; stm >> coord; i++) {
@@ -711,18 +722,22 @@ namespace scidb {
                     // Serialize in the right coordBuf
                     std::copy(pos.begin(), pos.end(), std::back_inserter(coordBuf[primaryID]));
             }
+
+            // TODO Remove
+            stop = std::chrono::high_resolution_clock::now();
+            duration2 += std::chrono::duration_cast<std::chrono::microseconds>(
+                stop - start);
+            start = stop;
         }
 
         // TODO Remove
-        auto stop = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-            stop - start);
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex download|parse|ser:" << duration.count() << " microseconds");
-
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex download:" << duration.count() << " microseconds");
+        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex parse|ser:" << duration2.count() << " microseconds");
 
         // TODO Remove
         start = std::chrono::high_resolution_clock::now();
 
+        // Distribute Index Splits to Each Instance
         for (InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
             if (remoteID != instID) {
                 // Prepare Shared Buffer
@@ -747,8 +762,8 @@ namespace scidb {
         LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex send:" << duration.count() << " microseconds");
 
         // TODO Remove
-        std::chrono::microseconds duration2;
-        duration = duration2;
+        duration = std::chrono::duration_values<std::chrono::microseconds>::zero();
+        duration2 = duration;
 
 
         for (InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
