@@ -68,7 +68,84 @@ namespace scidb {
     static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3array"));
 
     //
-    // S3 chunk iterator methods
+    // S3 Arrow Reader
+    //
+    S3ArrowReader::S3ArrowReader(S3Metadata::Compression compression,
+                  std::shared_ptr<Aws::S3::S3Client> awsClient,
+                  std::shared_ptr<const Aws::String> awsBucketName):
+        _compression(compression),
+        _awsClient(awsClient),
+        _awsBucketName(awsBucketName),
+        _arrowSizeAlloc(0)
+    {
+        if (_compression == S3Metadata::Compression::GZIP)
+            _arrowCodec = *arrow::util::Codec::Create(
+                arrow::Compression::type::GZIP);
+    }
+
+    void S3ArrowReader::readObject(
+        const Aws::String &objectName,
+        std::shared_ptr<arrow::RecordBatch> &arrowBatch)
+    {
+        // Download Chunk
+        Aws::S3::Model::GetObjectRequest objectRequest;
+        const Aws::String &bucketName = *_awsBucketName;
+        objectRequest.SetBucket(bucketName);
+        objectRequest.SetKey(objectName);
+        LOG4CXX_DEBUG(logger, "S3ARROWREADER||readObject:" << objectName);
+
+        auto outcome = _awsClient->GetObject(objectRequest);
+        S3_EXCEPTION_NOT_SUCCESS("Get");
+        const long long arrowSize = outcome.GetResult().GetContentLength();
+        if (arrowSize > CHUNK_MAX_SIZE) {
+            std::ostringstream out;
+            out << "Object size " << arrowSize
+                << " too large. Max size is " << CHUNK_MAX_SIZE;
+            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                 SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+        }
+
+        // Check size of current buffer and re-allocate the buffer if
+        // it is too small
+        if (arrowSize > _arrowSizeAlloc) {
+            LOG4CXX_DEBUG(logger, "S3ARROWREADER||readObject arrowSizeAlloc: " << _arrowSizeAlloc
+                          << " arrowSize: " << arrowSize);
+
+            _arrowSizeAlloc = arrowSize;
+            _arrowData = std::make_unique<char[]>(_arrowSizeAlloc);
+        }
+
+        auto& bodyStream = outcome.GetResultWithOwnership().GetBody();
+        bodyStream.read(_arrowData.get(),
+                        static_cast<std::streamsize>(arrowSize));
+
+        _arrowBufferReader = std::make_shared<arrow::io::BufferReader>(
+            reinterpret_cast<const uint8_t*>(_arrowData.get()),
+            arrowSize); // zero copy
+
+        // Setup Arrow Compression, If Enabled
+        if (_compression != S3Metadata::Compression::NONE) {
+            ASSIGN_OR_THROW(_arrowCompressedStream,
+                            arrow::io::CompressedInputStream::Make(
+                                _arrowCodec.get(), _arrowBufferReader));
+            // Read Record Batch using Stream Reader
+            THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
+                             _arrowCompressedStream, &_arrowBatchReader));
+        }
+        else {
+            THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
+                             _arrowBufferReader, &_arrowBatchReader));
+        }
+        // Arrow >= 0.17.0
+        // ARROW_ASSIGN_OR_RAISE(
+        //     arrowReader,
+        //     arrow::ipc::RecordBatchStreamReader::Open(&arrowBufferReader));
+
+        THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatch));
+    }
+
+    //
+    // S3 Chunk Iterator
     //
     S3ChunkIterator::S3ChunkIterator(const S3Array& array,
                                      const S3Chunk* chunk,
@@ -340,7 +417,7 @@ namespace scidb {
     }
 
     //
-    // S3 chunk methods
+    // S3 Chunk
     //
     S3Chunk::S3Chunk(S3Array& array, AttributeID attrID):
         _array(array),
@@ -353,78 +430,19 @@ namespace scidb {
         _attrID(attrID),
         _attrDesc(array._desc.getAttributes().findattr(attrID)),
         _attrType(typeId2TypeEnum(array._desc.getAttributes().findattr(attrID).getType(), true)),
-        _arrowSizeAlloc(0)
-    {
-        // Set Compression Codex
-        if (_array._compression == S3Metadata::Compression::ZLIB)
-            _arrowCodec = *arrow::util::Codec::Create(
-                arrow::Compression::type::GZIP);
-    }
+        _arrowReader(_array._compression, _array._awsClient, _array._awsBucketName)
+    {}
 
     void S3Chunk::download()
     {
         // Download Chunk
-        Aws::String &bucketName = *_array._awsBucketName;
         Aws::String objectName(coord2ObjectName(
                                    _array._settings->getBucketPrefix(),
                                    _firstPos,
                                    _dims).c_str());
-        Aws::S3::Model::GetObjectRequest objectRequest;
-        objectRequest.SetBucket(bucketName);
-        objectRequest.SetKey(objectName);
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._query->getInstanceID() << ">" << _attrID
-                      << "|download:" << objectName);
 
-        auto outcome = _array._awsClient->GetObject(objectRequest);
-        S3_EXCEPTION_NOT_SUCCESS("Get");
-        const long long arrowSize = outcome.GetResult().GetContentLength();
-        if (arrowSize > CHUNK_MAX_SIZE) {
-            std::ostringstream out;
-            out << "Object size " << arrowSize
-                << " too large. Max size is " << CHUNK_MAX_SIZE;
-            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                 SCIDB_LE_ILLEGAL_OPERATION) << out.str();
-        }
-
-        // Check size of current buffer and re-allocate the buffer if
-        // it is too small
-        if (arrowSize > _arrowSizeAlloc) {
-            LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._query->getInstanceID() << ">" << _attrID
-                          << "|download arrowSizeAlloc: " << _arrowSizeAlloc
-                          << " arrowSize: " << arrowSize);
-
-            _arrowSizeAlloc = arrowSize;
-            _arrowData = std::make_unique<char[]>(_arrowSizeAlloc);
-        }
-
-        auto& bodyStream = outcome.GetResultWithOwnership().GetBody();
-        bodyStream.read(_arrowData.get(),
-                        static_cast<std::streamsize>(arrowSize));
-
-        _arrowBufferReader = std::make_shared<arrow::io::BufferReader>(
-            reinterpret_cast<const uint8_t*>(_arrowData.get()),
-            arrowSize); // zero copy
-
-        // Setup Arrow Compression, If Enabled
-        if (_array._compression != S3Metadata::Compression::NONE) {
-            ASSIGN_OR_THROW(_arrowCompressedStream,
-                            arrow::io::CompressedInputStream::Make(
-                                _arrowCodec.get(), _arrowBufferReader));
-            // Read Record Batch using Stream Reader
-            THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
-                             _arrowCompressedStream, &_arrowBatchReader));
-        }
-        else {
-            THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
-                             _arrowBufferReader, &_arrowBatchReader));
-        }
-        // Arrow >= 0.17.0
-        // ARROW_ASSIGN_OR_RAISE(
-        //     arrowReader,
-        //     arrow::ipc::RecordBatchStreamReader::Open(&arrowBufferReader));
-
-        THROW_NOT_OK(_arrowBatchReader->ReadNext(&_arrowBatch));
         // One SciDB Chunk equals one Arrow Batch
+        _arrowReader.readObject(objectName, _arrowBatch);
     }
 
     void S3Chunk::setPosition(Coordinates const& pos)
@@ -589,7 +607,7 @@ namespace scidb {
     }
 
     //
-    // S3 array methods
+    // S3 Array
     //
     S3Array::S3Array(std::shared_ptr<Query> query,
                      const ArrayDesc& desc,
@@ -653,7 +671,6 @@ namespace scidb {
         size_t nIndex = outcome.GetResult().GetContents().size();
         LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex nIndex:" << nIndex);
 
-
         // -- - Read Part of Chunk Index Files - --
         // Divide index files among instnaces
 
@@ -664,6 +681,10 @@ namespace scidb {
 
         // One coordBuf for each instance
         std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
+        S3ArrowReader arrowReader(_compression,
+                                  _awsClient,
+                                  _awsBucketName);
+        std::shared_ptr<arrow::RecordBatch> arrowBatch;
 
         // TODO Remove
         auto start = std::chrono::high_resolution_clock::now();
@@ -675,17 +696,10 @@ namespace scidb {
         for (size_t iIndex = instID; iIndex < nIndex; iIndex += nInst) {
 
             // Download One Chunk Index
-            Aws::S3::Model::GetObjectRequest objectRequest;
             std::ostringstream out;
             out << _settings->getBucketPrefix() << "/index/" << iIndex;
             Aws::String objectName(out.str().c_str());
-            objectRequest.SetBucket(bucketName);
-            objectRequest.SetKey(objectName);
-            LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex download:" << objectName);
-
-            auto outcome = _awsClient->GetObject(objectRequest);
-            S3_EXCEPTION_NOT_SUCCESS("Get");
-            auto& indexStream = outcome.GetResultWithOwnership().GetBody();
+            arrowReader.readObject(objectName, arrowBatch);
 
             // TODO Remove
             stop = std::chrono::high_resolution_clock::now();
@@ -693,27 +707,26 @@ namespace scidb {
                 stop - start);
             start = stop;
 
-            // Parse S3Index
-            std::string line;
-            while (std::getline(indexStream, line)) {
+            if (arrowBatch->num_columns() != static_cast<int>(nDims)) {
+                out.str("");
+                out << objectName
+                    << " Invalid number of columns";
+                throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
+                                     scidb::SCIDB_LE_UNKNOWN_ERROR)
+                    << out.str();
+            }
+            std::vector<const int64_t*> columns(nDims);
+            for (size_t i = 0; i < nDims; i++)
+                columns[i] = std::static_pointer_cast<arrow::Int64Array>(arrowBatch->column(i))->raw_values();
+            size_t columnLen = arrowBatch->column(0)->length();
 
-                std::istringstream stm(line);
-                size_t i = 0;
-                for (scidb::Coordinate coord; stm >> coord; i++) {
-                    if (i >= nDims) break;
-                    pos[i] = (coord * dims[i].getChunkInterval()
-                              + dims[i].getStartMin());
-                }
-
-                if (i != nDims) {
-                    out.str("");
-                    out << objectName
-                        << " Invalid index line '" << line
-                        << "', expected " << nDims << " values";
-                    throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
-                                         scidb::SCIDB_LE_UNKNOWN_ERROR)
-                        << out.str();
-                }
+            for (size_t j = 0; j < columnLen; j++) {
+                for (size_t i = 0; i < nDims; i++)
+                    pos[i] = (
+                        columns[i][j]
+                        // * dims[i].getChunkInterval()
+                        // + dims[i].getStartMin()
+                        );
 
                 InstanceID primaryID = _desc.getPrimaryInstanceId(pos, nInst);
                 if (primaryID == instID)

@@ -146,7 +146,7 @@ void S3Index::sort() {
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
         stop - start);
-    LOG4CXX_DEBUG(logger, "S3INDEX| |Sort time:" << duration.count() << " microseconds");
+    LOG4CXX_DEBUG(logger, "S3INDEX||Sort time:" << duration.count() << " microseconds");
 }
 
 const S3IndexCont::const_iterator S3Index::begin() const {

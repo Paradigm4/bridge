@@ -62,6 +62,28 @@ namespace Aws {
 namespace scidb
 {
 
+class S3ArrowReader {
+public:
+    S3ArrowReader(S3Metadata::Compression,
+                  std::shared_ptr<Aws::S3::S3Client>,
+                  std::shared_ptr<const Aws::String> awsBucketName);
+
+    void readObject(const Aws::String &objectName,
+                    std::shared_ptr<arrow::RecordBatch>&);
+
+private:
+    const S3Metadata::Compression _compression;
+    std::shared_ptr<Aws::S3::S3Client> _awsClient;
+    std::shared_ptr<const Aws::String> _awsBucketName;
+
+    long long _arrowSizeAlloc;
+    std::unique_ptr<char[]> _arrowData;
+    std::shared_ptr<arrow::io::BufferReader> _arrowBufferReader;
+    std::unique_ptr<arrow::util::Codec> _arrowCodec;
+    std::shared_ptr<arrow::io::CompressedInputStream> _arrowCompressedStream;
+    std::shared_ptr<arrow::RecordBatchReader> _arrowBatchReader;
+};
+
 class S3Array;
 class S3ArrayIterator;
 class S3Chunk;
@@ -85,7 +107,7 @@ public:
     ConstChunk const& getChunk() override;
     virtual std::shared_ptr<Query> getQuery();
 
-  private:
+private:
     int64_t getCoord(size_t dim, int64_t index);
 
     const S3Array& _array;
@@ -116,9 +138,9 @@ public:
 
 class S3Chunk : public ConstChunk
 {
-friend class S3ChunkIterator;
+    friend class S3ChunkIterator;
 
-  public:
+public:
     S3Chunk(S3Array& array, AttributeID attrID);
 
     virtual const ArrayDesc& getArrayDesc() const;
@@ -132,7 +154,7 @@ friend class S3ChunkIterator;
     void setPosition(Coordinates const& pos);
     void download();
 
-  private:
+private:
     const S3Array& _array;
     const Dimensions _dims;
     const size_t _nDims;
@@ -144,12 +166,7 @@ friend class S3ChunkIterator;
     const AttributeDesc& _attrDesc;
     const TypeEnum _attrType;
 
-    long long _arrowSizeAlloc;
-    std::unique_ptr<char[]> _arrowData;
-    std::shared_ptr<arrow::io::BufferReader> _arrowBufferReader;
-    std::unique_ptr<arrow::util::Codec> _arrowCodec;
-    std::shared_ptr<arrow::io::CompressedInputStream> _arrowCompressedStream;
-    std::shared_ptr<arrow::RecordBatchReader> _arrowBatchReader;
+    S3ArrowReader _arrowReader;
     std::shared_ptr<arrow::RecordBatch> _arrowBatch;
 };
 
@@ -181,9 +198,9 @@ private:
 
 class S3Array : public Array
 {
-friend class S3ArrayIterator;
-friend class S3ChunkIterator;
-friend class S3Chunk;
+    friend class S3ArrayIterator;
+    friend class S3ChunkIterator;
+    friend class S3Chunk;
 
 public:
     S3Array(std::shared_ptr<Query> query,
