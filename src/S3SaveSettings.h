@@ -113,8 +113,8 @@ private:
     {
         if (compression[0] == "none")
             _compression = S3Metadata::Compression::NONE;
-        else if (compression[0] == "zlib")
-            _compression = S3Metadata::Compression::ZLIB;
+        else if (compression[0] == "gzip")
+            _compression = S3Metadata::Compression::GZIP;
         else
             throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
                 << "unsupported compression";

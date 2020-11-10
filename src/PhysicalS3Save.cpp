@@ -458,7 +458,7 @@ public:
         // Setup Arrow Compression, If Enabled
         std::shared_ptr<arrow::ipc::RecordBatchWriter> arrowWriter;
         std::shared_ptr<arrow::io::CompressedOutputStream> arrowCompressedStream;
-        if (_compression == S3Metadata::Compression::ZLIB) {
+        if (_compression == S3Metadata::Compression::GZIP) {
             std::unique_ptr<arrow::util::Codec> codec = *arrow::util::Codec::Create(
                 arrow::Compression::type::GZIP);
             ARROW_ASSIGN_OR_RAISE(
@@ -483,7 +483,7 @@ public:
         ARROW_RETURN_NOT_OK(arrowWriter->Close());
 
         // Close Arrow Compression Stream, If Enabled
-        if (_compression == S3Metadata::Compression::ZLIB) {
+        if (_compression == S3Metadata::Compression::GZIP) {
             ARROW_RETURN_NOT_OK(arrowCompressedStream->Close());
         }
 

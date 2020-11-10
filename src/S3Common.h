@@ -75,15 +75,15 @@ public:
 
     enum Compression {
         NONE  = 0,
-        ZLIB  = 1
+        GZIP  = 1
     };
 
     static std::string compression2String(Compression compression) {
         switch (compression) {
         case Compression::NONE:
             return "none";
-        case Compression::ZLIB:
-            return "zlib";
+        case Compression::GZIP:
+            return "gzip";
         }
         throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
                 << "unsupported compression";
@@ -92,8 +92,8 @@ public:
     static Compression string2Compression(const std::string &compressionStr) {
         if (compressionStr == "none")
             return Compression::NONE;
-        else if (compressionStr == "zlib")
-            return Compression::ZLIB;
+        else if (compressionStr == "gzip")
+            return Compression::GZIP;
         else
             throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
                 << "unsupported compression";
