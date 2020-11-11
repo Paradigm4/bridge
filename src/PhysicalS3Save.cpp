@@ -636,7 +636,7 @@ public:
 
             ArrowWriter indexWriter(Attributes(),
                                           inputSchema.getDimensions(),
-                                          S3Metadata::Compression::NONE);
+                                          S3Metadata::Compression::GZIP);
 
             auto splitPtr = index.begin();
             while (splitPtr != index.end()) {

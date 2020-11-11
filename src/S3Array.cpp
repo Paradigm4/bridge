@@ -681,7 +681,7 @@ namespace scidb {
 
         // One coordBuf for each instance
         std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
-        S3ArrowReader arrowReader(_compression,
+        S3ArrowReader arrowReader(S3Metadata::Compression::GZIP,
                                   _awsClient,
                                   _awsBucketName);
         std::shared_ptr<arrow::RecordBatch> arrowBatch;

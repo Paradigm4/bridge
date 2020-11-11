@@ -21,6 +21,7 @@ pages = client.get_paginator('list_objects_v2').paginate(
 # index_all = []
 
 sink = pyarrow.BufferOutputStream()
+sink_comp = pyarrow.output_stream(sink, compression='gzip')
 writer = None
 
 for page in pages:
@@ -31,17 +32,21 @@ for page in pages:
         # index_all.append(obj['Body'].read())
 
         buf = obj['Body'].read()
-        reader = pyarrow.RecordBatchStreamReader(buf)
+        strm = pyarrow.input_stream(pyarrow.BufferReader(buf),
+                                    compression='gzip')
+        reader = pyarrow.RecordBatchStreamReader(strm)
+
         for batch in reader:
             if writer is None:
-                writer = pyarrow.RecordBatchStreamWriter(sink, batch.schema)
+                writer = pyarrow.RecordBatchStreamWriter(sink_comp, batch.schema)
             writer.write_batch(batch)
 
 # index_all = b'\n'.join(index_all) + b'\n'
 # client.put_object(Body=index_all, Bucket=bucket, Key='{}/index'.format(key))
 
 writer.close()
+sink_comp.close()
 buf = sink.getvalue()
 client.put_object(Body=buf.to_pybytes(),
                   Bucket=bucket,
-                  Key='{}/index.arrow'.format(key))
+                  Key='{}/index.arrow.gz'.format(key))

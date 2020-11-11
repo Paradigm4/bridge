@@ -49,10 +49,12 @@ for split_st in range(0, len(chunks), split_sz):
 
     batches = table.to_batches()
     sink = pyarrow.BufferOutputStream()
-    writer = pyarrow.RecordBatchStreamWriter(sink, batches[0].schema)
+    sink_comp = pyarrow.output_stream(sink, compression='gzip')
+    writer = pyarrow.RecordBatchStreamWriter(sink_comp, batches[0].schema)
     for batch in batches:
         writer.write_batch(batch)
     writer.close()
+    sink_comp.close()
     buf = sink.getvalue()
 
     split_key = '{}/index/{}'.format(key, i)
