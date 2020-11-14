@@ -25,14 +25,14 @@
 
 #include <query/PhysicalOperator.h>
 
-#include "S3LoadSettings.h"
+#include "S3InputSettings.h"
 #include "S3Array.h"
 
 
 namespace scidb
 {
 
-static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3load"));
+static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3input"));
 
 static void EXCEPTION_ASSERT(bool cond)
 {
@@ -40,10 +40,10 @@ static void EXCEPTION_ASSERT(bool cond)
         throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "Internal inconsistency";
 }
 
-class PhysicalS3Load : public PhysicalOperator
+class PhysicalS3Input : public PhysicalOperator
 {
 public:
-    PhysicalS3Load(std::string const& logicalName,
+    PhysicalS3Input(std::string const& logicalName,
                    std::string const& physicalName,
                    Parameters const& parameters,
                    ArrayDesc const& schema):
@@ -54,9 +54,9 @@ public:
         std::vector< std::shared_ptr<Array> >& inputArrays,
         std::shared_ptr<Query> query)
     {
-        LOG4CXX_DEBUG(logger, "S3LOAD|" << query->getInstanceID() << "|Execute");
+        LOG4CXX_DEBUG(logger, "S3INPUT|" << query->getInstanceID() << "|Execute");
 
-        std::shared_ptr<S3LoadSettings> settings = std::make_shared<S3LoadSettings>(
+        std::shared_ptr<S3InputSettings> settings = std::make_shared<S3InputSettings>(
             _parameters, _kwParameters, false, query);
 
         std::shared_ptr<S3Array> array = std::make_shared<S3Array>(
@@ -68,6 +68,6 @@ public:
     }
 };
 
-REGISTER_PHYSICAL_OPERATOR_FACTORY(PhysicalS3Load, "s3load", "PhysicalS3Load");
+REGISTER_PHYSICAL_OPERATOR_FACTORY(PhysicalS3Input, "s3input", "PhysicalS3Input");
 
 } // end namespace scidb

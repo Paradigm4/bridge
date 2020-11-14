@@ -39,7 +39,7 @@
 #include <aws/s3/model/ListObjectsRequest.h>
 
 #include "S3Common.h"
-#include "S3LoadSettings.h"
+#include "S3InputSettings.h"
 
 
 // TODO use __builtin_expect
@@ -611,7 +611,7 @@ namespace scidb {
     //
     S3Array::S3Array(std::shared_ptr<Query> query,
                      const ArrayDesc& desc,
-                     const std::shared_ptr<S3LoadSettings> settings):
+                     const std::shared_ptr<S3InputSettings> settings):
         _query(query),
         _desc(desc),
         _settings(settings),

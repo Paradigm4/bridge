@@ -34,9 +34,9 @@ s3save(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
 
-    # Load
+    # Input
     array = scidb_con.iquery("""
-s3load(
+s3input(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
@@ -68,9 +68,9 @@ s3save(
                                 bucket_name,
                                 bucket_prefix))
 
-    # Load
+    # Input
     array = scidb_con.iquery("""
-s3load(
+s3input(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
@@ -103,9 +103,9 @@ s3save(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
 
-    # Load
+    # Input
     array = scidb_con.iquery("""
-s3load(
+s3input(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
@@ -178,9 +178,9 @@ def test_type(scidb_con, s3_con, type_name, is_null, type_numpy, chunk_size):
                      "bucket_prefix:'{}'".format(bucket_prefix))
     res = que.fetch()
 
-    # Load
+    # Input
     array = scidb_con.iquery("""
-s3load(
+s3input(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
@@ -229,9 +229,9 @@ s3save(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
 
-    # Load
+    # Input
     array = scidb_con.iquery("""
-s3load(
+s3input(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
@@ -273,10 +273,10 @@ s3save(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
 
-    # Load
+    # Input
     array = scidb_con.iquery("""
 filter(
-  s3load(
+  s3input(
     bucket_name:'{}',
     bucket_prefix:'{}'),
   i % 3 = 0 and i > 7)""".format(bucket_name, bucket_prefix),
@@ -313,9 +313,9 @@ s3save(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
 
-    # Load
+    # Input
     array = scidb_con.iquery("""
-s3load(
+s3input(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
@@ -350,9 +350,9 @@ s3save(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
 
-    # Load
+    # Input
     array = scidb_con.iquery("""
-s3load(
+s3input(
   bucket_name:'{}',
   bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)

@@ -28,16 +28,16 @@
 #include <util/OnScopeExit.h>
 
 #include "S3Common.h"
-#include "S3LoadSettings.h"
+#include "S3InputSettings.h"
 
 
 namespace scidb
 {
 
-class LogicalS3Load : public  LogicalOperator
+class LogicalS3Input : public  LogicalOperator
 {
 public:
-    LogicalS3Load(const std::string& logicalName, const std::string& alias):
+    LogicalS3Input(const std::string& logicalName, const std::string& alias):
         LogicalOperator(logicalName, alias)
     {
     }
@@ -54,7 +54,7 @@ public:
 
     ArrayDesc inferSchema(std::vector<ArrayDesc> schemas, std::shared_ptr<Query> query)
     {
-        S3LoadSettings settings(_parameters, _kwParameters, true, query);
+        S3InputSettings settings(_parameters, _kwParameters, true, query);
 
         // Get Metadata from AWS
         Aws::SDKOptions options;
@@ -67,7 +67,7 @@ public:
                                 Aws::String((settings.getBucketPrefix() +
                                              "/metadata").c_str()),
                                 metadata);
-        LOG4CXX_DEBUG(logger, "S3LOAD|" << query->getInstanceID() << "|schema: " << metadata["schema"]);
+        LOG4CXX_DEBUG(logger, "S3INPUT|" << query->getInstanceID() << "|schema: " << metadata["schema"]);
         Aws::ShutdownAPI(options);
 
         // Build Fake Query and Extract Schema
@@ -103,6 +103,6 @@ public:
     }
 };
 
-REGISTER_LOGICAL_OPERATOR_FACTORY(LogicalS3Load, "s3load");
+REGISTER_LOGICAL_OPERATOR_FACTORY(LogicalS3Input, "s3input");
 
 } // end namespace scidb

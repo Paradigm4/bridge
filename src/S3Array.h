@@ -37,7 +37,7 @@
 // Forward Declarastions to avoid including full headers - speed-up
 // compilation
 namespace scidb {
-    class S3LoadSettings;       // #include "S3LoadSettings.h"
+    class S3InputSettings;       // #include "S3InputSettings.h"
 }
 namespace arrow {
     class Array;
@@ -205,7 +205,7 @@ class S3Array : public Array
 public:
     S3Array(std::shared_ptr<Query> query,
             const ArrayDesc& desc,
-            const std::shared_ptr<S3LoadSettings> settings);
+            const std::shared_ptr<S3InputSettings> settings);
 
     virtual ~S3Array();
 
@@ -222,7 +222,7 @@ public:
 private:
     std::shared_ptr<Query> _query;
     const ArrayDesc _desc;
-    const std::shared_ptr<const S3LoadSettings> _settings;
+    const std::shared_ptr<const S3InputSettings> _settings;
 
     const Aws::SDKOptions _awsOptions;
     std::shared_ptr<Aws::S3::S3Client> _awsClient;

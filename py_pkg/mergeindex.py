@@ -38,7 +38,8 @@ for page in pages:
 
         for batch in reader:
             if writer is None:
-                writer = pyarrow.RecordBatchStreamWriter(sink_comp, batch.schema)
+                writer = pyarrow.RecordBatchStreamWriter(sink_comp,
+                                                         batch.schema)
             writer.write_batch(batch)
 
 # index_all = b'\n'.join(index_all) + b'\n'

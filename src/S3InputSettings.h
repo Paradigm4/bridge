@@ -31,8 +31,8 @@
 #include <query/Expression.h>
 #include <util/PathUtils.h>
 
-#ifndef S3LOAD_SETTINGS
-#define S3LOAD_SETTINGS
+#ifndef S3INPUT_SETTINGS
+#define S3INPUT_SETTINGS
 
 #define S3BRIDGE_VERSION 1
 #define STRINGIFY(x) #x
@@ -44,7 +44,7 @@ using boost::lexical_cast;
 using boost::bad_lexical_cast;
 
 // Logger for operator. static to prevent visibility of variable outside of file
-static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3load"));
+static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3input"));
 
 namespace scidb
 {
@@ -55,7 +55,7 @@ static const char* const KW_FORMAT	  = "format";
 
 typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t ;
 
-class S3LoadSettings
+class S3InputSettings
 {
 public:
     static size_t chunkDataOffset()
@@ -135,7 +135,7 @@ private:
         return paramContent;
     }
 
-    bool setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, void (S3LoadSettings::* innersetter)(std::vector<std::string>) )
+    bool setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, void (S3InputSettings::* innersetter)(std::vector<std::string>) )
     {
         std::vector <std::string> paramContent;
         bool retSet = false;
@@ -154,12 +154,12 @@ private:
             (this->*innersetter)(paramContent);
             retSet = true;
         } else {
-            LOG4CXX_DEBUG(logger, "S3LOAD|findKeyword null: " << kw);
+            LOG4CXX_DEBUG(logger, "S3INPUT|findKeyword null: " << kw);
         }
         return retSet;
     }
 
-    void setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, bool& alreadySet, void (S3LoadSettings::* innersetter)(std::vector<std::string>) )
+    void setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, bool& alreadySet, void (S3InputSettings::* innersetter)(std::vector<std::string>) )
     {
         checkIfSet(alreadySet, kw);
         alreadySet = setKeywordParamString(kwParams, kw, innersetter);
@@ -172,7 +172,7 @@ private:
     }
 
 public:
-    S3LoadSettings(std::vector<std::shared_ptr<OperatorParam> > const& operatorParameters,
+    S3InputSettings(std::vector<std::shared_ptr<OperatorParam> > const& operatorParameters,
                    KeywordParameters const& kwParams,
                    bool logical,
                    std::shared_ptr<Query>& query):
@@ -184,9 +184,9 @@ public:
         bool  bucketPrefixSet = false;
         bool  formatSet       = false;
 
-        setKeywordParamString(kwParams, KW_BUCKET_NAME,   bucketNameSet,   &S3LoadSettings::setParamBucketName);
-        setKeywordParamString(kwParams, KW_BUCKET_PREFIX, bucketPrefixSet, &S3LoadSettings::setParamBucketPrefix);
-        setKeywordParamString(kwParams, KW_FORMAT,        formatSet,       &S3LoadSettings::setParamFormat);
+        setKeywordParamString(kwParams, KW_BUCKET_NAME,   bucketNameSet,   &S3InputSettings::setParamBucketName);
+        setKeywordParamString(kwParams, KW_BUCKET_PREFIX, bucketPrefixSet, &S3InputSettings::setParamBucketPrefix);
+        setKeywordParamString(kwParams, KW_FORMAT,        formatSet,       &S3InputSettings::setParamFormat);
 
         if(_bucketName.size() == 0)
         {
@@ -218,4 +218,4 @@ public:
 }
 
 
-#endif //S3LoadSettings
+#endif //S3InputSettings
