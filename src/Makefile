@@ -40,7 +40,7 @@ CPPFLAGS := $(CFLAGS) $(INC)
 LIBS    := -shared -Wl,-soname,libs3bridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
 LIBS    += -rdynamic $(AWS_LIB)/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,$(AWS_LIB) $(CURL_LIB)
 
-SRCS    := plugin.cpp LogicalS3Save.cpp PhysicalS3Save.cpp LogicalS3Load.cpp PhysicalS3Load.cpp LogicalS3LoadEager.cpp PhysicalS3LoadEager.cpp S3Array.cpp S3Index.cpp
+SRCS    := plugin.cpp LogicalS3Save.cpp PhysicalS3Save.cpp LogicalS3Load.cpp PhysicalS3Load.cpp S3Array.cpp S3Index.cpp
 HEADERS := S3Common.h S3SaveSettings.h S3LoadSettings.h S3Array.h S3Index.h
 OBJS    := $(SRCS:%.cpp=%.o)
 
@@ -65,9 +65,6 @@ plugin.o:
 
 LogicalS3Load.o: S3Common.h S3LoadSettings.h
 PhysicalS3Load.o: S3LoadSettings.h S3Array.h S3Index.h
-
-LogicalS3LoadEager.o: S3Common.h S3LoadSettings.h
-PhysicalS3LoadEager.o: S3Common.h S3LoadSettings.h
 
 LogicalS3Save.o:  S3Common.h S3SaveSettings.h
 PhysicalS3Save.o: S3Common.h S3SaveSettings.h S3Index.h
