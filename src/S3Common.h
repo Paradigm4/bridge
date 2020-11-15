@@ -38,20 +38,24 @@
 #define S3BRIDGE_VERSION 1
 #define CHUNK_MAX_SIZE 2147483648
 
-#define S3_EXCEPTION_NOT_SUCCESS(operation)                                      \
-  {                                                                              \
-      if (!outcome.IsSuccess()) {                                                \
-          std::ostringstream exceptionOutput;                                         \
-          exceptionOutput << (operation) << " operation on s3://"                \
-                           << bucketName << "/" << objectName << " failed. ";    \
-          auto error = outcome.GetError();                                       \
-          exceptionOutput << error.GetMessage();                                 \
-          if (error.GetResponseCode() == Aws::Http::HttpResponseCode::FORBIDDEN) \
-              exceptionOutput << "See https://aws.amazon.com/premiumsupport/"    \
-                               << "knowledge-center/s3-troubleshoot-403/";       \
-          throw USER_EXCEPTION(SCIDB_SE_NETWORK,                                 \
-                               SCIDB_LE_UNKNOWN_ERROR) << exceptionOutput.str(); \
-      }                                                                          \
+#define S3_EXCEPTION_NOT_SUCCESS(operation)                             \
+  {                                                                     \
+      if (!outcome.IsSuccess()) {                                       \
+          std::ostringstream exceptionOutput;                           \
+          exceptionOutput                                               \
+              << (operation) << " operation on s3://"                   \
+              << bucketName << "/" << objectName << " failed. ";        \
+          auto error = outcome.GetError();                              \
+          exceptionOutput << error.GetMessage();                        \
+          if (error.GetResponseCode() ==                                \
+              Aws::Http::HttpResponseCode::FORBIDDEN)                   \
+              exceptionOutput                                           \
+                  << "See https://aws.amazon.com/premiumsupport/"       \
+                  << "knowledge-center/s3-troubleshoot-403/";           \
+          throw USER_EXCEPTION(                                         \
+              SCIDB_SE_NETWORK,                                         \
+              SCIDB_LE_UNKNOWN_ERROR) << exceptionOutput.str();         \
+      }                                                                 \
   }
 
 

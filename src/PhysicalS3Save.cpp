@@ -23,6 +23,9 @@
 * END_COPYRIGHT
 */
 
+#include <chrono>
+#include <thread>
+
 #include <array/TileIteratorAdaptors.h>
 #include <network/Network.h>
 #include <query/PhysicalOperator.h>
@@ -40,6 +43,8 @@
 #include "S3SaveSettings.h"
 #include "S3Index.h"
 
+#define RETRY_COUNT 10
+#define RETRY_SLEEP 1000        // milliseconds
 
 #define THROW_NOT_OK(s)                                                 \
     {                                                                   \
@@ -523,7 +528,7 @@ public:
         bool haveChunk_ = haveChunk(inputArray, inputSchema);
         LOG4CXX_DEBUG(logger,
                       "S3SAVE|" << query->getInstanceID()
-                      << "|executed isCoord " << query->isCoordinator()
+                      << "|execute isCoord " << query->isCoordinator()
                       << " haveChunk " << haveChunk_);
 
         // Chunk Coordinate Index
@@ -660,7 +665,7 @@ public:
                 out << bucketPrefix << "/index/" << split;
 
                 LOG4CXX_DEBUG(logger, "S3SAVE|" << query->getInstanceID()
-                              << "|executed index split:" << out.str());
+                              << "|execute index split:" << out.str());
 
                 // Upload Chunk Coordinate List to S3
                 uploadToS3(bucketName,
@@ -689,12 +694,30 @@ private:
     {
         Aws::S3::S3Client s3Client;
         Aws::S3::Model::PutObjectRequest objectRequest;
+        Aws::S3::Model::PutObjectOutcome outcome;
+        std::ostringstream retryOutput;
 
         objectRequest.SetBucket(bucketName);
         objectRequest.SetKey(objectName);
         objectRequest.SetBody(inputData);
 
-        auto outcome = s3Client.PutObject(objectRequest);
+        for (int i = 0; i < RETRY_COUNT; i++) {
+            if (i != 0)
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(RETRY_SLEEP));
+
+            outcome = s3Client.PutObject(objectRequest);
+            if (outcome.IsSuccess())
+                break;
+
+            if (outcome.GetError().GetResponseCode() ==
+                Aws::Http::HttpResponseCode::FORBIDDEN)
+                S3_EXCEPTION_NOT_SUCCESS("Upload");
+
+            LOG4CXX_DEBUG(
+                logger, "S3SAVE||uploadToS3 s3://" << bucketName << "/"
+                << objectName << " failed, retry #" << (i + 1));
+        }
         S3_EXCEPTION_NOT_SUCCESS("Upload");
     }
 
