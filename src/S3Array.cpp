@@ -192,7 +192,9 @@ namespace scidb {
 
         // TODO Remove (debugging)
         LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._query->getInstanceID() << ">" << _chunk->_attrID
-                      << "|ChunkIt::restart pos: " << _currPos << " [" << _firstPos << ", " << _lastPos << "] arrowLen: " << _arrowLength << " hasCurr: " << _hasCurrent);
+                      << "|ChunkIt::restart pos: " << _currPos
+                      << " [" << _firstPos << ", " << _lastPos << "] arrowLen: " << _arrowLength
+                      << " hasCurr: " << _hasCurrent);
     }
 
     Value const& S3ChunkIterator::getItem()
@@ -596,10 +598,6 @@ namespace scidb {
 
     Coordinates const& S3ArrayIterator::getPosition()
     {
-        // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._query->getInstanceID() << ">" << _attrID
-                      << "|ArrayIt::getChunk hasCurr: " << _hasCurrent);
-
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
