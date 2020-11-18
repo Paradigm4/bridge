@@ -43,9 +43,9 @@ for split_st in range(0, len(chunks), split_sz):
         read_options=pyarrow.csv.ReadOptions(autogenerate_column_names=True),
         parse_options=pyarrow.csv.ParseOptions(delimiter='\t'))
 
-    frame = table.to_pandas()
-    frame = frame * 10 + 1
-    table = pyarrow.Table.from_pandas(frame)
+    # frame = table.to_pandas()
+    # frame = frame * 10 + 1
+    # table = pyarrow.Table.from_pandas(frame)
 
     batches = table.to_batches()
     sink = pyarrow.BufferOutputStream()
