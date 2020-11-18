@@ -1,5 +1,6 @@
 import boto3
 import itertools
+import pandas
 import pyarrow
 import scidbpy
 
@@ -7,7 +8,13 @@ __version__ = '19.11.1'
 
 
 def metadata_from_string(input):
-    return dict(ln.split('\t') for ln in input.strip().split('\n'))
+    res = dict(ln.split('\t') for ln in input.strip().split('\n'))
+    try:
+        if res['compression'] == 'none':
+            res['compression'] = None
+    except KeyError:
+        pass
+    return res
 
 
 class S3Array(object):
@@ -65,11 +72,24 @@ class S3Array(object):
         return self._schema
 
     def list_chunks(self):
-        prefix = '{}/c_'.format(self.bucket_prefix)
+        prefix = '{}/index/'.format(self.bucket_prefix)
         result = self.client.list_objects_v2(Bucket=self.bucket_name,
                                              Prefix=prefix)
-        return tuple(sorted(tuple(map(int, e['Key'][len(prefix):].split('_')))
-                            for e in result['Contents']))
+        batches = []
+        for split in result['Contents']:
+            obj = self.client.get_object(Bucket=self.bucket_name,
+                                         Key=split['Key'])
+
+            buf = obj['Body'].read()
+            strm = pyarrow.input_stream(pyarrow.BufferReader(buf),
+                                        compression='gzip')
+            reader = pyarrow.RecordBatchStreamReader(strm)
+            for batch in reader:
+                batches.append(batch)
+
+        table = pyarrow.Table.from_batches(batches)
+        index = table.to_pandas(split_blocks=True, self_destruct=True)
+        return index.sort_values(by=list(index.columns))
 
     def get_chunk(self, *argv):
         return S3Chunk(self, *argv)
@@ -81,15 +101,23 @@ class S3Chunk(object):
     def __init__(self, array, *argv):
         self.array = array
 
-        if len(argv) != len(self.array.schema.dims):
+        if (len(argv) == 1 and
+                type(argv[0]) is pandas.core.series.Series):
+            argv = tuple(argv[0])
+
+        dims = self.array.schema.dims
+        if len(argv) != len(dims):
             raise Exception(
                 ('Number of arguments, {}, does no match the number of ' +
                  'dimensions, {}. Please specify one start coordiante for ' +
                  'each dimension.').format(
                      len(argv), len(self.array.schema.dims)))
-        self.bucket_postfix = '_'.join(itertools.chain(
-            ('c', ), (str(arg) for arg in argv)))
 
+        parts = ['c']
+        for (val, dim) in zip(argv, dims):
+            parts.append((val - dim.low_value) // dim.chunk_length)
+
+        self.bucket_postfix = '_'.join(map(str, parts))
         self._object = None
 
     def __iter__(self):
@@ -117,5 +145,7 @@ class S3Chunk(object):
         return self._object
 
     def to_pandas(self):
-        return pyarrow.ipc.open_stream(
-            self.object["Body"].read()).read_all().to_pandas()
+        strm = pyarrow.input_stream(
+            pyarrow.BufferReader(self.object["Body"].read()),
+            compression=self.array.metadata['compression'])
+        return pyarrow.RecordBatchStreamReader(strm).read_pandas()
