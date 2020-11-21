@@ -28,6 +28,7 @@ while b'' in chunks:
 
 n_dims = len(chunks[0].split(b'\t'))
 split_sz = INDEX_SPLIT_SIZE // n_dims
+print('TSV lines:', len(chunks))
 
 
 # Delete Existing Split Index
@@ -43,16 +44,14 @@ for split_st in range(0, len(chunks), split_sz):
         read_options=pyarrow.csv.ReadOptions(autogenerate_column_names=True),
         parse_options=pyarrow.csv.ParseOptions(delimiter='\t'))
 
-    # frame = table.to_pandas()
-    # frame = frame * 10 + 1
-    # table = pyarrow.Table.from_pandas(frame)
+    # Copy back and forth to Pandas in order to get a single record batch
+    frame = table.to_pandas(split_blocks=True, self_destruct=True)
+    batch = pyarrow.RecordBatch.from_pandas(frame)
 
-    batches = table.to_batches()
     sink = pyarrow.BufferOutputStream()
     sink_comp = pyarrow.output_stream(sink, compression='gzip')
-    writer = pyarrow.RecordBatchStreamWriter(sink_comp, batches[0].schema)
-    for batch in batches:
-        writer.write_batch(batch)
+    writer = pyarrow.RecordBatchStreamWriter(sink_comp, batch.schema)
+    writer.write_batch(batch)
     writer.close()
     sink_comp.close()
     buf = sink.getvalue()
