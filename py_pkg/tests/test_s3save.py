@@ -37,7 +37,9 @@ s3save(
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(
                                   schema.replace(']', ':0:1000000]'))}}
-    assert array.list_chunks() == ((0,),)
+    pandas.testing.assert_frame_equal(
+        array.list_chunks(),
+        pandas.DataFrame(data={'i': range(1)}))
     pandas.testing.assert_frame_equal(
         array.get_chunk(0).to_pandas(),
         pandas.DataFrame(data={'v': range(10), 'i': range(10)}))
@@ -62,12 +64,14 @@ s3save(
     assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
-    assert array.list_chunks() == tuple((i,) for i in range(0, 4))
+    pandas.testing.assert_frame_equal(
+        array.list_chunks(),
+        pandas.DataFrame(data={'i': range(0, 20, 5)}))
     pandas.testing.assert_frame_equal(
         array.get_chunk(0).to_pandas(),
         pandas.DataFrame(data={'v': range(5), 'i': range(5)}))
     pandas.testing.assert_frame_equal(
-        array.get_chunk(2).to_pandas(),
+        array.get_chunk(10).to_pandas(),
         pandas.DataFrame(data={'v': range(10, 15), 'i': range(10, 15)}))
 
     delete_prefix(s3_con, prefix)
@@ -90,11 +94,14 @@ s3save(
     assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
-    assert array.list_chunks() == tuple((i, j)
-                                        for i in range(2)
-                                        for j in range(2))
     pandas.testing.assert_frame_equal(
-        array.get_chunk(0, 0).to_pandas(),
+        array.list_chunks(),
+        pandas.DataFrame(data=((i, j)
+                               for i in range(0, 9, 5)
+                               for j in range(10, 20, 5)),
+                         columns=('i', 'j')))
+    pandas.testing.assert_frame_equal(
+        array.get_chunk(0, 10).to_pandas(),
         pandas.DataFrame(data=((i, i, j)
                                for i in range(5)
                                for j in range(10, 15)),
@@ -123,11 +130,14 @@ s3save(
     assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
-    assert array.list_chunks() == tuple((i, j)
-                                        for i in range(2)
-                                        for j in range(2))
     pandas.testing.assert_frame_equal(
-        array.get_chunk(0, 0).to_pandas(),
+        array.list_chunks(),
+        pandas.DataFrame(data=((i, j)
+                               for i in range(0, 9, 5)
+                               for j in range(10, 20, 5)),
+                         columns=('i', 'j')))
+    pandas.testing.assert_frame_equal(
+        array.get_chunk(0, 10).to_pandas(),
         pandas.DataFrame(data=((i, float(i * i), i, j)
                                for i in range(5)
                                for j in range(10, 15)),
@@ -155,16 +165,18 @@ s3save(
     assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
-    assert array.list_chunks() == tuple((i, 1)
-                                        for i in range(2))
     pandas.testing.assert_frame_equal(
-        array.get_chunk(0, 1).to_pandas(),
+        array.list_chunks(),
+        pandas.DataFrame(data=((i, 15) for i in range(0, 9, 5)),
+                         columns=('i', 'j')))
+    pandas.testing.assert_frame_equal(
+        array.get_chunk(0, 15).to_pandas(),
         pandas.DataFrame(data=((i, i, j)
                                for i in range(3)
                                for j in range(16, 20)),
                          columns=('v', 'i', 'j')))
     pandas.testing.assert_frame_equal(
-        array.get_chunk(1, 1).to_pandas(),
+        array.get_chunk(5, 15).to_pandas(),
         pandas.DataFrame(data=((i, i, j)
                                for i in range(6, 10)
                                for j in range(16, 20)),

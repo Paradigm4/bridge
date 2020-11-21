@@ -3,7 +3,7 @@ base_prefix = 's3bridge-tests'
 base_metadata = {'version':     '1',
                  'format':      'arrow',
                  'attribute':   'ALL',
-                 'compression': 'none'}
+                 'compression': None}
 
 
 def delete_prefix(s3_con, prefix):

@@ -89,7 +89,7 @@ class S3Array(object):
 
         table = pyarrow.Table.from_batches(batches)
         index = table.to_pandas(split_blocks=True, self_destruct=True)
-        return index.sort_values(by=list(index.columns))
+        return index.sort_values(by=list(index.columns), ignore_index=True)
 
     def get_chunk(self, *argv):
         return S3Chunk(self, *argv)
@@ -115,7 +115,20 @@ class S3Chunk(object):
 
         parts = ['c']
         for (val, dim) in zip(argv, dims):
-            parts.append((val - dim.low_value) // dim.chunk_length)
+            if val < dim.low_value or val > dim.high_value:
+                raise Exception(
+                    ('Coordinate value, {}, is outside of dimension range, '
+                     '[{}:{}]').format(
+                         val, dim.low_value, dim.high_value))
+
+            part = val - dim.low_value
+            if part % dim.chunk_length != 0:
+                raise Exception(
+                    ('Coordinate value, {}, is not a multiple of ' +
+                     'chunk size, {}').format(
+                         val, dim.chunk_length))
+            part = part // dim.chunk_length
+            parts.append(part)
 
         self.bucket_postfix = '_'.join(map(str, parts))
         self._object = None
