@@ -43,6 +43,7 @@ namespace arrow {
     class Array;
     class RecordBatch;
     class RecordBatchReader;
+    class ResizableBuffer;
     namespace io {
         class BufferReader;
         class CompressedInputStream;
@@ -69,19 +70,45 @@ public:
                   std::shared_ptr<const Aws::String> awsBucketName);
 
     void readObject(const Aws::String &objectName,
-                    std::shared_ptr<arrow::RecordBatch>&);
+                    std::shared_ptr<arrow::RecordBatch>&,
+                    bool reuse=true);
 
 private:
     const S3Metadata::Compression _compression;
     std::shared_ptr<Aws::S3::S3Client> _awsClient;
     std::shared_ptr<const Aws::String> _awsBucketName;
 
-    long long _arrowSizeAlloc;
-    std::unique_ptr<char[]> _arrowData;
+    std::shared_ptr<arrow::ResizableBuffer> _arrowResizableBuffer;
     std::shared_ptr<arrow::io::BufferReader> _arrowBufferReader;
     std::unique_ptr<arrow::util::Codec> _arrowCodec;
     std::shared_ptr<arrow::io::CompressedInputStream> _arrowCompressedStream;
     std::shared_ptr<arrow::RecordBatchReader> _arrowBatchReader;
+};
+
+typedef std::pair<
+    std::list<Coordinates>::iterator,
+    std::shared_ptr<arrow::RecordBatch> > S3CacheCell;
+
+class S3Cache {
+public:
+    S3Cache(
+        S3Metadata::Compression,
+        std::shared_ptr<Aws::S3::S3Client>,
+        std::shared_ptr<const Aws::String> awsBucketName,
+        std::shared_ptr<const Aws::String> awsBucketPrefix,
+        const Dimensions&,
+        size_t);
+
+    std::shared_ptr<arrow::RecordBatch> get(Coordinates);
+
+private:
+    S3ArrowReader _arrowReader;
+    const std::shared_ptr<const Aws::String> _awsBucketPrefix;
+    const Dimensions _dims;
+    const size_t _sz;
+    std::list<Coordinates> _lru;
+    std::unordered_map<Coordinates, S3CacheCell, CoordinatesHash> _mem;
+    std::mutex _lock;
 };
 
 class S3Array;
@@ -166,7 +193,6 @@ private:
     const AttributeDesc& _attrDesc;
     const TypeEnum _attrType;
 
-    S3ArrowReader _arrowReader;
     std::shared_ptr<arrow::RecordBatch> _arrowBatch;
 };
 
@@ -215,8 +241,6 @@ public:
     /// @see Array::hasInputPipe
     bool hasInputPipe() const override { return false; }
 
-    S3Metadata::Compression getCompression() const { return _compression; }
-
     void readIndex();
 
 private:
@@ -227,8 +251,9 @@ private:
     const Aws::SDKOptions _awsOptions;
     std::shared_ptr<Aws::S3::S3Client> _awsClient;
     std::shared_ptr<Aws::String> _awsBucketName;
+    std::shared_ptr<Aws::String> _awsBucketPrefix;
     S3Index _index;
-    S3Metadata::Compression _compression;
+    std::unique_ptr<S3Cache> _cache;
 };
 
 }

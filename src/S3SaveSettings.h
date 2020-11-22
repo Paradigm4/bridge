@@ -43,9 +43,6 @@ using boost::bad_lexical_cast;
 // Logger for operator. static to prevent visibility of variable outside of file
 static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3save"));
 
-#define INDEX_SPLIT_MIN 100
-#define INDEX_SPLIT_DEFAULT 100000
-
 namespace scidb
 {
 

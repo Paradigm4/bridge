@@ -518,7 +518,6 @@ public:
                                    std::shared_ptr<Query> query)
     {
         S3SaveSettings settings(_parameters, _kwParameters, false, query);
-        const std::string bucketPrefix = settings.getBucketPrefix();
         const S3Metadata::Compression compression = settings.getCompression();
         std::shared_ptr<Array> result(new MemArray(_schema, query));
 
@@ -544,6 +543,7 @@ public:
         // Init AWS
         Aws::SDKOptions options;
         Aws::InitAPI(options);
+        const Aws::String bucketPrefix(settings.getBucketPrefix().c_str());
 
         // Coordiantor Creates S3 Metadata Object
         Aws::String bucketName = Aws::String(settings.getBucketName().c_str());
@@ -597,7 +597,7 @@ public:
                     index.insert(pos);
                     Aws::String objectName(coord2ObjectName(bucketPrefix,
                                                             pos,
-                                                            dims).c_str());
+                                                            dims));
 
                     std::shared_ptr<arrow::Buffer> arrowBuffer;
                     THROW_NOT_OK(

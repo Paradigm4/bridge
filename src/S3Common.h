@@ -37,6 +37,9 @@
 
 #define S3BRIDGE_VERSION 1
 #define CHUNK_MAX_SIZE 2147483648
+#define INDEX_SPLIT_MIN 100
+#define INDEX_SPLIT_DEFAULT 100000
+#define CACHE_SIZE 100
 
 #define S3_EXCEPTION_NOT_SUCCESS(operation)                             \
   {                                                                     \
@@ -132,10 +135,11 @@ public:
     }
 };
 
-static std::string coord2ObjectName(std::string const &bucketPrefix,
-                                    Coordinates const &pos,
-                                    Dimensions const &dims) {
-    std::ostringstream out;
+static const Aws::String coord2ObjectName(const Aws::String &bucketPrefix,
+                                          const Coordinates &pos,
+                                          const Dimensions &dims)
+{
+    Aws::OStringStream out;
     out << bucketPrefix << "/c";
     for (size_t i = 0; i < dims.size(); ++i)
         out << "_" << (pos[i] -
