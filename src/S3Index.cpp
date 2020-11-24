@@ -158,8 +158,11 @@ const S3IndexCont::const_iterator S3Index::end() const {
 }
 
 const S3IndexCont::const_iterator S3Index::find(const Coordinates& pos) const {
-    // TODO optimize index search
-    return std::find(begin(), end(), pos);
+    // return std::find(begin(), end(), pos);
+    auto res = std::lower_bound(begin(), end(), pos);
+    if (*res != pos)
+        return end();
+    return res;
 }
 
 /*
