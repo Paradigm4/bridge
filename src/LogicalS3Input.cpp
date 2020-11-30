@@ -47,7 +47,8 @@ public:
         static PlistSpec argSpec {
             { KW_BUCKET_NAME,   RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
             { KW_BUCKET_PREFIX, RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
-            { KW_FORMAT,        RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) }
+            { KW_FORMAT,        RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
+            { KW_CACHE_SIZE,    RE(PP(PLACEHOLDER_CONSTANT, TID_INT64))  }
         };
         return &argSpec;
     }

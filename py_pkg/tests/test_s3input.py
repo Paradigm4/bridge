@@ -2,7 +2,9 @@ import boto3
 import itertools
 import numpy
 import pandas
+import pyarrow
 import pytest
+import requests
 import scidbpy
 import scidbs3
 
@@ -363,3 +365,85 @@ s3input(
                           'v': numpy.arange(0.0, float(size))}))
 
     delete_prefix(s3_con, prefix)
+
+
+# Test with Different Cache Sizes
+@pytest.mark.parametrize('cache_size', (None, 4000, 1800))
+def test_cache(scidb_con, s3_con, cache_size):
+    prefix = 'default_cache'
+    schema = '<v:int64 not null> [i=0:999:0:100]'
+
+    # Store
+    bucket_prefix = '/'.join((base_prefix, prefix))
+    scidb_con.iquery("""
+s3save(
+  filter(
+    build({}, i),
+    i % 100 < 80 or i >= 800),
+  bucket_name:'{}',
+  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+
+    # Input
+    que = """
+s3input(
+  bucket_name:'{}',
+  bucket_prefix:'{}'
+  {})""".format(
+      bucket_name,
+      bucket_prefix,
+      '' if cache_size is None else ', cache_size:{}'.format(cache_size))
+
+    if cache_size == 1800:
+        with pytest.raises(requests.exceptions.HTTPError):
+            array = scidb_con.iquery(que, fetch=True)
+    else:
+        array = scidb_con.iquery(que, fetch=True)
+        array = array.sort_values(by=['i']).reset_index(drop=True)
+
+        assert array.equals(
+            pandas.DataFrame(data=(
+                (i, i) for i in range(1000) if (i % 100 < 80 or i >= 800)),
+                             columns=('i', 'v')))
+
+    delete_prefix(s3_con, prefix)
+
+
+# Test with Multiple Arrow Chunks per File
+def test_arrow_chunk(scidb_con, s3_con):
+    prefix = 'arrow_chunk'
+    schema = '<v:int64> [i=0:999:0:1000]'
+
+    # Store
+    bucket_prefix = '/'.join((base_prefix, prefix))
+    scidb_con.iquery("""
+s3save(
+  build({}, i),
+  bucket_name:'{}',
+  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+
+    # Re-write one SciDB Chunk file to use multiple Arrow Chunks
+    bucket_file = '{}/c_0'.format(bucket_prefix)
+    obj = s3_con.get_object(Bucket=bucket_name, Key=bucket_file)
+    reader = pyarrow.ipc.open_stream(obj['Body'].read())
+    tbl = reader.read_all()
+    sink = pyarrow.BufferOutputStream()
+    writer = pyarrow.ipc.RecordBatchStreamWriter(sink, tbl.schema)
+    for batch in tbl.to_batches(max_chunksize=200):  # 1000 / 200 = 5 chunks
+        writer.write_batch(batch)
+    writer.close()
+    s3_con.put_object(Body=sink.getvalue().to_pybytes(),
+                      Bucket=bucket_name,
+                      Key=bucket_file)
+
+    # Input
+    que = """
+s3input(
+  bucket_name:'{}',
+  bucket_prefix:'{}')""".format(
+      bucket_name,
+      bucket_prefix)
+
+    with pytest.raises(requests.exceptions.HTTPError):
+        array = scidb_con.iquery(que, fetch=True)
+
+    # delete_prefix(s3_con, prefix)

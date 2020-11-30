@@ -85,10 +85,10 @@ namespace scidb {
                 arrow::Compression::type::GZIP);
     }
 
-    void S3ArrowReader::readObject(
+    size_t S3ArrowReader::readObject(
         const Aws::String &objectName,
-        std::shared_ptr<arrow::RecordBatch> &arrowBatch,
-        bool reuse)
+        bool reuse,
+        std::shared_ptr<arrow::RecordBatch> &arrowBatch)
     {
         // Download Chunk
         Aws::S3::Model::GetObjectRequest objectRequest;
@@ -100,14 +100,15 @@ namespace scidb {
         auto outcome = _awsClient->GetObject(objectRequest);
         S3_EXCEPTION_NOT_SUCCESS("Get");
         auto&& result = outcome.GetResultWithOwnership();
-        const long long arrowSize = result.GetContentLength();
-        if (arrowSize > CHUNK_MAX_SIZE) {
+        const long long awsSize = result.GetContentLength();
+        if (awsSize > CHUNK_MAX_SIZE) {
             std::ostringstream out;
-            out << "Object size " << arrowSize
+            out << "Object size " << awsSize
                 << " too large. Max size is " << CHUNK_MAX_SIZE;
             throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
                                  SCIDB_LE_ILLEGAL_OPERATION) << out.str();
         }
+        size_t arrowSize = static_cast<size_t>(awsSize);
         auto& bodyStream = result.GetBody();
 
         // Reuse an Arrow ResizableBuffer
@@ -141,6 +142,19 @@ namespace scidb {
         }
 
         THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatch));
+
+        // No More Record Batches are Expected
+        std::shared_ptr<arrow::RecordBatch> arrowBatchNext;
+        THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatchNext));
+        if (arrowBatchNext != NULL) {
+            std::ostringstream out;
+            out << "More than one Arrow Record Batch found in s3://"
+                << bucketName << "/" << objectName;
+            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                 SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+        }
+
+        return arrowSize;
     }
 
     //
@@ -153,43 +167,54 @@ namespace scidb {
         std::shared_ptr<const Aws::String> awsBucketPrefix,
         const Dimensions &dims,
         size_t cacheSize):
-        _arrowReader(compression, awsClient, awsBucketName),
+        _awsBucketName(awsBucketName),
         _awsBucketPrefix(awsBucketPrefix),
+        _arrowReader(compression, awsClient, awsBucketName),
         _dims(dims),
-        _sz(cacheSize)
+        _size(0),
+        _sizeMax(cacheSize)
     {}
 
     std::shared_ptr<arrow::RecordBatch> S3Cache::get(Coordinates pos)
     {
         if (_mem.find(pos) == _mem.end()) {
+            // Download Chunk
+            std::shared_ptr<arrow::RecordBatch> arrowBatch;
+            auto objectName = coord2ObjectName(*_awsBucketPrefix, pos, _dims);
+            auto arrowSize = _arrowReader.readObject(objectName,
+                                                     false,
+                                                     arrowBatch);
 
-            // Cache is Full
-            if (_lru.size() == _sz) {
+            // Check if Record Batch Fits in Cache
+            if (arrowSize > _sizeMax) {
+                std::ostringstream out;
+                out << "Object s3://"
+                    << *_awsBucketName << "/" << objectName
+                    << " size " << arrowSize
+                    << " is bigger than cache size " << _sizeMax;
+                throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                     SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+            }
 
+            // Make Space in Cache
+            while (_size + arrowSize > _sizeMax && !_lru.empty()) {
                 // Remove Last Recently Used (LRU)
                 _lock.lock();   // LOCK
                 auto rm = _lru.back();
                 _lru.pop_back();
+                _size -= _mem[rm].arrowSize;
                 _mem.erase(rm);
                 _lock.unlock(); // UNLOCK
-
-                LOG4CXX_DEBUG(logger, "S3CACHE||get delete:" << rm);
+                LOG4CXX_DEBUG(logger, "S3CACHE||get delete:" << rm << " size:" << _size);
             }
-
-            // Download Chunk | One SciDB Chunk equals one Arrow Batch
-            std::shared_ptr<arrow::RecordBatch> arrowBatch;
-            _arrowReader.readObject(
-                coord2ObjectName(*_awsBucketPrefix, pos, _dims),
-                arrowBatch,
-                false);
-
-            LOG4CXX_DEBUG(logger, "S3CACHE||get add:" << pos);
 
             // Add to Cache
             _lock.lock();   // LOCK
             _lru.push_front(pos);
-            _mem[pos] = S3CacheCell(_lru.begin(), arrowBatch);
+            _mem[pos] = S3CacheCell{_lru.begin(), arrowBatch, arrowSize};
+            _size += arrowSize;
             _lock.unlock(); // UNLOCK
+            LOG4CXX_DEBUG(logger, "S3CACHE||get add:" << pos << " size:" << _size);
 
             return arrowBatch;
         }
@@ -200,10 +225,10 @@ namespace scidb {
             // Read and Move to Front
             _lock.lock();           // LOCK
             auto &cell = _mem[pos];
-            auto res = cell.second;
-            _lru.erase(cell.first);
+            auto res = cell.arrowBatch;
+            _lru.erase(cell.lruIt);
             _lru.push_front(pos);
-            _mem[pos].first = _lru.begin();
+            _mem[pos].lruIt = _lru.begin(); // Iterator
             _lock.unlock();         // UNLOCK
 
             return res;
@@ -701,7 +726,7 @@ namespace scidb {
                                            _awsBucketName,
                                            _awsBucketPrefix,
                                            _desc.getDimensions(),
-                                           CACHE_SIZE);
+                                           settings->getCacheSize());
     }
 
     S3Array::~S3Array() {
@@ -762,7 +787,7 @@ namespace scidb {
             std::ostringstream out;
             out << *_awsBucketPrefix << "/index/" << iIndex;
             Aws::String objectName(out.str().c_str());
-            arrowReader.readObject(objectName, arrowBatch);
+            arrowReader.readObject(objectName, true, arrowBatch);
 
             // TODO Remove
             stop = std::chrono::high_resolution_clock::now();

@@ -31,6 +31,8 @@
 #include <query/Expression.h>
 #include <util/PathUtils.h>
 
+#include "S3Common.h"
+
 #ifndef S3INPUT_SETTINGS
 #define S3INPUT_SETTINGS
 
@@ -52,6 +54,7 @@ namespace scidb
 static const char* const KW_BUCKET_NAME   = "bucket_name";
 static const char* const KW_BUCKET_PREFIX = "bucket_prefix";
 static const char* const KW_FORMAT	  = "format";
+static const char* const KW_CACHE_SIZE	  = "cache_size";
 
 typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t ;
 
@@ -78,6 +81,7 @@ private:
     std::string			_bucketName;
     std::string			_bucketPrefix;
     FormatType                  _format;
+    size_t                      _cacheSize;
 
     void checkIfSet(bool alreadySet, const char* kw)
     {
@@ -119,6 +123,17 @@ private:
         }
     }
 
+    void setParamCacheSize(std::vector<int64_t> cacheSize)
+    {
+        _cacheSize = cacheSize[0];
+    }
+
+    Parameter getKeywordParam(KeywordParameters const& kwp, const std::string& kw) const
+    {
+        auto const& kwPair = kwp.find(kw);
+        return kwPair == kwp.end() ? Parameter() : kwPair->second;
+    }
+
     std::string getParamContentString(Parameter& param)
     {
         std::string paramContent;
@@ -135,7 +150,28 @@ private:
         return paramContent;
     }
 
-    bool setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, void (S3InputSettings::* innersetter)(std::vector<std::string>) )
+    int64_t getParamContentInt64(Parameter& param)
+    {
+        size_t paramContent;
+
+        if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
+            ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
+            paramContent = evaluate(paramExpr->getExpression(), TID_INT64).getInt64();
+        }
+        else {
+            OperatorParamPhysicalExpression* exp =
+                dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
+            SCIDB_ASSERT(exp != nullptr);
+            paramContent = exp->getExpression()->evaluate().getInt64();
+            LOG4CXX_DEBUG(logger, "aio_save integer param is " << paramContent)
+
+        }
+        return paramContent;
+    }
+
+    bool setKeywordParamString(KeywordParameters const& kwParams,
+                               const char* const kw,
+                               void (S3InputSettings::* innersetter)(std::vector<std::string>))
     {
         std::vector <std::string> paramContent;
         bool retSet = false;
@@ -159,16 +195,33 @@ private:
         return retSet;
     }
 
-    void setKeywordParamString(KeywordParameters const& kwParams, const char* const kw, bool& alreadySet, void (S3InputSettings::* innersetter)(std::vector<std::string>) )
+    bool setKeywordParamInt64(KeywordParameters const& kwParams,
+                              const char* const kw,
+                              void (S3InputSettings::* innersetter)(std::vector<int64_t>) )
     {
-        checkIfSet(alreadySet, kw);
-        alreadySet = setKeywordParamString(kwParams, kw, innersetter);
-    }
+        std::vector<int64_t> paramContent;
+        size_t numParams;
+        bool retSet = false;
 
-    Parameter getKeywordParam(KeywordParameters const& kwp, const std::string& kw) const
-    {
-        auto const& kwPair = kwp.find(kw);
-        return kwPair == kwp.end() ? Parameter() : kwPair->second;
+        Parameter kwParam = getKeywordParam(kwParams, kw);
+        if (kwParam) {
+            if (kwParam->getParamType() == PARAM_NESTED) {
+                auto group = dynamic_cast<OperatorParamNested*>(kwParam.get());
+                Parameters& gParams = group->getParameters();
+                numParams = gParams.size();
+                for (size_t i = 0; i < numParams; ++i)
+                    paramContent.push_back(getParamContentInt64(gParams[i]));
+            }
+            else
+                paramContent.push_back(getParamContentInt64(kwParam));
+
+            (this->*innersetter)(paramContent);
+            retSet = true;
+        }
+        else
+            LOG4CXX_DEBUG(logger, "aio_save findKeyword null: " << kw);
+
+        return retSet;
     }
 
 public:
@@ -178,15 +231,13 @@ public:
                    std::shared_ptr<Query>& query):
                 _bucketName(""),
                 _bucketPrefix(""),
-                _format(ARROW)
+                _format(ARROW),
+                _cacheSize(CACHE_SIZE_DEFAULT)
     {
-        bool  bucketNameSet   = false;
-        bool  bucketPrefixSet = false;
-        bool  formatSet       = false;
-
-        setKeywordParamString(kwParams, KW_BUCKET_NAME,   bucketNameSet,   &S3InputSettings::setParamBucketName);
-        setKeywordParamString(kwParams, KW_BUCKET_PREFIX, bucketPrefixSet, &S3InputSettings::setParamBucketPrefix);
-        setKeywordParamString(kwParams, KW_FORMAT,        formatSet,       &S3InputSettings::setParamFormat);
+        setKeywordParamString(kwParams, KW_BUCKET_NAME,   &S3InputSettings::setParamBucketName);
+        setKeywordParamString(kwParams, KW_BUCKET_PREFIX, &S3InputSettings::setParamBucketPrefix);
+        setKeywordParamString(kwParams, KW_FORMAT,        &S3InputSettings::setParamFormat);
+        setKeywordParamInt64( kwParams, KW_CACHE_SIZE,    &S3InputSettings::setParamCacheSize);
 
         if(_bucketName.size() == 0)
         {
@@ -212,6 +263,11 @@ public:
     std::string const& getBucketPrefix() const
     {
         return _bucketPrefix;
+    }
+
+    size_t getCacheSize() const
+    {
+        return _cacheSize;
     }
 };
 

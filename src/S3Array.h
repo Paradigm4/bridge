@@ -69,9 +69,9 @@ public:
                   std::shared_ptr<Aws::S3::S3Client>,
                   std::shared_ptr<const Aws::String> awsBucketName);
 
-    void readObject(const Aws::String &objectName,
-                    std::shared_ptr<arrow::RecordBatch>&,
-                    bool reuse=true);
+    size_t readObject(const Aws::String &objectName,
+                    bool reuse,
+                      std::shared_ptr<arrow::RecordBatch>&);
 
 private:
     const S3Metadata::Compression _compression;
@@ -85,9 +85,11 @@ private:
     std::shared_ptr<arrow::RecordBatchReader> _arrowBatchReader;
 };
 
-typedef std::pair<
-    std::list<Coordinates>::iterator,
-    std::shared_ptr<arrow::RecordBatch> > S3CacheCell;
+typedef struct {
+    std::list<Coordinates>::iterator lruIt;
+    std::shared_ptr<arrow::RecordBatch> arrowBatch;
+    size_t arrowSize;
+} S3CacheCell;
 
 class S3Cache {
 public:
@@ -102,10 +104,12 @@ public:
     std::shared_ptr<arrow::RecordBatch> get(Coordinates);
 
 private:
+    const std::shared_ptr<const Aws::String> _awsBucketName,
+        _awsBucketPrefix;
     S3ArrowReader _arrowReader;
-    const std::shared_ptr<const Aws::String> _awsBucketPrefix;
     const Dimensions _dims;
-    const size_t _sz;
+    size_t _size;
+    const size_t _sizeMax;
     std::list<Coordinates> _lru;
     std::unordered_map<Coordinates, S3CacheCell, CoordinatesHash> _mem;
     std::mutex _lock;

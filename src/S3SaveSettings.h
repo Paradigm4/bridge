@@ -30,7 +30,7 @@
 #include <query/Expression.h>
 #include <util/PathUtils.h>
 
-#include <S3Common.h>
+#include "S3Common.h"
 
 #ifndef S3SAVE_SETTINGS
 #define S3SAVE_SETTINGS
@@ -127,6 +127,12 @@ private:
         }
     }
 
+    Parameter getKeywordParam(KeywordParameters const& kwp, const std::string& kw) const
+    {
+        auto const& kwPair = kwp.find(kw);
+        return kwPair == kwp.end() ? Parameter() : kwPair->second;
+    }
+
     std::string getParamContentString(Parameter& param)
     {
         std::string paramContent;
@@ -139,6 +145,25 @@ private:
                 dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
             SCIDB_ASSERT(exp != nullptr);
             paramContent = exp->getExpression()->evaluate().getString();
+        }
+        return paramContent;
+    }
+
+    int64_t getParamContentInt64(Parameter& param)
+    {
+        size_t paramContent;
+
+        if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
+            ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
+            paramContent = evaluate(paramExpr->getExpression(), TID_INT64).getInt64();
+        }
+        else {
+            OperatorParamPhysicalExpression* exp =
+                dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
+            SCIDB_ASSERT(exp != nullptr);
+            paramContent = exp->getExpression()->evaluate().getInt64();
+            LOG4CXX_DEBUG(logger, "aio_save integer param is " << paramContent)
+
         }
         return paramContent;
     }
@@ -167,33 +192,6 @@ private:
             LOG4CXX_DEBUG(logger, "S3SAVE|findKeyword null: " << kw);
         }
         return retSet;
-    }
-
-    void setKeywordParamString(KeywordParameters const& kwParams,
-                               const char* const kw,
-                               bool& alreadySet, void (S3SaveSettings::* innersetter)(std::vector<std::string>) )
-    {
-        checkIfSet(alreadySet, kw);
-        alreadySet = setKeywordParamString(kwParams, kw, innersetter);
-    }
-
-    int64_t getParamContentInt64(Parameter& param)
-    {
-        size_t paramContent;
-
-        if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
-            ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
-            paramContent = evaluate(paramExpr->getExpression(), TID_INT64).getInt64();
-        }
-        else {
-            OperatorParamPhysicalExpression* exp =
-                dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
-            SCIDB_ASSERT(exp != nullptr);
-            paramContent = exp->getExpression()->evaluate().getInt64();
-            LOG4CXX_DEBUG(logger, "aio_save integer param is " << paramContent)
-
-        }
-        return paramContent;
     }
 
     bool setKeywordParamInt64(KeywordParameters const& kwParams,
@@ -225,21 +223,6 @@ private:
         return retSet;
     }
 
-    void setKeywordParamInt64(KeywordParameters const& kwParams,
-                              const char* const kw,
-                              bool& alreadySet,
-                              void (S3SaveSettings::* innersetter)(std::vector<int64_t>) )
-    {
-        checkIfSet(alreadySet, kw);
-        alreadySet = setKeywordParamInt64(kwParams, kw, innersetter);
-    }
-
-    Parameter getKeywordParam(KeywordParameters const& kwp, const std::string& kw) const
-    {
-        auto const& kwPair = kwp.find(kw);
-        return kwPair == kwp.end() ? Parameter() : kwPair->second;
-    }
-
 public:
     S3SaveSettings(std::vector<std::shared_ptr<OperatorParam> > const& operatorParameters,
                    KeywordParameters const& kwParams,
@@ -251,17 +234,11 @@ public:
                 _compression(S3Metadata::Compression::NONE),
                 _indexSplit(INDEX_SPLIT_DEFAULT)
     {
-        bool  bucketNameSet   = false;
-        bool  bucketPrefixSet = false;
-        bool  formatSet       = false;
-        bool  compressionSet  = false;
-        bool  indexSplit      = false;
-
-        setKeywordParamString(kwParams, KW_BUCKET_NAME,   bucketNameSet,   &S3SaveSettings::setParamBucketName);
-        setKeywordParamString(kwParams, KW_BUCKET_PREFIX, bucketPrefixSet, &S3SaveSettings::setParamBucketPrefix);
-        setKeywordParamString(kwParams, KW_FORMAT,        formatSet,       &S3SaveSettings::setParamFormat);
-        setKeywordParamString(kwParams, KW_COMPRESSION,   compressionSet,  &S3SaveSettings::setParamCompression);
-        setKeywordParamInt64(kwParams,  KW_INDEX_SPLIT,   indexSplit,      &S3SaveSettings::setParamIndexSplit);
+        setKeywordParamString(kwParams, KW_BUCKET_NAME,   &S3SaveSettings::setParamBucketName);
+        setKeywordParamString(kwParams, KW_BUCKET_PREFIX, &S3SaveSettings::setParamBucketPrefix);
+        setKeywordParamString(kwParams, KW_FORMAT,        &S3SaveSettings::setParamFormat);
+        setKeywordParamString(kwParams, KW_COMPRESSION,   &S3SaveSettings::setParamCompression);
+        setKeywordParamInt64( kwParams, KW_INDEX_SPLIT,   &S3SaveSettings::setParamIndexSplit);
 
         if(_bucketName.size() == 0)
             throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_NAME << " was not provided, or failed to parse";
