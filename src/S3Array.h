@@ -94,10 +94,9 @@ typedef struct {
 class S3Cache {
 public:
     S3Cache(
-        S3Metadata::Compression,
-        std::shared_ptr<Aws::S3::S3Client>,
         std::shared_ptr<const Aws::String> awsBucketName,
         std::shared_ptr<const Aws::String> awsBucketPrefix,
+        std::shared_ptr<S3ArrowReader>,
         const Dimensions&,
         size_t);
 
@@ -106,7 +105,7 @@ public:
 private:
     const std::shared_ptr<const Aws::String> _awsBucketName,
         _awsBucketPrefix;
-    S3ArrowReader _arrowReader;
+    const std::shared_ptr<S3ArrowReader> _arrowReader;
     const Dimensions _dims;
     size_t _size;
     const size_t _sizeMax;
@@ -248,14 +247,19 @@ public:
     void readIndex();
 
 private:
+    // SciDB members
     std::shared_ptr<Query> _query;
     const ArrayDesc _desc;
     const std::shared_ptr<const S3InputSettings> _settings;
 
+    // AWS members
     const Aws::SDKOptions _awsOptions;
     std::shared_ptr<Aws::S3::S3Client> _awsClient;
     std::shared_ptr<Aws::String> _awsBucketName;
     std::shared_ptr<Aws::String> _awsBucketPrefix;
+
+    // S3Bridge members
+    std::shared_ptr<S3ArrowReader> _arrowReader;
     S3Index _index;
     std::unique_ptr<S3Cache> _cache;
 };

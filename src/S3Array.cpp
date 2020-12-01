@@ -161,15 +161,14 @@ namespace scidb {
     // S3 Cache
     //
     S3Cache::S3Cache(
-        S3Metadata::Compression compression,
-        std::shared_ptr<Aws::S3::S3Client> awsClient,
         std::shared_ptr<const Aws::String> awsBucketName,
         std::shared_ptr<const Aws::String> awsBucketPrefix,
+        std::shared_ptr<S3ArrowReader> arrowReader,
         const Dimensions &dims,
         size_t cacheSize):
         _awsBucketName(awsBucketName),
         _awsBucketPrefix(awsBucketPrefix),
-        _arrowReader(compression, awsClient, awsBucketName),
+        _arrowReader(arrowReader),
         _dims(dims),
         _size(0),
         _sizeMax(cacheSize)
@@ -181,16 +180,16 @@ namespace scidb {
             // Download Chunk
             std::shared_ptr<arrow::RecordBatch> arrowBatch;
             auto objectName = coord2ObjectName(*_awsBucketPrefix, pos, _dims);
-            auto arrowSize = _arrowReader.readObject(objectName,
-                                                     false,
-                                                     arrowBatch);
+            auto arrowSize = _arrowReader->readObject(objectName,
+                                                      false,
+                                                      arrowBatch);
 
             // Check if Record Batch Fits in Cache
             if (arrowSize > _sizeMax) {
                 std::ostringstream out;
-                out << "Object s3://"
+                out << "Size " << arrowSize << " of object s3://"
                     << *_awsBucketName << "/" << objectName
-                    << " size " << arrowSize
+                    << " for position " << pos
                     << " is bigger than cache size " << _sizeMax;
                 throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
                                      SCIDB_LE_ILLEGAL_OPERATION) << out.str();
@@ -527,7 +526,15 @@ namespace scidb {
 
     void S3Chunk::download()
     {
-        _arrowBatch = _array._cache->get(_firstPos);
+        if (_array._cache != NULL)
+            _arrowBatch = _array._cache->get(_firstPos);
+        else {
+            // Cache is disabled
+            auto objectName = coord2ObjectName(*_array._awsBucketPrefix,
+                                               _firstPos,
+                                               _dims);
+            _array._arrowReader->readObject(objectName, true, _arrowBatch);
+        }
     }
 
     void S3Chunk::setPosition(Coordinates const& pos)
@@ -721,12 +728,19 @@ namespace scidb {
                 << "compression missing from metadata";
         auto compression = S3Metadata::string2Compression(compressionPair->second);
 
-        _cache = std::make_unique<S3Cache>(compression,
-                                           _awsClient,
-                                           _awsBucketName,
-                                           _awsBucketPrefix,
-                                           _desc.getDimensions(),
-                                           settings->getCacheSize());
+
+        _arrowReader = std::make_shared<S3ArrowReader>(compression,
+                                                       _awsClient,
+                                                       _awsBucketName);
+
+        // If cache size is 0, the cache will be disabled
+        auto cacheSize = settings->getCacheSize();
+        if (cacheSize > 0)
+            _cache = std::make_unique<S3Cache>(_awsBucketName,
+                                               _awsBucketPrefix,
+                                               _arrowReader,
+                                               _desc.getDimensions(),
+                                               cacheSize);
     }
 
     S3Array::~S3Array() {

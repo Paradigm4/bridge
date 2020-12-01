@@ -368,20 +368,27 @@ s3input(
 
 
 # Test with Different Cache Sizes
-@pytest.mark.parametrize('cache_size', (None, 4000, 1800))
+@pytest.mark.parametrize('cache_size', (None, 5000, 2500, 0))
 def test_cache(scidb_con, s3_con, cache_size):
-    prefix = 'default_cache'
-    schema = '<v:int64 not null> [i=0:999:0:100]'
+    prefix = 'cache'
+    schema = '<v:int64 not null, w:int64 not null> [i=0:999:0:100]'
 
     # Store
     bucket_prefix = '/'.join((base_prefix, prefix))
     scidb_con.iquery("""
 s3save(
-  filter(
-    build({}, i),
-    i % 100 < 80 or i >= 800),
+  redimension(
+    filter(
+      apply(
+        build({}, i),
+        w, i * i),
+      i % 100 < 80 or i >= 800),
+    {}),
   bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  bucket_prefix:'{}')""".format(schema.replace(', w:int64 not null', ''),
+                                schema,
+                                bucket_name,
+                                bucket_prefix))
 
     # Input
     que = """
@@ -393,7 +400,7 @@ s3input(
       bucket_prefix,
       '' if cache_size is None else ', cache_size:{}'.format(cache_size))
 
-    if cache_size == 1800:
+    if cache_size == 2500:
         with pytest.raises(requests.exceptions.HTTPError):
             array = scidb_con.iquery(que, fetch=True)
     else:
@@ -401,9 +408,10 @@ s3input(
         array = array.sort_values(by=['i']).reset_index(drop=True)
 
         assert array.equals(
-            pandas.DataFrame(data=(
-                (i, i) for i in range(1000) if (i % 100 < 80 or i >= 800)),
-                             columns=('i', 'v')))
+            pandas.DataFrame(data=((i, i, i * i)
+                                   for i in range(1000)
+                                   if (i % 100 < 80 or i >= 800)),
+                             columns=('i', 'v', 'w')))
 
     delete_prefix(s3_con, prefix)
 
@@ -446,4 +454,4 @@ s3input(
     with pytest.raises(requests.exceptions.HTTPError):
         array = scidb_con.iquery(que, fetch=True)
 
-    # delete_prefix(s3_con, prefix)
+    delete_prefix(s3_con, prefix)
