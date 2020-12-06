@@ -201,47 +201,4 @@ std::ostream& operator<<(std::ostream& out, const scidb::S3Index& index) {
     out << "]";
     return out;
 }
-
-/*
-Aws::IOStream& operator<<(Aws::IOStream& out, const scidb::S3Index& index) {
-    for (auto posPtr = index.begin(); posPtr != index.end(); ++posPtr) {
-        for (size_t i = 0; i < index._nDims; ++i) {
-            if (i > 0)
-                out << '\t';
-            out << (((*posPtr)[i] - index._dims[i].getStartMin())
-                    / index._dims[i].getChunkInterval());
-        }
-        out << "\n";
-    }
-    return out;
-}
-*/
-
-/*
-Aws::IOStream& operator>>(Aws::IOStream& in, scidb::S3Index& index) {
-    std::string line;
-    scidb::Coordinates pos(index._nDims);
-    while (std::getline(in, line)) {
-        std::istringstream stm(line);
-        size_t i = 0;
-        for (scidb::Coordinate coord; stm >> coord; i++) {
-            if (i >= index._nDims) break;
-            pos[i] = (coord * index._dims[i].getChunkInterval()
-                      + index._dims[i].getStartMin());
-        }
-
-        if (i != index._nDims)
-            throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
-                                 scidb::SCIDB_LE_UNKNOWN_ERROR)
-                << "Invalid index line '" << line
-                << "', expected " << index._nDims << " values";
-
-        // Keep Only Chunks for this Instance
-        // if (index._desc.getPrimaryInstanceId(pos, index._nInst) == index._instID)
-
-        index.insert(pos);
-    }
-    return in;
-}
-*/
 }

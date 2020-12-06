@@ -30,8 +30,6 @@
 #include <array/Dimensions.h>
 #include <query/InstanceID.h>
 
-#include <aws/core/utils/memory/stl/AWSStreamFwd.h>
-
 
 // Forward Declarastions to avoid including full headers - speed-up
 // compilation
@@ -49,11 +47,6 @@ namespace scidb {
 namespace std {
     std::ostream& operator<<(std::ostream&, const scidb::Coordinates&);
     std::ostream& operator<<(std::ostream&, const scidb::S3Index&);
-
-    // Serialize & De-serialize to S3
-    // Aws::IOStream& operator<<(Aws::IOStream&, const scidb::Coordinates&);
-    // Aws::IOStream& operator<<(Aws::IOStream&, const scidb::S3Index&);
-    // Aws::IOStream& operator>>(Aws::IOStream&, scidb::S3Index&);
 }
 
 namespace scidb {
