@@ -786,13 +786,6 @@ namespace scidb {
                                   _awsBucketName);
         std::shared_ptr<arrow::RecordBatch> arrowBatch;
 
-        // TODO Remove
-        auto start = std::chrono::high_resolution_clock::now();
-        std::chrono::time_point<std::chrono::high_resolution_clock> stop;
-        std::chrono::microseconds duration, duration2;
-        duration = std::chrono::duration_values<std::chrono::microseconds>::zero();
-        duration2 = duration;
-
         for (size_t iIndex = instID; iIndex < nIndex; iIndex += nInst) {
 
             // Download One Chunk Index
@@ -800,12 +793,6 @@ namespace scidb {
             out << *_awsBucketPrefix << "/index/" << iIndex;
             Aws::String objectName(out.str().c_str());
             arrowReader.readObject(objectName, true, arrowBatch);
-
-            // TODO Remove
-            stop = std::chrono::high_resolution_clock::now();
-            duration += std::chrono::duration_cast<std::chrono::microseconds>(
-                stop - start);
-            start = stop;
 
             if (arrowBatch->num_columns() != static_cast<int>(nDims)) {
                 out.str("");
