@@ -27,7 +27,7 @@
 #include <query/Parser.h>
 #include <util/OnScopeExit.h>
 
-#include "S3Common.h"
+#include "S3Driver.h"
 #include "S3InputSettings.h"
 
 
@@ -57,19 +57,11 @@ public:
     {
         S3InputSettings settings(_parameters, _kwParameters, true, query);
 
-        // Get Metadata from AWS
-        Aws::SDKOptions options;
-        Aws::InitAPI(options);
-        Aws::S3::S3Client s3Client;
-
+        // Get Metadata
+        S3Driver driver(settings.getBucketName(), settings.getBucketPrefix());
         std::map<std::string, std::string> metadata;
-        S3Metadata::getMetadata(s3Client,
-                                Aws::String(settings.getBucketName().c_str()),
-                                Aws::String((settings.getBucketPrefix() +
-                                             "/metadata").c_str()),
-                                metadata);
+        driver.readMetadata(metadata);
         LOG4CXX_DEBUG(logger, "S3INPUT|" << query->getInstanceID() << "|schema: " << metadata["schema"]);
-        Aws::ShutdownAPI(options);
 
         // Build Fake Query and Extract Schema
         std::shared_ptr<Query> innerQuery = Query::createFakeQuery(

@@ -37,14 +37,10 @@
 #include <arrow/record_batch.h>
 #include <arrow/util/compression.h>
 
-#include <aws/s3/model/PutObjectRequest.h>
-
 #include "S3Common.h"
+#include "S3Driver.h"
 #include "S3SaveSettings.h"
 #include "S3Index.h"
-
-#define RETRY_COUNT 10
-#define RETRY_SLEEP 1000        // milliseconds
 
 #define THROW_NOT_OK(s)                                                 \
     {                                                                   \
@@ -540,32 +536,22 @@ public:
             return result;
         }
 
-        // Init AWS
-        Aws::SDKOptions options;
-        Aws::InitAPI(options);
-        const Aws::String bucketPrefix(settings.getBucketPrefix().c_str());
+        S3Driver driver(settings.getBucketName(), settings.getBucketPrefix());
 
         // Coordiantor Creates S3 Metadata Object
-        Aws::String bucketName = Aws::String(settings.getBucketName().c_str());
         if (query->isCoordinator()) {
             // Prep Metadata
-            const std::shared_ptr<Aws::IOStream> metaData =
-                Aws::MakeShared<Aws::StringStream>("");
-            *metaData << "schema\t";
-            printSchema(*metaData, inputSchema);
-            *metaData << "\n";
-            *metaData << "version\t" << S3BRIDGE_VERSION << "\n";
-            *metaData << "attribute\tALL\n";
-            *metaData << "format\tarrow\n";
-            *metaData << "compression\t" << S3Metadata::compression2String(compression) << "\n";
-
-            // Set Object Name
+            std::map<std::string, std::string> metadata;
             std::ostringstream out;
-            out << bucketPrefix << "/metadata";
+            printSchema(out, inputSchema);
+            metadata["schema"] = out.str();
+            metadata["version"] = STR(S3BRIDGE_VERSION);
+            metadata["attribute"] = "ALL";
+            metadata["format"] = "arrow";
+            metadata["compression"] = S3Metadata::compression2String(compression);
 
-            uploadToS3(bucketName,
-                       Aws::String(out.str().c_str()),
-                       metaData);
+            // Write Metadata
+            driver.writeMetadata(metadata);
         }
 
         const Dimensions &dims = inputSchema.getDimensions();
@@ -593,23 +579,17 @@ public:
 
                     // Set Object Name using Top-Left Coordinates
                     Coordinates const &pos = inputChunkIters[0]->getFirstPosition();
+
                     // Add Chunk Coordinates to the Chunk Index
                     index.insert(pos);
-                    Aws::String objectName(coord2ObjectName(bucketPrefix,
-                                                            pos,
-                                                            dims));
 
+                    // Serialize Chunk
                     std::shared_ptr<arrow::Buffer> arrowBuffer;
                     THROW_NOT_OK(
                         dataWriter.writeArrowBuffer(inputChunkIters, arrowBuffer));
 
-                    // Set Chunk Data
-                    const std::shared_ptr<Aws::IOStream> chunkData =
-                        Aws::MakeShared<Aws::StringStream>("");
-                    chunkData->write(reinterpret_cast<const char*>(arrowBuffer->data()),
-                                     arrowBuffer->size());
-
-                    uploadToS3(bucketName, objectName, chunkData);
+                    // Write Chunk
+                    driver.writeArrow(coord2ObjectName(pos, dims), arrowBuffer);
                 }
 
                 // Advance Array Iterators
@@ -647,30 +627,15 @@ public:
             while (splitPtr != index.end()) {
                 // Convert to Arrow
                 std::shared_ptr<arrow::Buffer> arrowBuffer;
-                THROW_NOT_OK(
-                    indexWriter.writeArrowBuffer(splitPtr,
-                                                 index.end(),
-                                                 szSplit,
-                                                 arrowBuffer));
+                THROW_NOT_OK(indexWriter.writeArrowBuffer(splitPtr,
+                                                          index.end(),
+                                                          szSplit,
+                                                          arrowBuffer));
 
-
-                // Set Meta Data
-                const std::shared_ptr<Aws::IOStream> metaData =
-                    Aws::MakeShared<Aws::StringStream>("");
-                metaData->write(reinterpret_cast<const char*>(arrowBuffer->data()),
-                                 arrowBuffer->size());
-
-                // Set Object Name
+                // Write Chunk Coordinate List
                 std::ostringstream out;
-                out << bucketPrefix << "/index/" << split;
-
-                LOG4CXX_DEBUG(logger, "S3SAVE|" << query->getInstanceID()
-                              << "|execute index split:" << out.str());
-
-                // Upload Chunk Coordinate List to S3
-                uploadToS3(bucketName,
-                           Aws::String(out.str().c_str()),
-                           metaData);
+                out << "index/" << split;
+                driver.writeArrow(out.str(), arrowBuffer);
 
                 // Advance to Next Index Split
                 splitPtr += std::min<size_t>(
@@ -682,45 +647,10 @@ public:
         else
             BufSend(query->getCoordinatorID(), index.serialize(), query);
 
-        Aws::ShutdownAPI(options);
-
         return result;
     }
 
 private:
-    void uploadToS3(const Aws::String& bucketName,
-                    const Aws::String& objectName,
-                    const std::shared_ptr<Aws::IOStream> inputData)
-    {
-        Aws::S3::S3Client s3Client;
-        Aws::S3::Model::PutObjectRequest objectRequest;
-        Aws::S3::Model::PutObjectOutcome outcome;
-        std::ostringstream retryOutput;
-
-        objectRequest.SetBucket(bucketName);
-        objectRequest.SetKey(objectName);
-        objectRequest.SetBody(inputData);
-
-        for (int i = 0; i < RETRY_COUNT; i++) {
-            if (i != 0)
-                std::this_thread::sleep_for(
-                    std::chrono::milliseconds(RETRY_SLEEP));
-
-            outcome = s3Client.PutObject(objectRequest);
-            if (outcome.IsSuccess())
-                break;
-
-            if (outcome.GetError().GetResponseCode() ==
-                Aws::Http::HttpResponseCode::FORBIDDEN)
-                S3_EXCEPTION_NOT_SUCCESS("Upload");
-
-            LOG4CXX_DEBUG(
-                logger, "S3SAVE||uploadToS3 s3://" << bucketName << "/"
-                << objectName << " failed, retry #" << (i + 1));
-        }
-        S3_EXCEPTION_NOT_SUCCESS("Upload");
-    }
-
     bool haveChunk(std::shared_ptr<Array>& array, ArrayDesc const& schema)
     {
         std::shared_ptr<ConstArrayIterator> iter = array->getConstIterator(

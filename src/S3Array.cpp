@@ -34,10 +34,8 @@
 #include <arrow/ipc/reader.h>
 #include <arrow/util/compression.h>
 
-#include <aws/s3/model/ListObjectsRequest.h>
-
-#include "S3Common.h"
 #include "S3InputSettings.h"
+#include "S3Driver.h"
 
 
 // TODO use __builtin_expect
@@ -60,8 +58,6 @@
     }
 
 
-using namespace std;
-
 namespace scidb {
     static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3array"));
 
@@ -70,11 +66,9 @@ namespace scidb {
     //
     S3ArrowReader::S3ArrowReader(
         S3Metadata::Compression compression,
-        std::shared_ptr<Aws::S3::S3Client> awsClient,
-        std::shared_ptr<const Aws::String> awsBucketName):
+        std::shared_ptr<const S3Driver> driver):
         _compression(compression),
-        _awsClient(awsClient),
-        _awsBucketName(awsBucketName)
+        _driver(driver)
     {
         THROW_NOT_OK(arrow::AllocateResizableBuffer(0, &_arrowResizableBuffer));
 
@@ -84,30 +78,22 @@ namespace scidb {
     }
 
     size_t S3ArrowReader::readObject(
-        const Aws::String &objectName,
+        const std::string &name,
         bool reuse,
         std::shared_ptr<arrow::RecordBatch> &arrowBatch)
     {
-        // Download Chunk
-        Aws::S3::Model::GetObjectRequest objectRequest;
-        const Aws::String &bucketName = *_awsBucketName;
-        objectRequest.SetBucket(bucketName);
-        objectRequest.SetKey(objectName);
-        LOG4CXX_DEBUG(logger, "S3ARROWREADER||readObject:" << objectName);
+        // Initiate Chunk Read
+        auto chunk = _driver->readArrow(name);
 
-        auto outcome = _awsClient->GetObject(objectRequest);
-        S3_EXCEPTION_NOT_SUCCESS("Get");
-        auto&& result = outcome.GetResultWithOwnership();
-        const long long awsSize = result.GetContentLength();
-        if (awsSize > CHUNK_MAX_SIZE) {
+        // Get Chunk Size
+        size_t arrowSize = chunk.size();
+        if (arrowSize > CHUNK_MAX_SIZE) {
             std::ostringstream out;
-            out << "Object size " << awsSize
+            out << "Object size " << arrowSize
                 << " too large. Max size is " << CHUNK_MAX_SIZE;
             throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
                                  SCIDB_LE_ILLEGAL_OPERATION) << out.str();
         }
-        size_t arrowSize = static_cast<size_t>(awsSize);
-        auto& bodyStream = result.GetBody();
 
         // Reuse an Arrow ResizableBuffer
         std::shared_ptr<arrow::Buffer> arrowBuffer;
@@ -119,8 +105,8 @@ namespace scidb {
         else
             THROW_NOT_OK(arrow::AllocateBuffer(arrowSize, &arrowBuffer));
 
-        bodyStream.read(reinterpret_cast<char*>(arrowBuffer->mutable_data()),
-                        arrowSize);
+        // Download Chunk
+        chunk.read(arrowBuffer, arrowSize);
 
         _arrowBufferReader = std::make_shared<arrow::io::BufferReader>(
             arrowBuffer);
@@ -146,8 +132,8 @@ namespace scidb {
         THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatchNext));
         if (arrowBatchNext != NULL) {
             std::ostringstream out;
-            out << "More than one Arrow Record Batch found in s3://"
-                << bucketName << "/" << objectName;
+            out << "More than one Arrow Record Batch found in "
+                << _driver->path() << "/" << name;
             throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
                                  SCIDB_LE_ILLEGAL_OPERATION) << out.str();
         }
@@ -159,14 +145,12 @@ namespace scidb {
     // S3 Cache
     //
     S3Cache::S3Cache(
-        std::shared_ptr<const Aws::String> awsBucketName,
-        std::shared_ptr<const Aws::String> awsBucketPrefix,
         std::shared_ptr<S3ArrowReader> arrowReader,
+        const std::string &path,
         const Dimensions &dims,
         size_t cacheSize):
-        _awsBucketName(awsBucketName),
-        _awsBucketPrefix(awsBucketPrefix),
         _arrowReader(arrowReader),
+        _path(path),
         _dims(dims),
         _size(0),
         _sizeMax(cacheSize)
@@ -185,8 +169,8 @@ namespace scidb {
             // Check if Record Batch Fits in Cache
             if (arrowSize > _sizeMax) {
                 std::ostringstream out;
-                out << "Size " << arrowSize << " of object s3://"
-                    << *_awsBucketName << "/" << objectName
+                out << "Size " << arrowSize << " of object "
+                    << _path << "/" << objectName
                     << " for position " << pos
                     << " is bigger than cache size " << _sizeMax;
                 throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
@@ -528,9 +512,7 @@ namespace scidb {
             _arrowBatch = _array._cache->get(_firstPos);
         else {
             // Cache is disabled
-            auto objectName = coord2ObjectName(*_array._awsBucketPrefix,
-                                               _firstPos,
-                                               _dims);
+            auto objectName = coord2ObjectName(_firstPos, _dims);
             _array._arrowReader->readObject(objectName, true, _arrowBatch);
         }
     }
@@ -706,18 +688,11 @@ namespace scidb {
         auto nInst = _query->getInstancesCount();
         SCIDB_ASSERT(nInst > 0 && _query->getInstanceID() < nInst);
 
-        // Init AWS
-        Aws::InitAPI(_awsOptions);
-        _awsClient = std::make_shared<Aws::S3::S3Client>();
-        _awsBucketName = std::make_shared<Aws::String>(_settings->getBucketName().c_str());
-        _awsBucketPrefix = std::make_shared<Aws::String>(_settings->getBucketPrefix().c_str());
+        _driver = std::make_shared<S3Driver>(_settings->getBucketName(),
+                                             _settings->getBucketPrefix());
 
         std::map<std::string, std::string> metadata;
-        S3Metadata::getMetadata(*_awsClient,
-                                *_awsBucketName,
-                                Aws::String((*_awsBucketPrefix +
-                                             "/metadata").c_str()),
-                                metadata);
+        _driver->readMetadata(metadata);
 
         auto compressionPair = metadata.find("compression");
         if (compressionPair == metadata.end())
@@ -726,23 +701,16 @@ namespace scidb {
                 << "compression missing from metadata";
         auto compression = S3Metadata::string2Compression(compressionPair->second);
 
-
         _arrowReader = std::make_shared<S3ArrowReader>(compression,
-                                                       _awsClient,
-                                                       _awsBucketName);
+                                                       _driver);
 
         // If cache size is 0, the cache will be disabled
         auto cacheSize = settings->getCacheSize();
         if (cacheSize > 0)
-            _cache = std::make_unique<S3Cache>(_awsBucketName,
-                                               _awsBucketPrefix,
-                                               _arrowReader,
+            _cache = std::make_unique<S3Cache>(_arrowReader,
+                                               _driver->path(),
                                                _desc.getDimensions(),
                                                cacheSize);
-    }
-
-    S3Array::~S3Array() {
-        Aws::ShutdownAPI(_awsOptions);
     }
 
     ArrayDesc const& S3Array::getArrayDesc() const {
@@ -757,18 +725,9 @@ namespace scidb {
 
     void S3Array::readIndex() {
         const InstanceID instID = _query->getInstanceID();
-        const Aws::String &bucketName = *_awsBucketName;
 
         // -- - Get Count of Chunk Index Files - --
-        Aws::S3::Model::ListObjectsRequest listRequest;
-        listRequest.WithBucket(bucketName);
-        Aws::String objectName((*_awsBucketPrefix + "/index/").c_str());
-        listRequest.WithPrefix(objectName);
-
-        auto outcome = _awsClient->ListObjects(listRequest);
-        S3_EXCEPTION_NOT_SUCCESS("List");
-
-        size_t nIndex = outcome.GetResult().GetContents().size();
+        size_t nIndex = _driver->count("index/");
         LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex nIndex:" << nIndex);
 
         // -- - Read Part of Chunk Index Files - --
@@ -781,17 +740,15 @@ namespace scidb {
 
         // One coordBuf for each instance
         std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
-        S3ArrowReader arrowReader(S3Metadata::Compression::GZIP,
-                                  _awsClient,
-                                  _awsBucketName);
+        S3ArrowReader arrowReader(S3Metadata::Compression::GZIP, _driver);
         std::shared_ptr<arrow::RecordBatch> arrowBatch;
 
         for (size_t iIndex = instID; iIndex < nIndex; iIndex += nInst) {
 
             // Download One Chunk Index
             std::ostringstream out;
-            out << *_awsBucketPrefix << "/index/" << iIndex;
-            Aws::String objectName(out.str().c_str());
+            out << "index/" << iIndex;
+            std::string objectName(out.str());
             arrowReader.readObject(objectName, true, arrowBatch);
 
             if (arrowBatch->num_columns() != static_cast<int>(nDims)) {

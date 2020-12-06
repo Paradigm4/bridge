@@ -26,9 +26,9 @@
 #ifndef S3_ARRAY_H_
 #define S3_ARRAY_H_
 
-#include <array/DelegateArray.h>
+#include <mutex>
 
-#include <aws/core/Aws.h>
+#include <array/DelegateArray.h>
 
 #include "S3Common.h"
 #include "S3Index.h"
@@ -38,6 +38,7 @@
 // compilation
 namespace scidb {
     class S3InputSettings;       // #include "S3InputSettings.h"
+    class S3Driver;              // #include "S3Driver.h"
 }
 namespace arrow {
     class Array;
@@ -52,11 +53,6 @@ namespace arrow {
         class Codec;
     }
 }
-namespace Aws {
-    namespace S3 {
-        class S3Client;         // #include <aws/s3/S3Client.h>
-    }
-}
 // -- End of Forward Declarations
 
 
@@ -66,17 +62,16 @@ namespace scidb
 class S3ArrowReader {
 public:
     S3ArrowReader(S3Metadata::Compression,
-                  std::shared_ptr<Aws::S3::S3Client>,
-                  std::shared_ptr<const Aws::String> awsBucketName);
+                  std::shared_ptr<const S3Driver>);
 
-    size_t readObject(const Aws::String &objectName,
-                    bool reuse,
+    size_t readObject(const std::string &name,
+                      bool reuse,
                       std::shared_ptr<arrow::RecordBatch>&);
 
 private:
     const S3Metadata::Compression _compression;
-    std::shared_ptr<Aws::S3::S3Client> _awsClient;
-    std::shared_ptr<const Aws::String> _awsBucketName;
+
+    std::shared_ptr<const S3Driver> _driver;
 
     std::shared_ptr<arrow::ResizableBuffer> _arrowResizableBuffer;
     std::shared_ptr<arrow::io::BufferReader> _arrowBufferReader;
@@ -94,18 +89,16 @@ typedef struct {
 class S3Cache {
 public:
     S3Cache(
-        std::shared_ptr<const Aws::String> awsBucketName,
-        std::shared_ptr<const Aws::String> awsBucketPrefix,
         std::shared_ptr<S3ArrowReader>,
+        const std::string &path,
         const Dimensions&,
         size_t);
 
     std::shared_ptr<arrow::RecordBatch> get(Coordinates);
 
 private:
-    const std::shared_ptr<const Aws::String> _awsBucketName,
-        _awsBucketPrefix;
     const std::shared_ptr<S3ArrowReader> _arrowReader;
+    const std::string _path;
     const Dimensions _dims;
     size_t _size;
     const size_t _sizeMax;
@@ -236,9 +229,8 @@ public:
             const ArrayDesc& desc,
             const std::shared_ptr<S3InputSettings> settings);
 
-    virtual ~S3Array();
-
     virtual ArrayDesc const& getArrayDesc() const;
+
     std::shared_ptr<ConstArrayIterator> getConstIteratorImpl(const AttributeDesc& attr) const override;
 
     /// @see Array::hasInputPipe
@@ -252,13 +244,8 @@ private:
     const ArrayDesc _desc;
     const std::shared_ptr<const S3InputSettings> _settings;
 
-    // AWS members
-    const Aws::SDKOptions _awsOptions;
-    std::shared_ptr<Aws::S3::S3Client> _awsClient;
-    std::shared_ptr<Aws::String> _awsBucketName;
-    std::shared_ptr<Aws::String> _awsBucketPrefix;
-
     // S3Bridge members
+    std::shared_ptr<const S3Driver> _driver;
     std::shared_ptr<S3ArrowReader> _arrowReader;
     S3Index _index;
     std::unique_ptr<S3Cache> _cache;

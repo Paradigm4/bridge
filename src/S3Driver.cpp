@@ -1,0 +1,226 @@
+/*
+**
+* BEGIN_COPYRIGHT
+*
+* Copyright (C) 2020 Paradigm4 Inc.
+* All Rights Reserved.
+*
+* s3bridge is a plugin for SciDB, an Open Source Array DBMS maintained
+* by Paradigm4. See http://www.paradigm4.com/
+*
+* s3bridge is free software: you can redistribute it and/or modify
+* it under the terms of the AFFERO GNU General Public License as published by
+* the Free Software Foundation.
+*
+* s3bridge is distributed "AS-IS" AND WITHOUT ANY WARRANTY OF ANY KIND,
+* INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY,
+* NON-INFRINGEMENT, OR FITNESS FOR A PARTICULAR PURPOSE. See
+* the AFFERO GNU General Public License for the complete license terms.
+*
+* You should have received a copy of the AFFERO GNU General Public License
+* along with s3bridge.  If not, see <http://www.gnu.org/licenses/agpl-3.0.html>
+*
+* END_COPYRIGHT
+*/
+
+#include "S3Driver.h"
+
+#include <system/UserException.h>
+
+#include <log4cxx/logger.h>
+
+#include <arrow/buffer.h>
+
+#include <aws/s3/S3Client.h>
+#include <aws/s3/model/GetObjectRequest.h>
+#include <aws/s3/model/HeadObjectRequest.h>
+#include <aws/s3/model/ListObjectsRequest.h>
+#include <aws/s3/model/PutObjectRequest.h>
+
+
+#define RETRY_COUNT 10
+#define RETRY_SLEEP 1000        // milliseconds
+
+#define S3_EXCEPTION_NOT_SUCCESS(operation)                             \
+  {                                                                     \
+      if (!outcome.IsSuccess()) {                                       \
+          std::ostringstream exceptionOutput;                           \
+          exceptionOutput                                               \
+              << (operation) << " operation on s3://"                   \
+              << _bucket << "/" << key << " failed. ";                   \
+          auto error = outcome.GetError();                              \
+          exceptionOutput << error.GetMessage();                        \
+          if (error.GetResponseCode() ==                                \
+              Aws::Http::HttpResponseCode::FORBIDDEN)                   \
+              exceptionOutput                                           \
+                  << "See https://aws.amazon.com/premiumsupport/"       \
+                  << "knowledge-center/s3-troubleshoot-403/";           \
+          throw USER_EXCEPTION(                                         \
+              SCIDB_SE_NETWORK,                                         \
+              SCIDB_LE_UNKNOWN_ERROR) << exceptionOutput.str();         \
+      }                                                                 \
+  }
+
+
+namespace scidb {
+    static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3sriver"));
+
+    //
+    // S3Driver
+    //
+    S3Driver::S3Driver(const std::string &bucket, const std::string &prefix):
+        _bucket(bucket.c_str()),
+        _prefix(prefix),
+        _path("s://" + bucket + "/" + prefix)
+    {
+        Aws::InitAPI(_sdkOptions);
+        _client = std::make_unique<Aws::S3::S3Client>();
+    }
+
+    S3Driver::~S3Driver()
+    {
+        Aws::ShutdownAPI(_sdkOptions);
+    }
+
+    S3DriverChunk S3Driver::readArrow(const std::string &suffix) const
+    {
+        Aws::String key((_prefix + "/" + suffix).c_str());
+
+        Aws::S3::Model::GetObjectRequest request;
+        request.SetBucket(_bucket);
+        request.SetKey(key);
+        LOG4CXX_DEBUG(logger, "S3DRIVER|get:" << key);
+
+        auto outcome = _client->GetObject(request);
+        S3_EXCEPTION_NOT_SUCCESS("Get");
+
+        return S3DriverChunk(outcome.GetResultWithOwnership());
+    }
+
+    void S3Driver::writeArrow(const std::string &suffix,
+                              std::shared_ptr<const arrow::Buffer> buffer) const
+    {
+        Aws::String key((_prefix + "/" + suffix).c_str());
+
+        Aws::S3::Model::PutObjectRequest request;
+        request.SetBucket(_bucket);
+        request.SetKey(key);
+
+        std::shared_ptr<Aws::IOStream> data =
+            Aws::MakeShared<Aws::StringStream>("");
+        data->write(reinterpret_cast<const char*>(buffer->data()),
+                    buffer->size());
+        request.SetBody(data);
+
+        putRequest(request);
+    }
+
+    void S3Driver::readMetadata(std::map<std::string,
+                                         std::string> &metadata) const
+    {
+        Aws::String key((_prefix + "/metadata").c_str());
+
+        Aws::S3::Model::GetObjectRequest request;
+        request.SetBucket(_bucket);
+        request.SetKey(key);
+        LOG4CXX_DEBUG(logger, "S3DRIVER|get:" << key);
+
+        auto outcome = _client->GetObject(request);
+        S3_EXCEPTION_NOT_SUCCESS("Get");
+
+        auto& body =  outcome.GetResultWithOwnership().GetBody();
+        std::string line;
+        while (std::getline(body, line)) {
+            std::istringstream stream(line);
+            std::string key, value;
+            if (!std::getline(stream, key, '\t')
+                || !std::getline(stream, value))
+                throw USER_EXCEPTION(SCIDB_SE_METADATA,
+                                     SCIDB_LE_UNKNOWN_ERROR)
+                    << "Invalid metadata line '" << line << "'";
+            metadata[key] = value;
+        }
+    }
+
+    void S3Driver::writeMetadata(const std::map<std::string,
+                                                std::string> &metadata) const
+    {
+        Aws::String key((_prefix + "/metadata").c_str());
+
+        Aws::S3::Model::PutObjectRequest request;
+        request.SetBucket(_bucket);
+        request.SetKey(key);
+
+        std::shared_ptr<Aws::IOStream> data =
+            Aws::MakeShared<Aws::StringStream>("");
+        for (auto i = metadata.begin(); i != metadata.end(); ++i)
+            *data << i->first << "\t" << i->second << "\n";
+        request.SetBody(data);
+
+        putRequest(request);
+    }
+
+    size_t S3Driver::count(const std::string& suffix) const
+    {
+        Aws::String key((_prefix + "/" + suffix).c_str());
+
+        Aws::S3::Model::ListObjectsRequest request;
+        request.WithBucket(_bucket);
+        request.WithPrefix(key);
+        LOG4CXX_DEBUG(logger, "S3DRIVER|list:" << key);
+
+        auto outcome = _client->ListObjects(request);
+        S3_EXCEPTION_NOT_SUCCESS("List");
+
+        return outcome.GetResult().GetContents().size();
+    }
+
+    const std::string& S3Driver::path() const
+    {
+        return _path;
+    }
+
+    void S3Driver::putRequest(Aws::S3::Model::PutObjectRequest &request) const
+    {
+        Aws::String key = request.GetKey();
+        LOG4CXX_DEBUG(logger, "S3DRIVER|upload:" << key);
+
+        for (int i = 0; i < RETRY_COUNT; i++) {
+            auto outcome = _client->PutObject(request);
+            if (outcome.IsSuccess())
+                break;
+
+            if (outcome.GetError().GetResponseCode() ==
+                Aws::Http::HttpResponseCode::FORBIDDEN
+                || i == RETRY_COUNT - 1) // Last try
+                S3_EXCEPTION_NOT_SUCCESS("Upload");
+
+            LOG4CXX_DEBUG(logger,
+                          "S3DRIVER|upload s3://" << _bucket << "/"
+                          << key << " failed, retry #" << (i + 1));
+
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(RETRY_SLEEP));
+        }
+    }
+
+    //
+    // S3DriverChunk
+    //
+    S3DriverChunk::S3DriverChunk(Aws::S3::Model::GetObjectResult &&result):
+        _result(std::move(result))
+    {}
+
+    size_t S3DriverChunk::size() const
+    {
+        return static_cast<unsigned long long>(_result.GetContentLength());
+    }
+
+    void S3DriverChunk::read(std::shared_ptr<arrow::Buffer> buffer,
+                             const size_t length)
+    {
+        auto& body = _result.GetBody();
+        body.read(reinterpret_cast<char*>(buffer->mutable_data()),
+                  length);
+    }
+}
