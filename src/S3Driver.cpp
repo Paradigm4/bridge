@@ -86,15 +86,7 @@ namespace scidb {
     {
         Aws::String key((_prefix + "/" + suffix).c_str());
 
-        Aws::S3::Model::GetObjectRequest request;
-        request.SetBucket(_bucket);
-        request.SetKey(key);
-        LOG4CXX_DEBUG(logger, "S3DRIVER|get:" << key);
-
-        auto outcome = _client->GetObject(request);
-        S3_EXCEPTION_NOT_SUCCESS("Get");
-
-        return S3DriverChunk(outcome.GetResultWithOwnership());
+        return S3DriverChunk(getRequest(key));
     }
 
     void S3Driver::writeArrow(const std::string &suffix,
@@ -102,17 +94,12 @@ namespace scidb {
     {
         Aws::String key((_prefix + "/" + suffix).c_str());
 
-        Aws::S3::Model::PutObjectRequest request;
-        request.SetBucket(_bucket);
-        request.SetKey(key);
-
         std::shared_ptr<Aws::IOStream> data =
             Aws::MakeShared<Aws::StringStream>("");
         data->write(reinterpret_cast<const char*>(buffer->data()),
                     buffer->size());
-        request.SetBody(data);
 
-        putRequest(request);
+        putRequest(key, data);
     }
 
     void S3Driver::readMetadata(std::map<std::string,
@@ -120,15 +107,8 @@ namespace scidb {
     {
         Aws::String key((_prefix + "/metadata").c_str());
 
-        Aws::S3::Model::GetObjectRequest request;
-        request.SetBucket(_bucket);
-        request.SetKey(key);
-        LOG4CXX_DEBUG(logger, "S3DRIVER|get:" << key);
-
-        auto outcome = _client->GetObject(request);
-        S3_EXCEPTION_NOT_SUCCESS("Get");
-
-        auto& body =  outcome.GetResultWithOwnership().GetBody();
+        auto&& result = getRequest(key);
+        auto& body = result.GetBody();
         std::string line;
         while (std::getline(body, line)) {
             std::istringstream stream(line);
@@ -147,31 +127,39 @@ namespace scidb {
     {
         Aws::String key((_prefix + "/metadata").c_str());
 
-        Aws::S3::Model::PutObjectRequest request;
-        request.SetBucket(_bucket);
-        request.SetKey(key);
-
         std::shared_ptr<Aws::IOStream> data =
             Aws::MakeShared<Aws::StringStream>("");
         for (auto i = metadata.begin(); i != metadata.end(); ++i)
             *data << i->first << "\t" << i->second << "\n";
-        request.SetBody(data);
 
-        putRequest(request);
+        putRequest(key, data);
     }
 
     size_t S3Driver::count(const std::string& suffix) const
     {
         Aws::String key((_prefix + "/" + suffix).c_str());
-
         Aws::S3::Model::ListObjectsRequest request;
         request.WithBucket(_bucket);
         request.WithPrefix(key);
+
         LOG4CXX_DEBUG(logger, "S3DRIVER|list:" << key);
-
         auto outcome = _client->ListObjects(request);
-        S3_EXCEPTION_NOT_SUCCESS("List");
 
+        // -- - Retry - --
+        int retry = 1;
+        while (!outcome.IsSuccess() && retry < RETRY_COUNT) {
+            LOG4CXX_WARN(logger,
+                         "S3DRIVER|List s3://" << _bucket << "/"
+                         << key << " attempt #" << retry << " failed");
+            retry++;
+
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(RETRY_SLEEP));
+
+            outcome = _client->ListObjects(request);
+        }
+
+        S3_EXCEPTION_NOT_SUCCESS("List");
         return outcome.GetResult().GetContents().size();
     }
 
@@ -180,28 +168,59 @@ namespace scidb {
         return _path;
     }
 
-    void S3Driver::putRequest(Aws::S3::Model::PutObjectRequest &request) const
+    Aws::S3::Model::GetObjectResult S3Driver::getRequest(const Aws::String &key) const
     {
-        Aws::String key = request.GetKey();
-        LOG4CXX_DEBUG(logger, "S3DRIVER|upload:" << key);
+        Aws::S3::Model::GetObjectRequest request;
+        request.SetBucket(_bucket);
+        request.SetKey(key);
 
-        for (int i = 0; i < RETRY_COUNT; i++) {
-            auto outcome = _client->PutObject(request);
-            if (outcome.IsSuccess())
-                break;
+        LOG4CXX_DEBUG(logger, "S3DRIVER|get:" << key);
+        auto outcome = _client->GetObject(request);
 
-            if (outcome.GetError().GetResponseCode() ==
-                Aws::Http::HttpResponseCode::FORBIDDEN
-                || i == RETRY_COUNT - 1) // Last try
-                S3_EXCEPTION_NOT_SUCCESS("Upload");
-
-            LOG4CXX_DEBUG(logger,
-                          "S3DRIVER|upload s3://" << _bucket << "/"
-                          << key << " failed, retry #" << (i + 1));
+        // -- - Retry - --
+        int retry = 1;
+        while (!outcome.IsSuccess() && retry < RETRY_COUNT) {
+            LOG4CXX_WARN(logger,
+                         "S3DRIVER|Get s3://" << _bucket << "/"
+                         << key << " attempt #" << retry << " failed");
+            retry++;
 
             std::this_thread::sleep_for(
                 std::chrono::milliseconds(RETRY_SLEEP));
+
+            outcome = _client->GetObject(request);
         }
+
+        S3_EXCEPTION_NOT_SUCCESS("Get");
+        return outcome.GetResultWithOwnership();
+    }
+
+    void S3Driver::putRequest(const Aws::String &key,
+                              std::shared_ptr<Aws::IOStream> data) const
+    {
+        Aws::S3::Model::PutObjectRequest request;
+        request.SetBucket(_bucket);
+        request.SetKey(key);
+        request.SetBody(data);
+
+        LOG4CXX_DEBUG(logger, "S3DRIVER|upload:" << key);
+        auto outcome = _client->PutObject(request);
+
+        // -- - Retry - --
+        int retry = 1;
+        while (!outcome.IsSuccess() && retry < RETRY_COUNT) {
+            LOG4CXX_WARN(logger,
+                         "S3DRIVER|Put s3://" << _bucket << "/"
+                         << key << " attempt #" << retry << " failed");
+            retry++;
+
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(RETRY_SLEEP));
+
+            outcome = _client->PutObject(request);
+        }
+
+        S3_EXCEPTION_NOT_SUCCESS("Put");
     }
 
     //

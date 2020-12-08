@@ -40,9 +40,6 @@ namespace arrow {
 namespace Aws {
     namespace S3 {
         class S3Client;         // #include <aws/s3/S3Client.h>
-        namespace Model {
-            class PutObjectRequest; // #include <aws/s3/model/PutObjectRequest.h>
-        }
     }
 }
 // -- End of Forward Declarations
@@ -90,7 +87,8 @@ private:
     const Aws::SDKOptions _sdkOptions;
     std::shared_ptr<Aws::S3::S3Client> _client;
 
-    void putRequest(Aws::S3::Model::PutObjectRequest&) const;
+    Aws::S3::Model::GetObjectResult getRequest(const Aws::String&) const;
+    void putRequest(const Aws::String&, std::shared_ptr<Aws::IOStream>) const;
 };
 
 }
