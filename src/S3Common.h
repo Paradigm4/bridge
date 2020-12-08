@@ -36,7 +36,7 @@
 #define INDEX_SPLIT_DEFAULT 100000  // Number of Coordinates =
                                     // (Number-of-Chunks *
                                     // Number-of-Dimensions)
-#define CACHE_SIZE_DEFAULT 10485760 // Bytes
+#define CACHE_SIZE_DEFAULT 268435456 // 256MB in Bytes
 
 #define _STR(x) #x
 #define STR(x) _STR(x)
