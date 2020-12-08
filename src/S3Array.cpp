@@ -142,6 +142,17 @@ namespace scidb {
     }
 
     //
+    // ScopedMutex
+    //
+    class ScopedMutex {
+    public:
+        ScopedMutex(std::mutex &lock):_lock(lock) { _lock.lock(); }
+        ~ScopedMutex() { _lock.unlock(); }
+    private:
+        std::mutex &_lock;
+    };
+
+    //
     // S3 Cache
     //
     S3Cache::S3Cache(
@@ -158,61 +169,59 @@ namespace scidb {
 
     std::shared_ptr<arrow::RecordBatch> S3Cache::get(Coordinates pos)
     {
-        if (_mem.find(pos) == _mem.end()) {
-            // Download Chunk
+        {
+            ScopedMutex lock(_lock); // LOCK
+
             std::shared_ptr<arrow::RecordBatch> arrowBatch;
-            auto objectName = coord2ObjectName(*_awsBucketPrefix, pos, _dims);
-            auto arrowSize = _arrowReader->readObject(objectName,
-                                                      false,
-                                                      arrowBatch);
+            if (_mem.find(pos) == _mem.end()) {
+                // Download Chunk
+                auto objectName = coord2ObjectName(pos, _dims);
+                auto arrowSize = _arrowReader->readObject(objectName,
+                                                          false,
+                                                          arrowBatch);
 
-            // Check if Record Batch Fits in Cache
-            if (arrowSize > _sizeMax) {
-                std::ostringstream out;
-                out << "Size " << arrowSize << " of object "
-                    << _path << "/" << objectName
-                    << " for position " << pos
-                    << " is bigger than cache size " << _sizeMax;
-                throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                     SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+                // Check if Record Batch Fits in Cache
+                if (arrowSize > _sizeMax) {
+                    std::ostringstream out;
+                    out << "Size " << arrowSize << " of object "
+                        << _path << "/" << objectName
+                        << " for position " << pos
+                        << " is bigger than cache size " << _sizeMax;
+                    throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                         SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+                }
+
+                // Make Space in Cache
+                while (_size + arrowSize > _sizeMax && !_lru.empty()) {
+                    // Remove Last Recently Used (LRU)
+                    auto rm = _lru.back();
+                    _lru.pop_back();
+                    _size -= _mem[rm].arrowSize;
+                    _mem.erase(rm);
+                    LOG4CXX_DEBUG(logger, "S3CACHE||get delete:" << rm << " size:" << _size);
+                }
+
+                // Add to Cache
+                _lru.push_front(pos);
+                _mem[pos] = S3CacheCell{_lru.begin(), arrowBatch, arrowSize};
+                _size += arrowSize;
+                LOG4CXX_DEBUG(logger, "S3CACHE||get add:" << pos << " size:" << _size);
+
+                return arrowBatch;
             }
+            // Read from Cache
+            else {
+                LOG4CXX_DEBUG(logger, "S3CACHE||get read:" << pos);
 
-            // Make Space in Cache
-            while (_size + arrowSize > _sizeMax && !_lru.empty()) {
-                // Remove Last Recently Used (LRU)
-                _lock.lock();   // LOCK
-                auto rm = _lru.back();
-                _lru.pop_back();
-                _size -= _mem[rm].arrowSize;
-                _mem.erase(rm);
-                _lock.unlock(); // UNLOCK
-                LOG4CXX_DEBUG(logger, "S3CACHE||get delete:" << rm << " size:" << _size);
+                // Read and Move to Front
+                auto &cell = _mem[pos];
+                arrowBatch = cell.arrowBatch;
+                _lru.erase(cell.lruIt);
+                _lru.push_front(pos);
+                _mem[pos].lruIt = _lru.begin(); // Iterator
             }
-
-            // Add to Cache
-            _lock.lock();   // LOCK
-            _lru.push_front(pos);
-            _mem[pos] = S3CacheCell{_lru.begin(), arrowBatch, arrowSize};
-            _size += arrowSize;
-            _lock.unlock(); // UNLOCK
-            LOG4CXX_DEBUG(logger, "S3CACHE||get add:" << pos << " size:" << _size);
 
             return arrowBatch;
-        }
-        // Read from Cache
-        else {
-            LOG4CXX_DEBUG(logger, "S3CACHE||get read:" << pos);
-
-            // Read and Move to Front
-            _lock.lock();           // LOCK
-            auto &cell = _mem[pos];
-            auto res = cell.arrowBatch;
-            _lru.erase(cell.lruIt);
-            _lru.push_front(pos);
-            _mem[pos].lruIt = _lru.begin(); // Iterator
-            _lock.unlock();         // UNLOCK
-
-            return res;
         }
     }
 
