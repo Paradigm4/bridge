@@ -133,7 +133,7 @@ namespace scidb {
         if (arrowBatchNext != NULL) {
             std::ostringstream out;
             out << "More than one Arrow Record Batch found in "
-                << _driver->path() << "/" << name;
+                << _driver->getURL() << "/" << name;
             throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
                                  SCIDB_LE_ILLEGAL_OPERATION) << out.str();
         }
@@ -697,9 +697,7 @@ namespace scidb {
         auto nInst = _query->getInstancesCount();
         SCIDB_ASSERT(nInst > 0 && _query->getInstanceID() < nInst);
 
-        _driver = std::make_shared<S3Driver>(_settings->getBucketName(),
-                                             _settings->getBucketPrefix());
-
+        _driver = std::make_shared<S3Driver>(_settings->getURL());
         std::map<std::string, std::string> metadata;
         _driver->readMetadata(metadata);
 
@@ -717,7 +715,7 @@ namespace scidb {
         auto cacheSize = settings->getCacheSize();
         if (cacheSize > 0)
             _cache = std::make_unique<S3Cache>(_arrowReader,
-                                               _driver->path(),
+                                               _driver->getURL(),
                                                _desc.getDimensions(),
                                                cacheSize);
     }

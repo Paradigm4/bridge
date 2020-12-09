@@ -62,7 +62,7 @@ private:
 
 class S3Driver {
 public:
-    S3Driver(const std::string &bucket, const std::string &prefix);
+    S3Driver(const std::string &url);
     ~S3Driver();
 
     size_t size(const std::string&) const;
@@ -79,11 +79,12 @@ public:
     size_t count(const std::string&) const;
 
     // Return print-friendly path used by driver
-    const std::string& path() const;
+    const std::string& getURL() const;
 
 private:
-    const Aws::String _bucket;
-    const std::string _prefix, _path;
+    const std::string _url;
+    Aws::String _bucket;
+    std::string _prefix;
     const Aws::SDKOptions _sdkOptions;
     std::shared_ptr<Aws::S3::S3Client> _client;
 

@@ -68,11 +68,17 @@ namespace scidb {
     //
     // S3Driver
     //
-    S3Driver::S3Driver(const std::string &bucket, const std::string &prefix):
-        _bucket(bucket.c_str()),
-        _prefix(prefix),
-        _path("s://" + bucket + "/" + prefix)
+    S3Driver::S3Driver(const std::string &url):
+        _url(url)
     {
+        size_t pos = _url.find("/", 5);
+        if (_url.rfind("s3://", 0) != 0 || pos == std::string::npos)
+            throw USER_EXCEPTION(SCIDB_SE_METADATA,
+                                 SCIDB_LE_UNKNOWN_ERROR)
+                << "Invalid S3 URL '" << _url << "'";
+        _bucket = _url.substr(5, pos - 5).c_str();
+        _prefix = _url.substr(pos + 1);
+
         Aws::InitAPI(_sdkOptions);
         _client = std::make_unique<Aws::S3::S3Client>();
     }
@@ -163,9 +169,9 @@ namespace scidb {
         return outcome.GetResult().GetContents().size();
     }
 
-    const std::string& S3Driver::path() const
+    const std::string& S3Driver::getURL() const
     {
-        return _path;
+        return _url;
     }
 
     Aws::S3::Model::GetObjectResult S3Driver::getRequest(const Aws::String &key) const

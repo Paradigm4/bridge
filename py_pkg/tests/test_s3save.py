@@ -1,6 +1,7 @@
 import boto3
 import pandas
 import pytest
+import requests
 import scidbpy
 import scidbs3
 
@@ -27,8 +28,7 @@ def test_one_chunk(scidb_con, s3_con):
     scidb_con.iquery("""
 s3save(
   build({}, i),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     array = scidbs3.S3Array(bucket_name=bucket_name,
                             bucket_prefix=bucket_prefix)
@@ -55,8 +55,7 @@ def test_multi_chunk(scidb_con, s3_con):
     scidb_con.iquery("""
 s3save(
   build({}, i),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     array = scidbs3.S3Array(bucket_name=bucket_name,
                             bucket_prefix=bucket_prefix)
@@ -85,8 +84,7 @@ def test_multi_dim(scidb_con, s3_con):
     scidb_con.iquery("""
 s3save(
   build({}, i),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     array = scidbs3.S3Array(bucket_name=bucket_name,
                             bucket_prefix=bucket_prefix)
@@ -120,8 +118,7 @@ s3save(
   apply(
     build({}, i),
     w, double(v * v)),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(
+  's3://{}/{}')""".format(
       schema.replace(',w:double', ''), bucket_name, bucket_prefix))
 
     array = scidbs3.S3Array(bucket_name=bucket_name,
@@ -156,8 +153,7 @@ s3save(
   filter(
     build({}, i),
     (i < 3 or i > 5) and j > 15),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     array = scidbs3.S3Array(bucket_name=bucket_name,
                             bucket_prefix=bucket_prefix)
@@ -195,8 +191,7 @@ s3save(
   filter(
     build({}, i + j),
     (i >= 5 and i < 10 or i >= 15) and (j < 20 or j >= 30 and j < 40)),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     array = scidbs3.S3Array(bucket_name=bucket_name,
                             bucket_prefix=bucket_prefix)
@@ -231,8 +226,7 @@ def test_one_index(scidb_con, s3_con):
     scidb_con.iquery("""
 s3save(
   build({}, i + j),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     array = scidbs3.S3Array(bucket_name=bucket_name,
                             bucket_prefix=bucket_prefix)
@@ -263,8 +257,7 @@ def test_multi_index(scidb_con, s3_con):
         scidb_con.iquery("""
 s3save(
   build({}, i + j),
-  bucket_name:'{}',
-  bucket_prefix:'{}',
+  's3://{}/{}',
   index_split:{})""".format(schema, bucket_name, bucket_prefix, index_split))
 
         array = scidbs3.S3Array(bucket_name=bucket_name,
@@ -295,8 +288,7 @@ def test_no_compression(scidb_con, s3_con):
     scidb_con.iquery("""
 s3save(
   build({}, i + j),
-  bucket_name:'{}',
-  bucket_prefix:'{}',
+  's3://{}/{}',
   compression:'none')""".format(schema, bucket_name, bucket_prefix))
 
     array = scidbs3.S3Array(bucket_name=bucket_name,
@@ -329,8 +321,7 @@ def test_gzip_compression(scidb_con, s3_con):
     scidb_con.iquery("""
 s3save(
   build({}, i + j),
-  bucket_name:'{}',
-  bucket_prefix:'{}',
+  's3://{}/{}',
   compression:'gzip')""".format(schema, bucket_name, bucket_prefix))
 
     array = scidbs3.S3Array(bucket_name=bucket_name,
@@ -354,3 +345,26 @@ s3save(
     assert sz < 500
 
     delete_prefix(s3_con, prefix)
+
+
+@pytest.mark.parametrize('url', (None,
+                                 '',
+                                 'foo',
+                                 'foo://',
+                                 'foo://bar/taz',
+                                 's3',
+                                 's3:',
+                                 's3:/',
+                                 's3://',
+                                 's3:\\',
+                                 's3:\\\\',
+                                 ))
+def test_bad_url(scidb_con, s3_con, url):
+    prefix = 'one_chunk'
+    schema = '<v:int64> [i=0:9]'
+
+    que = 's3save(build({}, i){})'.format(
+        schema, '' if url is None else ", '{}'".format(url))
+
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(que)

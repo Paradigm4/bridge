@@ -45,8 +45,11 @@ public:
     static PlistSpec const* makePlistSpec()
     {
         static PlistSpec argSpec {
-            { KW_BUCKET_NAME,   RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
-            { KW_BUCKET_PREFIX, RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
+            { "", // positionals
+              RE(RE::STAR, {
+                      RE(PP(PLACEHOLDER_CONSTANT, TID_STRING))
+                  })
+            },
             { KW_FORMAT,        RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
             { KW_CACHE_SIZE,    RE(PP(PLACEHOLDER_CONSTANT, TID_INT64))  }
         };
@@ -58,7 +61,7 @@ public:
         S3InputSettings settings(_parameters, _kwParameters, true, query);
 
         // Get Metadata
-        S3Driver driver(settings.getBucketName(), settings.getBucketPrefix());
+        S3Driver driver(settings.getURL());
         std::map<std::string, std::string> metadata;
         driver.readMetadata(metadata);
         LOG4CXX_DEBUG(logger, "S3INPUT|" << query->getInstanceID() << "|schema: " << metadata["schema"]);

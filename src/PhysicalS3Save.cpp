@@ -536,7 +536,7 @@ public:
             return result;
         }
 
-        S3Driver driver(settings.getBucketName(), settings.getBucketPrefix());
+        S3Driver driver(settings.getURL());
 
         // Coordiantor Creates S3 Metadata Object
         if (query->isCoordinator()) {

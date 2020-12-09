@@ -33,14 +33,12 @@ def test_one_dim_one_attr(scidb_con, s3_con, chunk_size):
     scidb_con.iquery("""
 s3save(
   build({}, i),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     # Input
     array = scidb_con.iquery("""
 s3input(
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
+  's3://{}/{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
@@ -64,17 +62,15 @@ s3save(
       build({}, i),
       w, v * v),
     {}),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema.replace(', w:int64', ''),
-                                schema,
-                                bucket_name,
-                                bucket_prefix))
+  's3://{}/{}')""".format(schema.replace(', w:int64', ''),
+                          schema,
+                          bucket_name,
+                          bucket_prefix))
 
     # Input
     array = scidb_con.iquery("""
 s3input(
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
+  's3://{}/{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
@@ -102,14 +98,12 @@ def test_multi_dim(scidb_con, s3_con, dim_start, dim_end, chunk_size):
     scidb_con.iquery("""
 s3save(
   build({}, i),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     # Input
     array = scidb_con.iquery("""
 s3input(
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
+  's3://{}/{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
 
@@ -176,15 +170,13 @@ def test_type(scidb_con, s3_con, type_name, is_null, type_numpy, chunk_size):
             que = que.redimension(schema)
     else:
         que = scidb_con.build(schema, '{}(i)'.format(type_name))
-    que = que.s3save("bucket_name:'{}'".format(bucket_name),
-                     "bucket_prefix:'{}'".format(bucket_prefix))
+    que = que.s3save("'s3://{}/{}'".format(bucket_name, bucket_prefix))
     res = que.fetch()
 
     # Input
     array = scidb_con.iquery("""
 s3input(
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
+  's3://{}/{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
@@ -228,14 +220,12 @@ def test_filter_before(scidb_con, s3_con, dim_start, dim_end, chunk_size):
     scidb_con.iquery("""
 s3save(
   filter(build({}, i), i % 3 = 0 and i > 7),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     # Input
     array = scidb_con.iquery("""
 s3input(
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
+  's3://{}/{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
 
@@ -272,15 +262,13 @@ def test_filter_after(scidb_con, s3_con, dim_start, dim_end, chunk_size):
     scidb_con.iquery("""
 s3save(
   build({}, i),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     # Input
     array = scidb_con.iquery("""
 filter(
   s3input(
-    bucket_name:'{}',
-    bucket_prefix:'{}'),
+    's3://{}/{}'),
   i % 3 = 0 and i > 7)""".format(bucket_name, bucket_prefix),
                              fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
@@ -312,14 +300,12 @@ def test_nulls(scidb_con, s3_con):
     scidb_con.iquery("""
 s3save(
   build({}, iif(i % 2 = 0, i, missing(i))),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     # Input
     array = scidb_con.iquery("""
 s3input(
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
+  's3://{}/{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
@@ -349,14 +335,12 @@ def test_chunk_index(scidb_con, s3_con):
     scidb_con.iquery("""
 s3save(
   build({}, i),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     # Input
     array = scidb_con.iquery("""
 s3input(
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(bucket_name, bucket_prefix),
+  's3://{}/{}')""".format(bucket_name, bucket_prefix),
                              fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
@@ -384,17 +368,15 @@ s3save(
         w, i * i),
       i % 100 < 80 or i >= 800),
     {}),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema.replace(', w:int64 not null', ''),
-                                schema,
-                                bucket_name,
-                                bucket_prefix))
+  's3://{}/{}')""".format(schema.replace(', w:int64 not null', ''),
+                          schema,
+                          bucket_name,
+                          bucket_prefix))
 
     # Input
     que = """
 s3input(
-  bucket_name:'{}',
-  bucket_prefix:'{}'
+  's3://{}/{}'
   {})""".format(
       bucket_name,
       bucket_prefix,
@@ -426,8 +408,7 @@ def test_arrow_chunk(scidb_con, s3_con):
     scidb_con.iquery("""
 s3save(
   build({}, i),
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(schema, bucket_name, bucket_prefix))
+  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
 
     # Re-write one SciDB Chunk file to use multiple Arrow Chunks
     bucket_file = '{}/c_0'.format(bucket_prefix)
@@ -446,8 +427,7 @@ s3save(
     # Input
     que = """
 s3input(
-  bucket_name:'{}',
-  bucket_prefix:'{}')""".format(
+  's3://{}/{}')""".format(
       bucket_name,
       bucket_prefix)
 

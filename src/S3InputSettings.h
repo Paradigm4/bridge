@@ -51,8 +51,6 @@ static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3i
 namespace scidb
 {
 
-static const char* const KW_BUCKET_NAME   = "bucket_name";
-static const char* const KW_BUCKET_PREFIX = "bucket_prefix";
 static const char* const KW_FORMAT	  = "format";
 static const char* const KW_CACHE_SIZE	  = "cache_size";
 
@@ -78,8 +76,7 @@ private:
         ARROW  = 0
     };
 
-    std::string			_bucketName;
-    std::string			_bucketPrefix;
+    std::string			_url;
     FormatType                  _format;
     size_t                      _cacheSize;
 
@@ -91,24 +88,6 @@ private:
             error << "illegal attempt to set " << kw << " multiple times";
             throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << error.str().c_str();
         }
-    }
-
-    void setParamBucketName(std::vector<std::string> bucketName)
-    {
-        if (_bucketName != "") {
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal attempt to set bucket name multiple times";
-        }
-
-        _bucketName = bucketName[0];
-    }
-
-    void setParamBucketPrefix(std::vector<std::string> bucketPrefix)
-    {
-        if (_bucketPrefix != "") {
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal attempt to set object path multiple times";
-        }
-
-        _bucketPrefix = bucketPrefix[0];
     }
 
     void setParamFormat(std::vector<std::string> format)
@@ -229,40 +208,29 @@ public:
                    KeywordParameters const& kwParams,
                    bool logical,
                    std::shared_ptr<Query>& query):
-                _bucketName(""),
-                _bucketPrefix(""),
                 _format(ARROW),
                 _cacheSize(CACHE_SIZE_DEFAULT)
     {
-        setKeywordParamString(kwParams, KW_BUCKET_NAME,   &S3InputSettings::setParamBucketName);
-        setKeywordParamString(kwParams, KW_BUCKET_PREFIX, &S3InputSettings::setParamBucketPrefix);
+        if (operatorParameters.size() != 1)
+            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal number of parameters passed to s3input";
+        std::shared_ptr<OperatorParam>const& param = operatorParameters[0];
+        if (logical)
+            _url = evaluate(((std::shared_ptr<OperatorParamLogicalExpression>&) param)->getExpression(), TID_STRING).getString();
+        else
+            _url = ((std::shared_ptr<OperatorParamPhysicalExpression>&) param)->getExpression()->evaluate().getString();
+
         setKeywordParamString(kwParams, KW_FORMAT,        &S3InputSettings::setParamFormat);
         setKeywordParamInt64( kwParams, KW_CACHE_SIZE,    &S3InputSettings::setParamCacheSize);
+    }
 
-        if(_bucketName.size() == 0)
-        {
-          throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_NAME << " was not provided, or failed to parse";
-        }
-
-        if(_bucketPrefix.size() == 0)
-        {
-          throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << KW_BUCKET_PREFIX << " was not provided, or failed to parse";
-        }
+    const std::string& getURL() const
+    {
+        return _url;
     }
 
     bool isArrowFormat() const
     {
         return _format == ARROW;
-    }
-
-    std::string const& getBucketName() const
-    {
-        return _bucketName;
-    }
-
-    std::string const& getBucketPrefix() const
-    {
-        return _bucketPrefix;
     }
 
     size_t getCacheSize() const
