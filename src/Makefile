@@ -63,13 +63,13 @@ all: libs3bridge.so
 
 plugin.o:
 
-LogicalS3Input.o: S3Common.h S3InputSettings.h
-PhysicalS3Input.o: S3InputSettings.h S3Array.h S3Index.h
+LogicalS3Input.o: S3InputSettings.h S3Driver.h
+PhysicalS3Input.o: S3InputSettings.h S3Array.h S3Common.h S3Index.h
 
-LogicalS3Save.o:  S3Common.h S3SaveSettings.h
-PhysicalS3Save.o: S3Common.h S3SaveSettings.h S3Index.h
+LogicalS3Save.o:  S3SaveSettings.h S3Common.h
+PhysicalS3Save.o: S3Common.h S3SaveSettings.h S3Common.h S3Driver.h S3Index.h
 
-S3Array.o: S3Array.h S3Index.h  S3Common.h S3InputSettings.h S3Driver.h
+S3Array.o: S3Array.h S3Index.h  S3Common.h S3InputSettings.h S3Driver.h S3Common.h
 S3Index.o: S3Index.h
 S3Driver.o: S3Driver.h
 
