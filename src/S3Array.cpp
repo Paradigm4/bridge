@@ -66,7 +66,7 @@ namespace scidb {
     //
     S3ArrowReader::S3ArrowReader(
         S3Metadata::Compression compression,
-        std::shared_ptr<const S3Driver> driver):
+        std::shared_ptr<const Driver> driver):
         _compression(compression),
         _driver(driver)
     {
@@ -86,7 +86,7 @@ namespace scidb {
         auto chunk = _driver->readArrow(name);
 
         // Get Chunk Size
-        size_t arrowSize = chunk.size();
+        size_t arrowSize = chunk->size();
         if (arrowSize > CHUNK_MAX_SIZE) {
             std::ostringstream out;
             out << "Object size " << arrowSize
@@ -106,7 +106,7 @@ namespace scidb {
             THROW_NOT_OK(arrow::AllocateBuffer(arrowSize, &arrowBuffer));
 
         // Download Chunk
-        chunk.read(arrowBuffer, arrowSize);
+        chunk->read(arrowBuffer, arrowSize);
 
         _arrowBufferReader = std::make_shared<arrow::io::BufferReader>(
             arrowBuffer);

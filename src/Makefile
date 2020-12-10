@@ -63,15 +63,15 @@ all: libs3bridge.so
 
 plugin.o:
 
-LogicalS3Input.o: S3InputSettings.h S3Driver.h
+LogicalS3Input.o: S3InputSettings.h S3Driver.h Driver.h
 PhysicalS3Input.o: S3InputSettings.h S3Array.h S3Common.h S3Index.h
 
 LogicalS3Save.o:  S3SaveSettings.h S3Common.h
-PhysicalS3Save.o: S3Common.h S3SaveSettings.h S3Common.h S3Driver.h S3Index.h
+PhysicalS3Save.o: S3Common.h S3SaveSettings.h S3Common.h S3Driver.h Driver.h S3Index.h
 
-S3Array.o: S3Array.h S3Index.h  S3Common.h S3InputSettings.h S3Driver.h S3Common.h
+S3Array.o: S3Array.h S3Index.h  S3Common.h S3InputSettings.h S3Driver.h Driver.h S3Common.h
 S3Index.o: S3Index.h
-S3Driver.o: S3Driver.h
+S3Driver.o: S3Driver.h Driver.h
 
 libs3bridge.so: $(OBJS)
 	@if test ! -d "$(SCIDB)"; then echo  "Error. Try:\n\nmake SCIDB=<PATH TO SCIDB INSTALL PATH>"; exit 1; fi

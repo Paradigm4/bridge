@@ -61,9 +61,10 @@ public:
         S3InputSettings settings(_parameters, _kwParameters, true, query);
 
         // Get Metadata
-        S3Driver driver(settings.getURL());
+        std::unique_ptr<Driver> driver = std::make_unique<S3Driver>(
+            settings.getURL());
         std::map<std::string, std::string> metadata;
-        driver.readMetadata(metadata);
+        driver->readMetadata(metadata);
         LOG4CXX_DEBUG(logger, "S3INPUT|" << query->getInstanceID() << "|schema: " << metadata["schema"]);
 
         // Build Fake Query and Extract Schema

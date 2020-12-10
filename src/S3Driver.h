@@ -26,7 +26,7 @@
 #ifndef S3_DRIVER_H_
 #define S3_DRIVER_H_
 
-#include <istream>
+#include "Driver.h"
 
 #include <aws/core/Aws.h>
 #include <aws/s3/model/GetObjectResult.h>
@@ -47,7 +47,7 @@ namespace Aws {
 
 namespace scidb
 {
-class S3DriverChunk {
+class S3DriverChunk: public DriverChunk {
 public:
     S3DriverChunk(Aws::S3::Model::GetObjectResult&&);
 
@@ -60,14 +60,12 @@ private:
     Aws::S3::Model::GetObjectResult _result;
 };
 
-class S3Driver {
+class S3Driver: public Driver {
 public:
     S3Driver(const std::string &url);
     ~S3Driver();
 
-    size_t size(const std::string&) const;
-
-    S3DriverChunk readArrow(const std::string&) const;
+    std::unique_ptr<DriverChunk> readArrow(const std::string&) const;
     void writeArrow(const std::string&,
                     std::shared_ptr<const arrow::Buffer>) const;
 

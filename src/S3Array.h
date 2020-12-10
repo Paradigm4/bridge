@@ -38,7 +38,7 @@
 // compilation
 namespace scidb {
     class S3InputSettings;       // #include "S3InputSettings.h"
-    class S3Driver;              // #include "S3Driver.h"
+    class Driver;                // #include "Driver.h"
 }
 namespace arrow {
     class Array;
@@ -62,7 +62,7 @@ namespace scidb
 class S3ArrowReader {
 public:
     S3ArrowReader(S3Metadata::Compression,
-                  std::shared_ptr<const S3Driver>);
+                  std::shared_ptr<const Driver>);
 
     size_t readObject(const std::string &name,
                       bool reuse,
@@ -71,7 +71,7 @@ public:
 private:
     const S3Metadata::Compression _compression;
 
-    std::shared_ptr<const S3Driver> _driver;
+    std::shared_ptr<const Driver> _driver;
 
     std::shared_ptr<arrow::ResizableBuffer> _arrowResizableBuffer;
     std::shared_ptr<arrow::io::BufferReader> _arrowBufferReader;
@@ -245,7 +245,7 @@ private:
     const std::shared_ptr<const S3InputSettings> _settings;
 
     // S3Bridge members
-    std::shared_ptr<const S3Driver> _driver;
+    std::shared_ptr<const Driver> _driver;
     std::shared_ptr<S3ArrowReader> _arrowReader;
     S3Index _index;
     std::unique_ptr<S3Cache> _cache;

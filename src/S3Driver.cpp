@@ -88,11 +88,12 @@ namespace scidb {
         Aws::ShutdownAPI(_sdkOptions);
     }
 
-    S3DriverChunk S3Driver::readArrow(const std::string &suffix) const
+    std::unique_ptr<DriverChunk> S3Driver::readArrow(
+        const std::string &suffix) const
     {
         Aws::String key((_prefix + "/" + suffix).c_str());
 
-        return S3DriverChunk(getRequest(key));
+        return std::make_unique<S3DriverChunk>(getRequest(key));
     }
 
     void S3Driver::writeArrow(const std::string &suffix,

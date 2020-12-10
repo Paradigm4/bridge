@@ -536,7 +536,8 @@ public:
             return result;
         }
 
-        S3Driver driver(settings.getURL());
+        std::unique_ptr<Driver> driver = std::make_unique<S3Driver>(
+            settings.getURL());
 
         // Coordiantor Creates S3 Metadata Object
         if (query->isCoordinator()) {
@@ -551,7 +552,7 @@ public:
             metadata["compression"] = S3Metadata::compression2String(compression);
 
             // Write Metadata
-            driver.writeMetadata(metadata);
+            driver->writeMetadata(metadata);
         }
 
         const Dimensions &dims = inputSchema.getDimensions();
@@ -589,7 +590,7 @@ public:
                         dataWriter.writeArrowBuffer(inputChunkIters, arrowBuffer));
 
                     // Write Chunk
-                    driver.writeArrow(coord2ObjectName(pos, dims), arrowBuffer);
+                    driver->writeArrow(coord2ObjectName(pos, dims), arrowBuffer);
                 }
 
                 // Advance Array Iterators
@@ -635,7 +636,7 @@ public:
                 // Write Chunk Coordinate List
                 std::ostringstream out;
                 out << "index/" << split;
-                driver.writeArrow(out.str(), arrowBuffer);
+                driver->writeArrow(out.str(), arrowBuffer);
 
                 // Advance to Next Index Split
                 splitPtr += std::min<size_t>(
