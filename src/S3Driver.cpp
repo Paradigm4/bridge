@@ -38,7 +38,7 @@
 #include <aws/s3/model/PutObjectRequest.h>
 
 
-#define RETRY_COUNT 10
+#define RETRY_COUNT 5
 #define RETRY_SLEEP 1000        // milliseconds
 
 #define S3_EXCEPTION_NOT_SUCCESS(operation)                             \
@@ -63,7 +63,7 @@
 
 
 namespace scidb {
-    static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3sriver"));
+    static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3driver"));
 
     //
     // S3Driver
@@ -71,12 +71,13 @@ namespace scidb {
     S3Driver::S3Driver(const std::string &url):
         _url(url)
     {
-        size_t pos = _url.find("/", 5);
+        const size_t prefix_len = 5; // "s3://"
+        size_t pos = _url.find("/", prefix_len);
         if (_url.rfind("s3://", 0) != 0 || pos == std::string::npos)
             throw USER_EXCEPTION(SCIDB_SE_METADATA,
                                  SCIDB_LE_UNKNOWN_ERROR)
                 << "Invalid S3 URL '" << _url << "'";
-        _bucket = _url.substr(5, pos - 5).c_str();
+        _bucket = _url.substr(prefix_len, pos - prefix_len).c_str();
         _prefix = _url.substr(pos + 1);
 
         Aws::InitAPI(_sdkOptions);
@@ -237,7 +238,7 @@ namespace scidb {
         _result(std::move(result))
     {}
 
-    size_t S3DriverChunk::size() const
+    size_t S3DriverChunk::size()
     {
         return static_cast<unsigned long long>(_result.GetContentLength());
     }

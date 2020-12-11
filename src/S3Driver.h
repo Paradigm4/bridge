@@ -51,7 +51,7 @@ class S3DriverChunk: public DriverChunk {
 public:
     S3DriverChunk(Aws::S3::Model::GetObjectResult&&);
 
-    size_t size() const;
+    size_t size();
 
     void read(std::shared_ptr<arrow::Buffer>,
               const size_t length);

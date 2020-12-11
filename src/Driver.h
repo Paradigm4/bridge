@@ -44,7 +44,7 @@ class DriverChunk {
 public:
     virtual ~DriverChunk() = 0;
 
-    virtual size_t size() const = 0;
+    virtual size_t size() = 0;
 
     virtual void read(std::shared_ptr<arrow::Buffer>,
                       const size_t length) = 0;
