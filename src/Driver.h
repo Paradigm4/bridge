@@ -28,33 +28,46 @@
 
 #include <map>
 #include <memory>
+#include <sstream>
+
+// SciDB
+#include <system/UserException.h>
+
+// Arrow
+#include <arrow/buffer.h>
 
 
-// Forward Declarastions to avoid including full headers - speed-up
-// compilation
-namespace arrow {
-    class Buffer;               // #include <arrow/buffer.h>
-}
-// -- End of Forward Declarations
+#define CHUNK_MAX_SIZE 2147483648
+
+// TODO use __builtin_expect
+#define THROW_NOT_OK(status)                                            \
+    {                                                                   \
+        arrow::Status _status = (status);                               \
+        if (!_status.ok())                                              \
+        {                                                               \
+            throw USER_EXCEPTION(                                       \
+                SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)      \
+                    << _status.ToString().c_str();                      \
+        }                                                               \
+    }
 
 
 namespace scidb
 {
-class DriverChunk {
-public:
-    virtual ~DriverChunk() = 0;
-
-    virtual size_t size() = 0;
-
-    virtual void read(std::shared_ptr<arrow::Buffer>,
-                      const size_t length) = 0;
-};
-
 class Driver {
 public:
     virtual ~Driver() = 0;
 
-    virtual std::unique_ptr<DriverChunk> readArrow(const std::string&) const = 0;
+    inline size_t readArrow(const std::string &suffix,
+                            std::shared_ptr<arrow::Buffer> &buffer) const {
+        return _readArrow(suffix, buffer, false);
+    }
+    inline size_t readArrow(const std::string &suffix,
+                            std::shared_ptr<arrow::ResizableBuffer> buffer) const {
+        auto buf = std::static_pointer_cast<arrow::Buffer>(buffer);
+        return _readArrow(suffix, buf, true);
+    }
+
     virtual void writeArrow(const std::string&,
                             std::shared_ptr<const arrow::Buffer>) const = 0;
 
@@ -67,11 +80,36 @@ public:
 
     // Return print-friendly path used by driver
     virtual const std::string& getURL() const = 0;
+
+private:
+    virtual size_t _readArrow(const std::string&,
+                              std::shared_ptr<arrow::Buffer>&,
+                              bool reuse) const = 0;
+
+protected:
+    inline void _setBuffer(const std::string &suffix,
+                           std::shared_ptr<arrow::Buffer> &buffer,
+                           bool reuse,
+                           size_t length) const {
+        if (length > CHUNK_MAX_SIZE) {
+            std::ostringstream out;
+            out << "Object " << getURL() << "/" << suffix
+                << " size " << length
+                << " exeeds max allowed " << CHUNK_MAX_SIZE;
+            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                 SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+        }
+        if (reuse) {
+            THROW_NOT_OK(std::static_pointer_cast<arrow::ResizableBuffer>(
+                             buffer)->Resize(length, false));
+        }
+        else {
+            THROW_NOT_OK(arrow::AllocateBuffer(length, &buffer));
+        }
+    }
 };
 
-inline DriverChunk::~DriverChunk() {}
 inline Driver::~Driver() {}
-
 }
 
 #endif

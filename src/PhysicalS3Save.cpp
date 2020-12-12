@@ -26,10 +26,12 @@
 #include <chrono>
 #include <thread>
 
+// SciDB
 #include <array/TileIteratorAdaptors.h>
 #include <network/Network.h>
 #include <query/PhysicalOperator.h>
 
+// Arrow
 #include <arrow/builder.h>
 #include <arrow/io/compressed.h>
 #include <arrow/io/memory.h>
@@ -41,17 +43,6 @@
 #include "S3Driver.h"
 #include "S3SaveSettings.h"
 #include "S3Index.h"
-
-#define THROW_NOT_OK(s)                                                 \
-    {                                                                   \
-        arrow::Status _s = (s);                                         \
-        if (!_s.ok())                                                   \
-        {                                                               \
-            throw USER_EXCEPTION(                                       \
-                SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)      \
-                    << _s.ToString().c_str();                           \
-        }                                                               \
-    }
 
 
 namespace scidb

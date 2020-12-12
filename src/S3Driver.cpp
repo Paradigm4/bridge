@@ -25,11 +25,7 @@
 
 #include "S3Driver.h"
 
-#include <system/UserException.h>
-
 #include <log4cxx/logger.h>
-
-#include <arrow/buffer.h>
 
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/GetObjectRequest.h>
@@ -42,24 +38,24 @@
 #define RETRY_SLEEP 1000        // milliseconds
 
 #define S3_EXCEPTION_NOT_SUCCESS(operation)                             \
-  {                                                                     \
-      if (!outcome.IsSuccess()) {                                       \
-          std::ostringstream exceptionOutput;                           \
-          exceptionOutput                                               \
-              << (operation) << " operation on s3://"                   \
-              << _bucket << "/" << key << " failed. ";                   \
-          auto error = outcome.GetError();                              \
-          exceptionOutput << error.GetMessage();                        \
-          if (error.GetResponseCode() ==                                \
-              Aws::Http::HttpResponseCode::FORBIDDEN)                   \
-              exceptionOutput                                           \
-                  << "See https://aws.amazon.com/premiumsupport/"       \
-                  << "knowledge-center/s3-troubleshoot-403/";           \
-          throw USER_EXCEPTION(                                         \
-              SCIDB_SE_NETWORK,                                         \
-              SCIDB_LE_UNKNOWN_ERROR) << exceptionOutput.str();         \
-      }                                                                 \
-  }
+    {                                                                   \
+        if (!outcome.IsSuccess()) {                                     \
+            std::ostringstream exceptionOutput;                         \
+            exceptionOutput                                             \
+            << (operation) << " operation on s3://"                     \
+            << _bucket << "/" << key << " failed. ";                    \
+            auto error = outcome.GetError();                            \
+            exceptionOutput << error.GetMessage();                      \
+            if (error.GetResponseCode() ==                              \
+                Aws::Http::HttpResponseCode::FORBIDDEN)                 \
+                exceptionOutput                                         \
+                    << "See https://aws.amazon.com/premiumsupport/"     \
+                    << "knowledge-center/s3-troubleshoot-403/";         \
+            throw USER_EXCEPTION(                                       \
+                SCIDB_SE_NETWORK,                                       \
+                SCIDB_LE_UNKNOWN_ERROR) << exceptionOutput.str();       \
+        }                                                               \
+    }
 
 
 namespace scidb {
@@ -76,7 +72,7 @@ namespace scidb {
         if (_url.rfind("s3://", 0) != 0 || pos == std::string::npos)
             throw USER_EXCEPTION(SCIDB_SE_METADATA,
                                  SCIDB_LE_UNKNOWN_ERROR)
-                << "Invalid S3 URL '" << _url << "'";
+                << "Invalid S3 URL " << _url;
         _bucket = _url.substr(prefix_len, pos - prefix_len).c_str();
         _prefix = _url.substr(pos + 1);
 
@@ -89,12 +85,21 @@ namespace scidb {
         Aws::ShutdownAPI(_sdkOptions);
     }
 
-    std::unique_ptr<DriverChunk> S3Driver::readArrow(
-        const std::string &suffix) const
+    size_t S3Driver::_readArrow(const std::string &suffix,
+                                std::shared_ptr<arrow::Buffer> &buffer,
+                                bool reuse) const
     {
         Aws::String key((_prefix + "/" + suffix).c_str());
 
-        return std::make_unique<S3DriverChunk>(getRequest(key));
+        auto&& result = _getRequest(key);
+
+        auto length = result.GetContentLength();
+        _setBuffer(suffix, buffer, reuse, length);
+
+        auto& body = result.GetBody();
+        body.read(reinterpret_cast<char*>(buffer->mutable_data()), length);
+
+        return length;
     }
 
     void S3Driver::writeArrow(const std::string &suffix,
@@ -107,7 +112,7 @@ namespace scidb {
         data->write(reinterpret_cast<const char*>(buffer->data()),
                     buffer->size());
 
-        putRequest(key, data);
+        _putRequest(key, data);
     }
 
     void S3Driver::readMetadata(std::map<std::string,
@@ -115,7 +120,7 @@ namespace scidb {
     {
         Aws::String key((_prefix + "/metadata").c_str());
 
-        auto&& result = getRequest(key);
+        auto&& result = _getRequest(key);
         auto& body = result.GetBody();
         std::string line;
         while (std::getline(body, line)) {
@@ -140,7 +145,7 @@ namespace scidb {
         for (auto i = metadata.begin(); i != metadata.end(); ++i)
             *data << i->first << "\t" << i->second << "\n";
 
-        putRequest(key, data);
+        _putRequest(key, data);
     }
 
     size_t S3Driver::count(const std::string& suffix) const
@@ -176,7 +181,7 @@ namespace scidb {
         return _url;
     }
 
-    Aws::S3::Model::GetObjectResult S3Driver::getRequest(const Aws::String &key) const
+    Aws::S3::Model::GetObjectResult S3Driver::_getRequest(const Aws::String &key) const
     {
         Aws::S3::Model::GetObjectRequest request;
         request.SetBucket(_bucket);
@@ -203,7 +208,7 @@ namespace scidb {
         return outcome.GetResultWithOwnership();
     }
 
-    void S3Driver::putRequest(const Aws::String &key,
+    void S3Driver::_putRequest(const Aws::String &key,
                               std::shared_ptr<Aws::IOStream> data) const
     {
         Aws::S3::Model::PutObjectRequest request;
@@ -229,25 +234,5 @@ namespace scidb {
         }
 
         S3_EXCEPTION_NOT_SUCCESS("Put");
-    }
-
-    //
-    // S3DriverChunk
-    //
-    S3DriverChunk::S3DriverChunk(Aws::S3::Model::GetObjectResult &&result):
-        _result(std::move(result))
-    {}
-
-    size_t S3DriverChunk::size()
-    {
-        return static_cast<unsigned long long>(_result.GetContentLength());
-    }
-
-    void S3DriverChunk::read(std::shared_ptr<arrow::Buffer> buffer,
-                             const size_t length)
-    {
-        auto& body = _result.GetBody();
-        body.read(reinterpret_cast<char*>(buffer->mutable_data()),
-                  length);
     }
 }

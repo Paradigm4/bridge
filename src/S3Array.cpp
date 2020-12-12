@@ -39,14 +39,14 @@
 
 
 // TODO use __builtin_expect
-#define THROW_NOT_OK(s)                                                 \
+#define THROW_NOT_OK(status)                                            \
     {                                                                   \
-        arrow::Status _s = (s);                                         \
-        if (!_s.ok())                                                   \
+        arrow::Status _status = (status);                               \
+        if (!_status.ok())                                              \
         {                                                               \
             throw USER_EXCEPTION(                                       \
                 SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)      \
-                    << _s.ToString().c_str();                           \
+                    << _status.ToString().c_str();                      \
         }                                                               \
     }
 
@@ -82,34 +82,23 @@ namespace scidb {
         bool reuse,
         std::shared_ptr<arrow::RecordBatch> &arrowBatch)
     {
-        // Initiate Chunk Read
-        auto chunk = _driver->readArrow(name);
-
-        // Get Chunk Size
-        size_t arrowSize = chunk->size();
-        if (arrowSize > CHUNK_MAX_SIZE) {
-            std::ostringstream out;
-            out << "Object size " << arrowSize
-                << " too large. Max size is " << CHUNK_MAX_SIZE;
-            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                 SCIDB_LE_ILLEGAL_OPERATION) << out.str();
-        }
-
-        // Reuse an Arrow ResizableBuffer
-        std::shared_ptr<arrow::Buffer> arrowBuffer;
-        if (reuse) {
-            THROW_NOT_OK(_arrowResizableBuffer->Resize(arrowSize, false));
-            arrowBuffer = _arrowResizableBuffer;
-        }
-        // Use a new Arrow Buffer
-        else
-            THROW_NOT_OK(arrow::AllocateBuffer(arrowSize, &arrowBuffer));
-
         // Download Chunk
-        chunk->read(arrowBuffer, arrowSize);
+        size_t arrowSize;
+        if (reuse) {
+            // Reuse an Arrow ResizableBuffer
+            arrowSize = _driver->readArrow(name, _arrowResizableBuffer);
 
-        _arrowBufferReader = std::make_shared<arrow::io::BufferReader>(
-            arrowBuffer);
+            _arrowBufferReader = std::make_shared<arrow::io::BufferReader>(
+                _arrowResizableBuffer);
+        }
+        else {
+            // Get a new Arrow Buffer
+            std::shared_ptr<arrow::Buffer> arrowBuffer;
+            arrowSize = _driver->readArrow(name, arrowBuffer);
+
+            _arrowBufferReader = std::make_shared<arrow::io::BufferReader>(
+                arrowBuffer);
+        }
 
         // Setup Arrow Compression, If Enabled
         if (_compression != S3Metadata::Compression::NONE) {

@@ -31,7 +31,6 @@
 #include <system/ErrorCodes.h>
 
 #define S3BRIDGE_VERSION 1
-#define CHUNK_MAX_SIZE 2147483648
 #define INDEX_SPLIT_MIN 100
 #define INDEX_SPLIT_DEFAULT 100000  // Number of Coordinates =
                                     // (Number-of-Chunks *

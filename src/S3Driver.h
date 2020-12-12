@@ -34,9 +34,6 @@
 
 // Forward Declarastions to avoid including full headers - speed-up
 // compilation
-namespace arrow {
-    class Buffer;               // #include <arrow/buffer.h>
-}
 namespace Aws {
     namespace S3 {
         class S3Client;         // #include <aws/s3/S3Client.h>
@@ -47,31 +44,17 @@ namespace Aws {
 
 namespace scidb
 {
-class S3DriverChunk: public DriverChunk {
-public:
-    S3DriverChunk(Aws::S3::Model::GetObjectResult&&);
-
-    size_t size();
-
-    void read(std::shared_ptr<arrow::Buffer>,
-              const size_t length);
-
-private:
-    Aws::S3::Model::GetObjectResult _result;
-};
 
 class S3Driver: public Driver {
 public:
     S3Driver(const std::string &url);
     ~S3Driver();
 
-    std::unique_ptr<DriverChunk> readArrow(const std::string&) const;
     void writeArrow(const std::string&,
                     std::shared_ptr<const arrow::Buffer>) const;
 
     void readMetadata(std::map<std::string, std::string>&) const;
-    void writeMetadata(const std::map<std::string,
-                                      std::string>&) const;
+    void writeMetadata(const std::map<std::string, std::string>&) const;
 
     // Count number of objects with specified prefix
     size_t count(const std::string&) const;
@@ -86,8 +69,10 @@ private:
     const Aws::SDKOptions _sdkOptions;
     std::shared_ptr<Aws::S3::S3Client> _client;
 
-    Aws::S3::Model::GetObjectResult getRequest(const Aws::String&) const;
-    void putRequest(const Aws::String&, std::shared_ptr<Aws::IOStream>) const;
+    size_t _readArrow(const std::string&, std::shared_ptr<arrow::Buffer>&, bool) const;
+
+    Aws::S3::Model::GetObjectResult _getRequest(const Aws::String&) const;
+    void _putRequest(const Aws::String&, std::shared_ptr<Aws::IOStream>) const;
 };
 
 }
