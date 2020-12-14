@@ -1,5 +1,5 @@
-SciDB-S3: Python Library for interacting wtih SciDB data in S3
-==============================================================
+SciDB-Bridge: Python Library to access externally stored SciDB data
+===================================================================
 
 .. image:: https://img.shields.io/badge/SciDB-19.11-blue.svg
     :target: https://forum.paradigm4.com/t/scidb-release-19-11/2411
@@ -15,7 +15,7 @@ Requirements
 - SciDB ``19.11`` or newer
 - SciDB-Py ``19.11.2`` or newer
 - Apache PyArrow ``0.16.0``
-- Boto3 ``1.14.16``
+- Boto3 ``1.14.16`` for Amazon Simple Storage Service (S3) support
 
 
 Installation
@@ -23,8 +23,8 @@ Installation
 
 Install latest release::
 
-  pip install scidb-s3
+  pip install scidb-bridge
 
 Install development version from GitHub::
 
-  pip install git+http://github.com/paradigm4/s3bridge.git#subdirectory=py_pkg
+  pip install git+http://github.com/paradigm4/bridge.git#subdirectory=py_pkg

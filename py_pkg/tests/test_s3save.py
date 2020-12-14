@@ -1,39 +1,26 @@
-import boto3
+import itertools
+import os.path
 import pandas
 import pytest
 import requests
-import scidbpy
-import scidbs3
+import scidbbridge
 
 from common import *
 
 
-@pytest.fixture
-def scidb_con():
-    return scidbpy.connect()
-
-
-@pytest.fixture
-def s3_con():
-    con = boto3.client('s3')
-    yield con
-    delete_prefix(con, '')
-
-
-def test_one_chunk(scidb_con, s3_con):
-    prefix = 'one_chunk'
+@pytest.mark.parametrize('url', test_urls)
+def test_one_chunk(scidb_con, url):
+    url = '{}/one_chunk'.format(url)
     schema = '<v:int64> [i=0:9]'
 
-    bucket_prefix = '/'.join((base_prefix, prefix))
     scidb_con.iquery("""
 s3save(
   build({}, i),
-  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
+  '{}')""".format(schema, url))
 
-    array = scidbs3.S3Array(bucket_name=bucket_name,
-                            bucket_prefix=bucket_prefix)
+    array = scidbbridge.Array(url)
 
-    assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
+    assert array.__str__() == url
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(
                                   schema.replace(']', ':0:1000000]'))}}
@@ -44,23 +31,20 @@ s3save(
         array.get_chunk(0).to_pandas(),
         pandas.DataFrame(data={'v': range(10), 'i': range(10)}))
 
-    delete_prefix(s3_con, prefix)
 
-
-def test_multi_chunk(scidb_con, s3_con):
-    prefix = 'multi_chunk'
+@pytest.mark.parametrize('url', test_urls)
+def test_multi_chunk(scidb_con, url):
+    url = '{}/multi_chunk'.format(url)
     schema = '<v:int64> [i=0:19:0:5]'
 
-    bucket_prefix = '/'.join((base_prefix, prefix))
     scidb_con.iquery("""
 s3save(
   build({}, i),
-  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
+  '{}')""".format(schema, url))
 
-    array = scidbs3.S3Array(bucket_name=bucket_name,
-                            bucket_prefix=bucket_prefix)
+    array = scidbbridge.Array(url)
 
-    assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
+    assert array.__str__() == url
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
@@ -73,23 +57,20 @@ s3save(
         array.get_chunk(10).to_pandas(),
         pandas.DataFrame(data={'v': range(10, 15), 'i': range(10, 15)}))
 
-    delete_prefix(s3_con, prefix)
 
-
-def test_multi_dim(scidb_con, s3_con):
-    prefix = 'multi_dim'
+@pytest.mark.parametrize('url', test_urls)
+def test_multi_dim(scidb_con, url):
+    url = '{}/multi_dim'.format(url)
     schema = '<v:int64> [i=0:9:0:5; j=10:19:0:5]'
 
-    bucket_prefix = '/'.join((base_prefix, prefix))
     scidb_con.iquery("""
 s3save(
   build({}, i),
-  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
+  '{}')""".format(schema, url))
 
-    array = scidbs3.S3Array(bucket_name=bucket_name,
-                            bucket_prefix=bucket_prefix)
+    array = scidbbridge.Array(url)
 
-    assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
+    assert array.__str__() == url
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
@@ -105,26 +86,23 @@ s3save(
                                for j in range(10, 15)),
                          columns=('v', 'i', 'j')))
 
-    delete_prefix(s3_con, prefix)
 
-
-def test_multi_atts(scidb_con, s3_con):
-    prefix = 'multi_attr'
+@pytest.mark.parametrize('url', test_urls)
+def test_multi_atts(scidb_con, url):
+    url = '{}/multi_attr'.format(url)
     schema = '<v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]'
 
-    bucket_prefix = '/'.join((base_prefix, prefix))
     scidb_con.iquery("""
 s3save(
   apply(
     build({}, i),
     w, double(v * v)),
-  's3://{}/{}')""".format(
-      schema.replace(',w:double', ''), bucket_name, bucket_prefix))
+  '{}')""".format(
+      schema.replace(',w:double', ''), url))
 
-    array = scidbs3.S3Array(bucket_name=bucket_name,
-                            bucket_prefix=bucket_prefix)
+    array = scidbbridge.Array(url)
 
-    assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
+    assert array.__str__() == url
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
@@ -140,25 +118,22 @@ s3save(
                                for j in range(10, 15)),
                          columns=('v', 'w', 'i', 'j')))
 
-    delete_prefix(s3_con, prefix)
 
-
-def test_filter(scidb_con, s3_con):
-    prefix = 'filter'
+@pytest.mark.parametrize('url', test_urls)
+def test_filter(scidb_con, url):
+    url = '{}/filter'.format(url)
     schema = '<v:int64> [i=0:9:0:5; j=10:19:0:5]'
 
-    bucket_prefix = '/'.join((base_prefix, prefix))
     scidb_con.iquery("""
 s3save(
   filter(
     build({}, i),
     (i < 3 or i > 5) and j > 15),
-  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
+  '{}')""".format(schema, url))
 
-    array = scidbs3.S3Array(bucket_name=bucket_name,
-                            bucket_prefix=bucket_prefix)
+    array = scidbbridge.Array(url)
 
-    assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
+    assert array.__str__() == url
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
@@ -178,25 +153,22 @@ s3save(
                                for j in range(16, 20)),
                          columns=('v', 'i', 'j')))
 
-    delete_prefix(s3_con, prefix)
 
-
-def test_empty_chunks(scidb_con, s3_con):
-    prefix = 'empty_chunks'
+@pytest.mark.parametrize('url', test_urls)
+def test_empty_chunks(scidb_con, url):
+    url = '{}/empty_chunks'.format(url)
     schema = '<v:int64> [i=0:19:0:5; j=10:49:0:10]'
 
-    bucket_prefix = '/'.join((base_prefix, prefix))
     scidb_con.iquery("""
 s3save(
   filter(
     build({}, i + j),
     (i >= 5 and i < 10 or i >= 15) and (j < 20 or j >= 30 and j < 40)),
-  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
+  '{}')""".format(schema, url))
 
-    array = scidbs3.S3Array(bucket_name=bucket_name,
-                            bucket_prefix=bucket_prefix)
+    array = scidbbridge.Array(url)
 
-    assert array.__str__() == 's3://{}/{}'.format(bucket_name, bucket_prefix)
+    assert array.__str__() == url
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
@@ -215,21 +187,19 @@ s3save(
                                        for j in range(j_st, j_st + 10)),
                                  columns=('v', 'i', 'j')))
 
-    delete_prefix(s3_con, prefix)
 
-
-def test_one_index(scidb_con, s3_con):
+@pytest.mark.parametrize('url', test_urls)
+def test_one_index(scidb_con, url):
     prefix = 'one_index'
+    url = '{}/{}'.format(url, prefix)
     schema = '<v:int64> [i=0:99:0:5; j=0:99:0:5]'
 
-    bucket_prefix = '/'.join((base_prefix, prefix))
     scidb_con.iquery("""
 s3save(
   build({}, i + j),
-  's3://{}/{}')""".format(schema, bucket_name, bucket_prefix))
+  '{}')""".format(schema, url))
 
-    array = scidbs3.S3Array(bucket_name=bucket_name,
-                            bucket_prefix=bucket_prefix)
+    array = scidbbridge.Array(url)
 
     pandas.testing.assert_frame_equal(
         array.list_chunks(),
@@ -238,98 +208,88 @@ s3save(
                                for j in range(0, 100, 5)),
                          columns=('i', 'j')))
 
-    index_prefix = '{}/index/'.format(bucket_prefix)
-    result = s3_con.list_objects_v2(Bucket=bucket_name,
-                                    Prefix=index_prefix)
-    keys = [split['Key'] for split in result['Contents']]
-    assert keys == ['{}0'.format(index_prefix)]
+    if url.startswith('s3://'):
+        index_prefix = '{}/{}/index/'.format(base_prefix, prefix)
+        result = s3_con.list_objects_v2(Bucket=s3_bucket, Prefix=index_prefix)
+        keys = [split['Key'] for split in result['Contents']]
+    elif url.startswith('file://'):
+        index_prefix = '{}/{}/index/'.format(fs_base, prefix)
+        keys = []
+        for fn in os.listdir(index_prefix):
+            key = index_prefix + fn
+            if os.path.isfile(key):
+                keys.append(key)
+        keys.sort()
 
-    delete_prefix(s3_con, prefix)
+    assert keys == ['{}{}'.format(index_prefix, 0)]
 
 
-def test_multi_index(scidb_con, s3_con):
-    prefix = 'multi_index'
+@pytest.mark.parametrize(('url', 'index_split'),
+                         itertools.product(test_urls, (100, 200, 400, 800)))
+def test_multi_index(scidb_con, url, index_split):
+    prefix = 'multi_index_{}'.format(index_split)
+    url = '{}/{}'.format(url, prefix)
     schema = '<v:int64> [i=0:99:0:5; j=0:99:0:5]'
 
-    for index_split in (100, 200, 400, 800):
-        sub_prefix = '{}_0'.format(prefix)
-        bucket_prefix = '/'.join((base_prefix, sub_prefix))
-        scidb_con.iquery("""
+    scidb_con.iquery("""
 s3save(
   build({}, i + j),
-  's3://{}/{}',
-  index_split:{})""".format(schema, bucket_name, bucket_prefix, index_split))
+  '{}',
+  index_split:{})""".format(schema, url, index_split))
 
-        array = scidbs3.S3Array(bucket_name=bucket_name,
-                                bucket_prefix=bucket_prefix)
+    array = scidbbridge.Array(url)
 
-        pandas.testing.assert_frame_equal(
-            array.list_chunks(),
-            pandas.DataFrame(data=((i, j)
-                                   for i in range(0, 100, 5)
-                                   for j in range(0, 100, 5)),
-                             columns=('i', 'j')))
+    pandas.testing.assert_frame_equal(
+        array.list_chunks(),
+        pandas.DataFrame(data=((i, j)
+                               for i in range(0, 100, 5)
+                               for j in range(0, 100, 5)),
+                         columns=('i', 'j')))
 
-        index_prefix = '{}/index/'.format(bucket_prefix)
-        result = s3_con.list_objects_v2(Bucket=bucket_name,
+    if url.startswith('s3://'):
+        index_prefix = '{}/{}/index/'.format(base_prefix, prefix)
+        result = s3_con.list_objects_v2(Bucket=s3_bucket,
                                         Prefix=index_prefix)
         keys = [split['Key'] for split in result['Contents']]
-        assert keys == ['{}{}'.format(index_prefix, i)
-                        for i in range(800 // index_split)]
+    elif url.startswith('file://'):
+        index_prefix = '{}/{}/index/'.format(fs_base, prefix)
+        keys = []
+        for fn in os.listdir(index_prefix):
+            key = index_prefix + fn
+            if os.path.isfile(key):
+                keys.append(key)
+        keys.sort()
 
-        delete_prefix(s3_con, sub_prefix)
+    assert keys == ['{}{}'.format(index_prefix, i)
+                    for i in range(800 // index_split)]
 
 
-def test_no_compression(scidb_con, s3_con):
-    prefix = 'no_compression'
+@pytest.mark.parametrize(('url', 'compression', 'sz_min', 'sz_max'),
+                         ((url, *param)
+                          for url in test_urls
+                          for param in zip(('default', 'none', 'gzip'),
+                                           (1500, 1500, 0),
+                                           (9999, 9999, 500))))
+def test_compression(scidb_con, url, compression, sz_min, sz_max):
+    prefix = 'compression_{}'.format(compression)
+    url = '{}/{}'.format(url, prefix)
     schema = '<v:int64> [i=0:19:0:5; j=10:49:0:10]'
 
-    bucket_prefix = '/'.join((base_prefix, prefix))
     scidb_con.iquery("""
 s3save(
   build({}, i + j),
-  's3://{}/{}',
-  compression:'none')""".format(schema, bucket_name, bucket_prefix))
+  '{}'{})""".format(schema,
+                    url,
+                    '' if compression == 'default'
+                    else ", compression:'{}'".format(compression)))
 
-    array = scidbs3.S3Array(bucket_name=bucket_name,
-                            bucket_prefix=bucket_prefix)
+    array = scidbbridge.Array(url)
 
-    assert array.metadata == {**base_metadata,
-                              **{'schema': '{}'.format(schema)}}
-    for i_st in (5, 15):
-        for j_st in (10, 30):
-            pandas.testing.assert_frame_equal(
-                array.get_chunk(i_st, j_st).to_pandas(),
-                pandas.DataFrame(data=((i + j, i, j)
-                                       for i in range(i_st, i_st + 5)
-                                       for j in range(j_st, j_st + 10)),
-                                 columns=('v', 'i', 'j')))
-
-    sz = s3_con.head_object(Bucket=bucket_name,
-                            Key='{}/{}'.format(bucket_prefix,
-                                               'c_0_0'))['ContentLength']
-    assert sz > 1500
-
-    delete_prefix(s3_con, prefix)
-
-
-def test_gzip_compression(scidb_con, s3_con):
-    prefix = 'gzip_compression'
-    schema = '<v:int64> [i=0:19:0:5; j=10:49:0:10]'
-
-    bucket_prefix = '/'.join((base_prefix, prefix))
-    scidb_con.iquery("""
-s3save(
-  build({}, i + j),
-  's3://{}/{}',
-  compression:'gzip')""".format(schema, bucket_name, bucket_prefix))
-
-    array = scidbs3.S3Array(bucket_name=bucket_name,
-                            bucket_prefix=bucket_prefix)
-
+    m_compression = (None if compression in ('default', 'none')
+                     else compression)
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema),
-                                 'compression': 'gzip'}}
+                                 'compression': m_compression}}
     for i_st in (5, 15):
         for j_st in (10, 30):
             pandas.testing.assert_frame_equal(
@@ -339,12 +299,15 @@ s3save(
                                        for j in range(j_st, j_st + 10)),
                                  columns=('v', 'i', 'j')))
 
-    sz = s3_con.head_object(Bucket=bucket_name,
-                            Key='{}/{}'.format(bucket_prefix,
-                                               'c_0_0'))['ContentLength']
-    assert sz < 500
+    if url.startswith('s3://'):
+        sz = s3_con.head_object(Bucket=s3_bucket,
+                                Key='{}/{}/c_0_0'.format(
+                                    base_prefix, prefix))['ContentLength']
+    elif url.startswith('file://'):
+        sz = os.path.getsize('{}/{}/c_0_0'.format(fs_base, prefix))
 
-    delete_prefix(s3_con, prefix)
+    assert sz > sz_min
+    assert sz < sz_max
 
 
 @pytest.mark.parametrize('url', (None,
@@ -359,8 +322,7 @@ s3save(
                                  's3:\\',
                                  's3:\\\\',
                                  ))
-def test_bad_url(scidb_con, s3_con, url):
-    prefix = 'one_chunk'
+def test_bad_url(scidb_con, url):
     schema = '<v:int64> [i=0:9]'
 
     que = 's3save(build({}, i){})'.format(

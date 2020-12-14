@@ -1,5 +1,7 @@
 import boto3
 import itertools
+import os
+import os.path
 import pandas
 import pyarrow
 import scidbpy
@@ -7,42 +9,80 @@ import scidbpy
 __version__ = '19.11.1'
 
 
-def metadata_from_string(input):
-    res = dict(ln.split('\t') for ln in input.strip().split('\n'))
-    try:
-        if res['compression'] == 'none':
-            res['compression'] = None
-    except KeyError:
-        pass
-    return res
+def Array(url):
+    """Array Factory Function"""
+
+    if url.startswith('s3://'):
+        return S3Array(url)
+    if url.startswith('file://'):
+        return FSArray(url)
+    raise Exception('URL {} not supported'.format(url))
 
 
-class S3Array(object):
-    """Wrapper for SciDB array stored in S3"""
+class _Array(object):
+    """Wrapper for SciDB array stored externally"""
 
-    def __init__(self,
-                 bucket_name,
-                 bucket_prefix):
-        self.bucket_name = bucket_name
-        self.bucket_prefix = bucket_prefix.rstrip('/')
+    @staticmethod
+    def __new__(cls, *args, **kwargs):
+        """Disallow direct instantiation"""
+        if cls is _Array:
+            raise TypeError("_Array class cannot be instantiated directly")
+        return object.__new__(cls)
 
-        self._client = None
-        self._object = None
+    def __init__(self, url):
+        self.url = url
+
         self._metadata = None
         self._schema = None
 
     def __iter__(self):
-        return (i for i in (self.bucket_name, self.bucket_prefix))
+        return (i for i in (self.url, ))
 
     def __eq__(self):
         return tuple(self) == tuple(other)
 
     def __repr__(self):
-        return ('{}(bucket_name={!r}, bucket_prefix={!r})').format(
-            type(self).__name__, *self)
+        return ('{}(url={!r})').format(type(self).__name__, *self)
 
     def __str__(self):
-        return 's3://{}/{}'.format(self.bucket_name, self.bucket_prefix)
+        return self.url
+
+    @property
+    def schema(self):
+        if self._schema is None:
+            self._schema = scidbpy.Schema.fromstring(
+                self.metadata['schema'])
+        return self._schema
+
+    @staticmethod
+    def metadata_from_string(input):
+        res = dict(ln.split('\t') for ln in input.strip().split('\n'))
+        try:
+            if res['compression'] == 'none':
+                res['compression'] = None
+        except KeyError:
+            pass
+        return res
+
+
+class S3Array(_Array):
+    """Wrapper for SciDB array stored in S3"""
+
+    def __init__(self, url):
+        _Array.__init__(self, url)
+        prefix_len = len('s3://')
+        pos = url.find('/', prefix_len)
+        self.bucket_name = url[prefix_len:pos]
+        self.bucket_prefix = url[pos + 1:].rstrip('/')
+
+        self._client = None
+
+    def __iter__(self):
+        return (i for i in (self.url, self.bucket_name, self.bucket_prefix))
+
+    def __repr__(self):
+        return ('{}(url={!r}, bucket_name={!r}, bucket_prefix={!r})').format(
+            type(self).__name__, *self)
 
     @property
     def client(self):
@@ -51,25 +91,14 @@ class S3Array(object):
         return self._client
 
     @property
-    def object(self):
-        if self._object is None:
-            self._object = self.client.get_object(
-                Bucket=self.bucket_name,
-                Key='{}/metadata'.format(self.bucket_prefix))
-        return self._object
-
-    @property
     def metadata(self):
         if self._metadata is None:
-            self._metadata = metadata_from_string(
-                self.object["Body"].read().decode('utf-8'))
+            obj = self.client.get_object(
+                Bucket=self.bucket_name,
+                Key='{}/metadata'.format(self.bucket_prefix))
+            self._metadata = _Array.metadata_from_string(
+                obj["Body"].read().decode('utf-8'))
         return self._metadata
-
-    @property
-    def schema(self):
-        if self._schema is None:
-            self._schema = scidbpy.Schema.fromstring(self.metadata['schema'])
-        return self._schema
 
     def list_chunks(self):
         prefix = '{}/index/'.format(self.bucket_prefix)
@@ -95,8 +124,57 @@ class S3Array(object):
         return S3Chunk(self, *argv)
 
 
-class S3Chunk(object):
-    """Wrapper for SciDB array chunk stored in S3"""
+class FSArray(_Array):
+    """Wrapper for SciDB array stored in a File System"""
+
+    def __init__(self, url):
+        _Array.__init__(self, url)
+        self.path = url[len('file://'):].rstrip('/')
+
+    def __iter__(self):
+        return (i for i in (self.url, self.path))
+
+    def __repr__(self):
+        return ('{}(url={!r}, path={!r})').format(
+            type(self).__name__, *self)
+
+    @property
+    def metadata(self):
+        if self._metadata is None:
+            with open(self.path + '/metadata') as f:
+                self._metadata = _Array.metadata_from_string(f.read())
+        return self._metadata
+
+    def list_chunks(self):
+        index_path = self.path + '/index'
+        files = [fn for fn in os.listdir(index_path)
+                 if os.path.isfile(index_path + '/' + fn)]
+
+        batches = []
+        for fn in files:
+            strm = pyarrow.input_stream(index_path + '/' + fn,
+                                        compression='gzip')
+            reader = pyarrow.RecordBatchStreamReader(strm)
+            for batch in reader:
+                batches.append(batch)
+
+        table = pyarrow.Table.from_batches(batches)
+        index = table.to_pandas(split_blocks=True, self_destruct=True)
+        return index.sort_values(by=list(index.columns), ignore_index=True)
+
+    def get_chunk(self, *argv):
+        return FSChunk(self, *argv)
+
+
+class Chunk(object):
+    """Wrapper for SciDB array chunk stored externally"""
+
+    @staticmethod
+    def __new__(cls, *args, **kwargs):
+        """Disallow direct instantiation"""
+        if cls is Chunk:
+            raise TypeError("Chunk class cannot be instantiated directly")
+        return object.__new__(cls)
 
     def __init__(self, array, *argv):
         self.array = array
@@ -130,35 +208,46 @@ class S3Chunk(object):
             part = part // dim.chunk_length
             parts.append(part)
 
-        self.bucket_postfix = '_'.join(map(str, parts))
-        self._object = None
+        self.url_suffix = '_'.join(map(str, parts))
 
     def __iter__(self):
-        return (i for i in (self.array, self.bucket_postfix))
+        return (i for i in (self.array, self.url_suffix))
 
     def __eq__(self):
         return tuple(self) == tuple(other)
 
     def __repr__(self):
-        return ('{}(array={!r}, bucket_postfix={!r})').format(
+        return ('{}(array={!r}, url_suffix={!r})').format(
             type(self).__name__, *self)
 
     def __str__(self):
-        return 's3://{}/{}/{}'.format(self.array.bucket_name,
-                                      self.array.bucket_prefix,
-                                      self.bucket_postfix)
+        return '{}/{}'.format(self.array.url, self.url_suffix)
 
-    @property
-    def object(self):
-        if self._object is None:
-            self._object = self.array._client.get_object(
-                Bucket=self.array.bucket_name,
-                Key='{}/{}'.format(self.array.bucket_prefix,
-                                   self.bucket_postfix))
-        return self._object
+
+class S3Chunk(Chunk):
+    """Wrapper for SciDB array chunk stored in S3"""
+
+    def __init__(self, array, *argv):
+        Chunk.__init__(self, array, *argv)
+
+    def to_pandas(self):
+        obj = self.array._client.get_object(
+            Bucket=self.array.bucket_name,
+            Key='{}/{}'.format(self.array.bucket_prefix, self.url_suffix))
+        strm = pyarrow.input_stream(
+            pyarrow.BufferReader(obj["Body"].read()),
+            compression=self.array.metadata['compression'])
+        return pyarrow.RecordBatchStreamReader(strm).read_pandas()
+
+
+class FSChunk(Chunk):
+    """Wrapper for SciDB array chunk stored in a File System"""
+
+    def __init__(self, array, *argv):
+        Chunk.__init__(self, array, *argv)
 
     def to_pandas(self):
         strm = pyarrow.input_stream(
-            pyarrow.BufferReader(self.object["Body"].read()),
+            self.array.path + '/' + self.url_suffix,
             compression=self.array.metadata['compression'])
         return pyarrow.RecordBatchStreamReader(strm).read_pandas()

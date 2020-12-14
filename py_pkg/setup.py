@@ -5,17 +5,17 @@ try:
 except ImportError:
     from distutils.core import setup
 
-import scidbs3
+import scidbbridge
 
 
-NAME = 'scidb-s3'
-DESCRIPTION = 'Python library for interacting with SciDB data in S3'
+NAME = 'scidb-bridge'
+DESCRIPTION = 'Python Library to access externally stored SciDB data'
 LONG_DESCRIPTION = open('README.rst').read()
 AUTHOR = 'Rares Vernica'
 AUTHOR_EMAIL = 'rvernica@gmail.com'
-DOWNLOAD_URL = 'http://github.com/Paradigm4/s3bridge'
+DOWNLOAD_URL = 'http://github.com/Paradigm4/bridge'
 LICENSE = 'AGPL-3.0'
-VERSION = scidbs3.__version__
+VERSION = scidbbridge.__version__
 
 setup(
     name=NAME,
@@ -26,7 +26,7 @@ setup(
     author_email=AUTHOR_EMAIL,
     download_url=DOWNLOAD_URL,
     license=LICENSE,
-    packages=['scidbs3'],
+    packages=['scidbbridge'],
     install_requires=[
         'boto3>=1.14.12',
         'pyarrow==0.16.0',
