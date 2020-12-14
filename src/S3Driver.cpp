@@ -127,10 +127,11 @@ namespace scidb {
             std::istringstream stream(line);
             std::string key, value;
             if (!std::getline(stream, key, '\t')
-                || !std::getline(stream, value))
-                throw USER_EXCEPTION(SCIDB_SE_METADATA,
-                                     SCIDB_LE_UNKNOWN_ERROR)
-                    << "Invalid metadata line '" << line << "'";
+                || !std::getline(stream, value)) {
+                std::ostringstream out;
+                out << "Invalid metadata line '" << line << "'";
+                throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR) << out.str();
+            }
             metadata[key] = value;
         }
     }

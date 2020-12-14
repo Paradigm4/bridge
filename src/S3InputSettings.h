@@ -23,33 +23,20 @@
 * END_COPYRIGHT
 */
 
-#include <boost/algorithm/string.hpp>
-#include <boost/lexical_cast.hpp>
-
-#include <query/LogicalOperator.h>
-#include <query/Query.h>
-#include <query/Expression.h>
-#include <util/PathUtils.h>
-
-#include "S3Common.h"
-
 #ifndef S3INPUT_SETTINGS
 #define S3INPUT_SETTINGS
 
-#define S3BRIDGE_VERSION 1
-#define STRINGIFY(x) #x
-#define TO_STR(x) STRINGIFY(x)
+#include "S3Common.h"
 
-using boost::algorithm::trim;
-using boost::starts_with;
-using boost::lexical_cast;
-using boost::bad_lexical_cast;
-
-// Logger for operator. static to prevent visibility of variable outside of file
-static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3input"));
+// SciDB
+#include <query/Expression.h>
+#include <query/LogicalOperator.h>
+#include <query/Query.h>
 
 namespace scidb
 {
+// Logger for operator. static to prevent visibility of variable outside of file
+static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3input"));
 
 static const char* const KW_FORMAT	  = "format";
 static const char* const KW_CACHE_SIZE	  = "cache_size";
@@ -86,7 +73,7 @@ private:
         {
             std::ostringstream error;
             error << "illegal attempt to set " << kw << " multiple times";
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << error.str().c_str();
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << error.str().c_str();
         }
     }
 
@@ -98,7 +85,7 @@ private:
         }
         else
         {
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "format must be 'arrow'";
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << "format must be 'arrow'";
         }
     }
 
@@ -212,7 +199,7 @@ public:
                 _cacheSize(CACHE_SIZE_DEFAULT)
     {
         if (operatorParameters.size() != 1)
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal number of parameters passed to s3input";
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << "illegal number of parameters passed to s3input";
         std::shared_ptr<OperatorParam>const& param = operatorParameters[0];
         if (logical)
             _url = evaluate(((std::shared_ptr<OperatorParamLogicalExpression>&) param)->getExpression(), TID_STRING).getString();

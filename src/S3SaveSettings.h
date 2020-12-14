@@ -23,34 +23,27 @@
 * END_COPYRIGHT
 */
 
-#include <boost/algorithm/string.hpp>
-#include <boost/lexical_cast.hpp>
-#include <query/LogicalOperator.h>
-#include <query/Query.h>
-#include <query/Expression.h>
-#include <util/PathUtils.h>
-
-#include "S3Common.h"
-
 #ifndef S3SAVE_SETTINGS
 #define S3SAVE_SETTINGS
 
-using boost::algorithm::trim;
-using boost::starts_with;
-using boost::lexical_cast;
-using boost::bad_lexical_cast;
+#include "S3Common.h"
 
-// Logger for operator. static to prevent visibility of variable outside of file
-static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3save"));
+// SciDB
+#include <query/Expression.h>
+#include <query/LogicalOperator.h>
+#include <query/Query.h>
+
 
 namespace scidb
 {
+// Logger for operator. static to prevent visibility of variable outside of file
+static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.s3save"));
 
 static const char* const KW_FORMAT	  = "format";
 static const char* const KW_COMPRESSION	  = "compression";
 static const char* const KW_INDEX_SPLIT	  = "index_split";
 
-typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t ;
+typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t;
 
 class S3SaveSettings
 {
@@ -65,7 +58,6 @@ public:
         return (sizeof(ConstRLEPayload::Header) + 2 * sizeof(ConstRLEPayload::Segment) + sizeof(varpart_offset_t) + 1);
     }
 
-
 private:
     std::string                 _url;
     S3Metadata::Format          _format;
@@ -78,7 +70,7 @@ private:
         {
             std::ostringstream error;
             error << "Illegal attempt to set " << kw << " multiple times";
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << error.str().c_str();
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << error.str().c_str();
         }
     }
 
@@ -87,7 +79,7 @@ private:
         if (format[0] == "arrow")
             _format = S3Metadata::Format::ARROW;
         else
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
                 << "format must be 'arrow'";
     }
 
@@ -98,7 +90,7 @@ private:
         else if (compression[0] == "gzip")
             _compression = S3Metadata::Compression::GZIP;
         else
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
                 << "unsupported compression";
     }
 
@@ -108,7 +100,7 @@ private:
         if(_indexSplit < INDEX_SPLIT_MIN) {
             std::ostringstream err;
             err << "index_split must be at or above " << INDEX_SPLIT_MIN;
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << err.str();
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << err.str();
         }
     }
 
@@ -218,7 +210,7 @@ public:
                 _indexSplit(INDEX_SPLIT_DEFAULT)
     {
         if (operatorParameters.size() != 1)
-            throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "illegal number of parameters passed to s3input";
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << "illegal number of parameters passed to s3input";
         std::shared_ptr<OperatorParam>const& param = operatorParameters[0];
         if (logical)
             _url = evaluate(((std::shared_ptr<OperatorParamLogicalExpression>&) param)->getExpression(), TID_STRING).getString();
@@ -250,7 +242,6 @@ public:
         return _indexSplit;
     }
 };
-}
 
-
+} // end namespace scidb
 #endif //S3SaveSettings

@@ -23,22 +23,14 @@
 * END_COPYRIGHT
 */
 
-#include <query/PhysicalOperator.h>
-
 #include "S3InputSettings.h"
 #include "S3Array.h"
+
+#include <query/PhysicalOperator.h>
 
 
 namespace scidb
 {
-
-static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3input"));
-
-static void EXCEPTION_ASSERT(bool cond)
-{
-    if (!cond)
-        throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "Internal inconsistency";
-}
 
 class PhysicalS3Input : public PhysicalOperator
 {

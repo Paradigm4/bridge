@@ -24,18 +24,18 @@
 */
 
 #include "S3Array.h"
+#include "S3InputSettings.h"
 
+// SciDB
 #include <array/MemoryBuffer.h>
 #include <network/Network.h>
 
+// Arrow
 #include <arrow/builder.h>
 #include <arrow/io/compressed.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/reader.h>
 #include <arrow/util/compression.h>
-
-#include "S3InputSettings.h"
-#include "S3Driver.h"
 
 
 // TODO use __builtin_expect
@@ -59,7 +59,6 @@
 
 
 namespace scidb {
-    static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3array"));
 
     //
     // S3 Arrow Reader
@@ -686,7 +685,7 @@ namespace scidb {
         auto nInst = _query->getInstancesCount();
         SCIDB_ASSERT(nInst > 0 && _query->getInstanceID() < nInst);
 
-        _driver = std::make_shared<S3Driver>(_settings->getURL());
+        _driver = makeDriver(_settings->getURL());
         std::map<std::string, std::string> metadata;
         _driver->readMetadata(metadata);
 
@@ -806,4 +805,4 @@ namespace scidb {
         LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex size:" << _index.size());
         // LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex:" << _index);
      }
-}
+} // end scidb namespace

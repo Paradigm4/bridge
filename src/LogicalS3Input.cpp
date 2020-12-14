@@ -27,7 +27,6 @@
 #include <query/Parser.h>
 #include <util/OnScopeExit.h>
 
-#include "S3Driver.h"
 #include "S3InputSettings.h"
 
 
@@ -39,8 +38,7 @@ class LogicalS3Input : public  LogicalOperator
 public:
     LogicalS3Input(const std::string& logicalName, const std::string& alias):
         LogicalOperator(logicalName, alias)
-    {
-    }
+    {}
 
     static PlistSpec const* makePlistSpec()
     {
@@ -61,8 +59,7 @@ public:
         S3InputSettings settings(_parameters, _kwParameters, true, query);
 
         // Get Metadata
-        std::unique_ptr<Driver> driver = std::make_unique<S3Driver>(
-            settings.getURL());
+        auto driver = makeDriver(settings.getURL());
         std::map<std::string, std::string> metadata;
         driver->readMetadata(metadata);
         LOG4CXX_DEBUG(logger, "S3INPUT|" << query->getInstanceID() << "|schema: " << metadata["schema"]);

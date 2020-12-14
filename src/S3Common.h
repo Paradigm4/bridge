@@ -26,9 +26,13 @@
 #ifndef S3_COMMON
 #define S3_COMMON
 
-#include <map>
+#include "S3Driver.h"
+#include "FSDriver.h"
 
-#include <system/ErrorCodes.h>
+// SciDB
+#include <array/DimensionDesc.h>
+#include <array/Dimensions.h>
+
 
 #define S3BRIDGE_VERSION 1
 #define INDEX_SPLIT_MIN 100
@@ -87,6 +91,17 @@ static const std::string coord2ObjectName(const Coordinates &pos,
     return out.str();
 }
 
+static std::shared_ptr<Driver> makeDriver(const std::string url)
+{
+    if (url.rfind("file://", 0) == 0)
+        return std::make_shared<FSDriver>(url);
+
+    if (url.rfind("s3://", 0) == 0)
+        return std::make_shared<S3Driver>(url);
+
+    throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR)
+        << "Invalid URL " << url;
 }
 
+}      // end namespace scidb
 #endif //S3Common

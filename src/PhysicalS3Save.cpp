@@ -23,6 +23,10 @@
 * END_COPYRIGHT
 */
 
+#include "S3Common.h"
+#include "S3SaveSettings.h"
+#include "S3Index.h"
+
 #include <chrono>
 #include <thread>
 
@@ -39,24 +43,9 @@
 #include <arrow/record_batch.h>
 #include <arrow/util/compression.h>
 
-#include "S3Common.h"
-#include "S3Driver.h"
-#include "S3SaveSettings.h"
-#include "S3Index.h"
-
 
 namespace scidb
 {
-
-static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3save"));
-
-using namespace scidb;
-
-static void EXCEPTION_ASSERT(bool cond)
-{
-    if (!cond)
-        throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION) << "Internal inconsistency";
-}
 
 class ArrowWriter
 {
@@ -527,8 +516,7 @@ public:
             return result;
         }
 
-        std::unique_ptr<Driver> driver = std::make_unique<S3Driver>(
-            settings.getURL());
+        auto driver = makeDriver(settings.getURL());
 
         // Coordiantor Creates S3 Metadata Object
         if (query->isCoordinator()) {

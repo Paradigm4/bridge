@@ -83,4 +83,4 @@ public:
 
 REGISTER_LOGICAL_OPERATOR_FACTORY(LogicalS3Save, "s3save");
 
-} // emd namespace scidb
+} // end namespace scidb
