@@ -391,8 +391,8 @@ private:
               typename ArrowBuilder,
               typename ValueFunc> inline
     arrow::Status writeCell(std::shared_ptr<ConstChunkIterator> chunkIter,
-                               ValueFunc valueGetter,
-                               const size_t attrIdx) {
+                            ValueFunc valueGetter,
+                            const size_t attrIdx) {
 
         std::vector<SciDBType> values;
         std::vector<bool> is_valid;

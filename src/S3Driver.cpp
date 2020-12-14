@@ -156,24 +156,9 @@ namespace scidb {
         request.WithBucket(_bucket);
         request.WithPrefix(key);
 
-        LOG4CXX_DEBUG(logger, "S3DRIVER|list:" << key);
-        auto outcome = _client->ListObjects(request);
+        auto outcome = _retryLoop<Aws::S3::Model::ListObjectsOutcome>(
+            "List", key, request, &Aws::S3::S3Client::ListObjects);
 
-        // -- - Retry - --
-        int retry = 1;
-        while (!outcome.IsSuccess() && retry < RETRY_COUNT) {
-            LOG4CXX_WARN(logger,
-                         "S3DRIVER|List s3://" << _bucket << "/"
-                         << key << " attempt #" << retry << " failed");
-            retry++;
-
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(RETRY_SLEEP));
-
-            outcome = _client->ListObjects(request);
-        }
-
-        S3_EXCEPTION_NOT_SUCCESS("List");
         return outcome.GetResult().GetContents().size();
     }
 
@@ -188,24 +173,9 @@ namespace scidb {
         request.SetBucket(_bucket);
         request.SetKey(key);
 
-        LOG4CXX_DEBUG(logger, "S3DRIVER|get:" << key);
-        auto outcome = _client->GetObject(request);
+        auto outcome = _retryLoop<Aws::S3::Model::GetObjectOutcome>(
+            "Get", key, request, &Aws::S3::S3Client::GetObject);
 
-        // -- - Retry - --
-        int retry = 1;
-        while (!outcome.IsSuccess() && retry < RETRY_COUNT) {
-            LOG4CXX_WARN(logger,
-                         "S3DRIVER|Get s3://" << _bucket << "/"
-                         << key << " attempt #" << retry << " failed");
-            retry++;
-
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(RETRY_SLEEP));
-
-            outcome = _client->GetObject(request);
-        }
-
-        S3_EXCEPTION_NOT_SUCCESS("Get");
         return outcome.GetResultWithOwnership();
     }
 
@@ -217,23 +187,35 @@ namespace scidb {
         request.SetKey(key);
         request.SetBody(data);
 
-        LOG4CXX_DEBUG(logger, "S3DRIVER|upload:" << key);
-        auto outcome = _client->PutObject(request);
+        _retryLoop<Aws::S3::Model::PutObjectOutcome>(
+            "Put", key, request, &Aws::S3::S3Client::PutObject);
+    }
+
+    // Re-try Loop Template
+    template <typename Outcome, typename Request, typename RequestFunc>
+    Outcome S3Driver::_retryLoop(const std::string &name,
+                                 const Aws::String &key,
+                                 const Request &request,
+                                 RequestFunc requestFunc) const
+    {
+        LOG4CXX_DEBUG(logger, "S3DRIVER|" << name << ":" << key);
+        auto outcome = ((*_client).*requestFunc)(request);
 
         // -- - Retry - --
         int retry = 1;
         while (!outcome.IsSuccess() && retry < RETRY_COUNT) {
             LOG4CXX_WARN(logger,
-                         "S3DRIVER|Put s3://" << _bucket << "/"
+                         "S3DRIVER|" << name << " s3://" << _bucket << "/"
                          << key << " attempt #" << retry << " failed");
             retry++;
 
             std::this_thread::sleep_for(
                 std::chrono::milliseconds(RETRY_SLEEP));
 
-            outcome = _client->PutObject(request);
+            outcome = ((*_client).*requestFunc)(request);
         }
 
-        S3_EXCEPTION_NOT_SUCCESS("Put");
+        S3_EXCEPTION_NOT_SUCCESS(name);
+        return outcome;
     }
 }

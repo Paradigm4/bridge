@@ -73,6 +73,13 @@ private:
 
     Aws::S3::Model::GetObjectResult _getRequest(const Aws::String&) const;
     void _putRequest(const Aws::String&, std::shared_ptr<Aws::IOStream>) const;
+
+    template <typename Outcome, typename Request, typename RequestFunc>
+    Outcome _retryLoop(const std::string &name,
+                       const Aws::String &key,
+                       const Request &request,
+                       RequestFunc requestFunc) const;
+
 };
 
 }
