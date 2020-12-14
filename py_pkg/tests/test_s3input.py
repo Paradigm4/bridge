@@ -339,7 +339,7 @@ s3save(
 
 
 # Test with Multiple Arrow Chunks per File
-@pytest.mark.parametrize('url', (test_urls[0], ))
+@pytest.mark.parametrize('url', test_urls)
 def test_arrow_chunk(scidb_con, url):
     prefix = 'arrow_chunk'
     url = '{}/{}'.format(url, prefix)
@@ -359,7 +359,7 @@ s3save(
         reader = pyarrow.ipc.open_stream(obj['Body'].read())
     elif url.startswith('file://'):
         fn = '{}/{}/c_0'.format(fs_base, prefix)
-        reader = pyarrow.open_stream(fn)
+        reader = pyarrow.open_stream(pyarrow.OSFile(fn))
 
     tbl = reader.read_all()
 
