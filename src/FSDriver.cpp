@@ -47,10 +47,12 @@ namespace scidb {
         }
 
         _prefix = _url.substr(prefix_len);
-        bool res = boost::filesystem::create_directory(_prefix);
-        if (!res) {
+        try {
+            boost::filesystem::create_directory(_prefix);
+        }
+        catch (const std::exception &ex) {
             std::ostringstream out;
-            out << "Failed to create directory " << _prefix;
+            out << "Failed to create directory " << _prefix << " " << ex.what();
             throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR) << out.str();
         }
     }
@@ -94,11 +96,13 @@ namespace scidb {
             if (!boost::filesystem::exists(path)) {
 
                 // Create index directory
-                auto ok = boost::filesystem::create_directory(path);
-                if (!ok) {
-                    std::ostringstream out;
-                    out << "Failed creating directory " << path;
-                    throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR) << out.str();
+                try {
+                    boost::filesystem::create_directory(path);
+                }
+                catch (const std::exception &ex) {
+                  std::ostringstream out;
+                  out << "Failed to create directory " << _prefix << " " << ex.what();
+                  throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR) << out.str();
                 }
             }
         }
