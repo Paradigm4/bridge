@@ -47,7 +47,12 @@ namespace scidb {
         }
 
         _prefix = _url.substr(prefix_len);
-        boost::filesystem::create_directory(_prefix);
+        bool res = boost::filesystem::create_directory(_prefix);
+        if (!res) {
+            std::ostringstream out;
+            out << "Failed to create directory " << _prefix;
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR) << out.str();
+        }
     }
 
     size_t FSDriver::_readArrow(const std::string &suffix,
