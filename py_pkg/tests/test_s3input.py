@@ -12,7 +12,7 @@ from common import *
 @pytest.mark.parametrize(('url', 'chunk_size'),
                          itertools.product(test_urls, (5, 10, 20)))
 def test_one_dim_one_attr(scidb_con, url, chunk_size):
-    prefix = 'one_dim_one_attr_{}'.format(chunk_size)
+    url = '{}/one_dim_one_attr_{}'.format(url, chunk_size)
     schema = '<v:int64> [i=0:19:0:{}]'.format(chunk_size)
 
     # Store
@@ -32,7 +32,7 @@ s3save(
 @pytest.mark.parametrize(('url', 'chunk_size'),
                          itertools.product(test_urls, (5, 10, 20)))
 def test_multi_attr(scidb_con, url, chunk_size):
-    prefix = 'multi_attr_{}'.format(chunk_size)
+    url = '{}/multi_attr_{}'.format(url, chunk_size)
     schema = '<v:int64, w:int64> [i=0:19:0:{}]'.format(chunk_size)
 
     # Store
@@ -65,7 +65,7 @@ s3save(
                           for e in (10, 16, 19)
                           for c in (5, 7, 10, 20)))
 def test_multi_dim(scidb_con, url, dim_start, dim_end, chunk_size):
-    prefix = 'multi_dim_{}_{}_{}'.format(dim_start, dim_end, chunk_size)
+    url = '{}/multi_dim_{}_{}_{}'.format(url, dim_start, dim_end, chunk_size)
     schema = '<v:int64> [i={s}:{e}:0:{c}; j=-15:14:0:{c}]'.format(
         s=dim_start, e=dim_end - 1, c=chunk_size)
 
@@ -126,7 +126,7 @@ s3save(
      for c in (5, 10, 20)))
 def test_type(scidb_con, url, type_name, is_null, type_numpy, chunk_size):
     max_val = 20
-    prefix = 'type_{}_{}_{}'.format(type_name, is_null, chunk_size)
+    url = '{}/type_{}_{}_{}'.format(url, type_name, is_null, chunk_size)
     schema = '<v:{} {}NULL> [i=0:{}:0:{}]'.format(
         type_name, '' if is_null else 'NOT ', max_val - 1, chunk_size)
 
@@ -177,7 +177,8 @@ def test_type(scidb_con, url, type_name, is_null, type_numpy, chunk_size):
                           for e in (11, 13, 17)
                           for c in (3, 7, 11)))
 def test_filter_before(scidb_con, url, dim_start, dim_end, chunk_size):
-    prefix = 'filter_before_{}_{}_{}'.format(dim_start, dim_end, chunk_size)
+    url = '{}/filter_before_{}_{}_{}'.format(
+        url, dim_start, dim_end, chunk_size)
     schema = '<v:int64> [i={s}:{e}:0:{c}; j=-11:13:0:{c}]'.format(
         s=dim_start, e=dim_end - 1, c=chunk_size)
 
@@ -214,7 +215,8 @@ s3save(
                           for e in (11, 13, 17)
                           for c in (3, 7, 11)))
 def test_filter_after(scidb_con, url, dim_start, dim_end, chunk_size):
-    prefix = 'filter_after_{}_{}_{}'.format(dim_start, dim_end, chunk_size)
+    url = '{}/filter_after_{}_{}_{}'.format(
+        url, dim_start, dim_end, chunk_size)
     schema = '<v:int64> [i={s}:{e}:0:{c}; j=-11:13:0:{c}]'.format(
         s=dim_start, e=dim_end - 1, c=chunk_size)
 
@@ -250,7 +252,7 @@ filter(
 
 @pytest.mark.parametrize('url', test_urls)
 def test_nulls(scidb_con, url):
-    prefix = 'nulls'
+    url = '{}/nulls'.format(url)
     schema = '<v:int64> [i=0:99:0:5]'
 
     # Store
@@ -280,7 +282,7 @@ s3save(
 @pytest.mark.parametrize('url', test_urls)
 def test_chunk_index(scidb_con, url):
     size = 300
-    prefix = 'chunk_index'
+    url = '{}/chunk_index'.format(url)
     schema = '<v:int64> [i=0:{}:0:5]'.format(size - 1)
 
     # Store
@@ -302,7 +304,7 @@ s3save(
 @pytest.mark.parametrize('url, cache_size',
                          itertools.product(test_urls, (None, 5000, 2500, 0)))
 def test_cache(scidb_con, url, cache_size):
-    prefix = 'cache'
+    url = '{}/cache'.format(url)
     schema = '<v:int64 not null, w:int64 not null> [i=0:999:0:100]'
 
     # Store
