@@ -304,7 +304,7 @@ s3save(
 @pytest.mark.parametrize('url, cache_size',
                          itertools.product(test_urls, (None, 5000, 2500, 0)))
 def test_cache(scidb_con, url, cache_size):
-    url = '{}/cache'.format(url)
+    url = '{}/cache-{}'.format(url, cache_size)
     schema = '<v:int64 not null, w:int64 not null> [i=0:999:0:100]'
 
     # Store
