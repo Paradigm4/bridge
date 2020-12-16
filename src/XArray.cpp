@@ -5,26 +5,27 @@
 * Copyright (C) 2020 Paradigm4 Inc.
 * All Rights Reserved.
 *
-* s3bridge is a plugin for SciDB, an Open Source Array DBMS maintained
+* bridge is a plugin for SciDB, an Open Source Array DBMS maintained
 * by Paradigm4. See http://www.paradigm4.com/
 *
-* s3bridge is free software: you can redistribute it and/or modify
+* bridge is free software: you can redistribute it and/or modify
 * it under the terms of the AFFERO GNU General Public License as published by
 * the Free Software Foundation.
 *
-* s3bridge is distributed "AS-IS" AND WITHOUT ANY WARRANTY OF ANY KIND,
+* bridge is distributed "AS-IS" AND WITHOUT ANY WARRANTY OF ANY KIND,
 * INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY,
 * NON-INFRINGEMENT, OR FITNESS FOR A PARTICULAR PURPOSE. See
 * the AFFERO GNU General Public License for the complete license terms.
 *
 * You should have received a copy of the AFFERO GNU General Public License
-* along with s3bridge.  If not, see <http://www.gnu.org/licenses/agpl-3.0.html>
+* along with bridge.  If not, see <http://www.gnu.org/licenses/agpl-3.0.html>
 *
 * END_COPYRIGHT
 */
 
-#include "S3Array.h"
-#include "S3InputSettings.h"
+#include "XArray.h"
+#include "XInputSettings.h"
+#include "Driver.h"
 
 // SciDB
 #include <array/MemoryBuffer.h>
@@ -61,22 +62,22 @@
 namespace scidb {
 
     //
-    // S3 Arrow Reader
+    // X Arrow Reader
     //
-    S3ArrowReader::S3ArrowReader(
-        S3Metadata::Compression compression,
+    XArrowReader::XArrowReader(
+        XMetadata::Compression compression,
         std::shared_ptr<const Driver> driver):
         _compression(compression),
         _driver(driver)
     {
         THROW_NOT_OK(arrow::AllocateResizableBuffer(0, &_arrowResizableBuffer));
 
-        if (_compression == S3Metadata::Compression::GZIP)
+        if (_compression == XMetadata::Compression::GZIP)
             _arrowCodec = *arrow::util::Codec::Create(
                 arrow::Compression::type::GZIP);
     }
 
-    size_t S3ArrowReader::readObject(
+    size_t XArrowReader::readObject(
         const std::string &name,
         bool reuse,
         std::shared_ptr<arrow::RecordBatch> &arrowBatch)
@@ -100,7 +101,7 @@ namespace scidb {
         }
 
         // Setup Arrow Compression, If Enabled
-        if (_compression != S3Metadata::Compression::NONE) {
+        if (_compression != XMetadata::Compression::NONE) {
             ASSIGN_OR_THROW(_arrowCompressedStream,
                             arrow::io::CompressedInputStream::Make(
                                 _arrowCodec.get(), _arrowBufferReader));
@@ -141,10 +142,10 @@ namespace scidb {
     };
 
     //
-    // S3 Cache
+    // X Cache
     //
-    S3Cache::S3Cache(
-        std::shared_ptr<S3ArrowReader> arrowReader,
+    XCache::XCache(
+        std::shared_ptr<XArrowReader> arrowReader,
         const std::string &path,
         const Dimensions &dims,
         size_t cacheSize):
@@ -155,7 +156,7 @@ namespace scidb {
         _sizeMax(cacheSize)
     {}
 
-    std::shared_ptr<arrow::RecordBatch> S3Cache::get(Coordinates pos)
+    std::shared_ptr<arrow::RecordBatch> XCache::get(Coordinates pos)
     {
         {
             ScopedMutex lock(_lock); // LOCK
@@ -186,20 +187,20 @@ namespace scidb {
                     _lru.pop_back();
                     _size -= _mem[rm].arrowSize;
                     _mem.erase(rm);
-                    LOG4CXX_DEBUG(logger, "S3CACHE||get delete:" << rm << " size:" << _size);
+                    LOG4CXX_DEBUG(logger, "XCACHE||get delete:" << rm << " size:" << _size);
                 }
 
                 // Add to Cache
                 _lru.push_front(pos);
-                _mem[pos] = S3CacheCell{_lru.begin(), arrowBatch, arrowSize};
+                _mem[pos] = XCacheCell{_lru.begin(), arrowBatch, arrowSize};
                 _size += arrowSize;
-                LOG4CXX_DEBUG(logger, "S3CACHE||get add:" << pos << " size:" << _size);
+                LOG4CXX_DEBUG(logger, "XCACHE||get add:" << pos << " size:" << _size);
 
                 return arrowBatch;
             }
             // Read from Cache
             else {
-                LOG4CXX_DEBUG(logger, "S3CACHE||get read:" << pos);
+                LOG4CXX_DEBUG(logger, "XCACHE||get read:" << pos);
 
                 // Read and Move to Front
                 auto &cell = _mem[pos];
@@ -214,10 +215,10 @@ namespace scidb {
     }
 
     //
-    // S3 Chunk Iterator
+    // X Chunk Iterator
     //
-    S3ChunkIterator::S3ChunkIterator(const S3Array& array,
-                                     const S3Chunk* chunk,
+    XChunkIterator::XChunkIterator(const XArray& array,
+                                     const XChunk* chunk,
                                      int iterationMode,
                                      std::shared_ptr<arrow::RecordBatch> arrowBatch):
         _array(array),
@@ -250,7 +251,7 @@ namespace scidb {
         restart();
     }
 
-    void S3ChunkIterator::restart()
+    void XChunkIterator::restart()
     {
         _currPos = _firstPos;
         _arrowIndex = 0;
@@ -260,13 +261,13 @@ namespace scidb {
             _hasCurrent = false;
 
         // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._query->getInstanceID() << ">" << _chunk->_attrID
+        LOG4CXX_DEBUG(logger, "XARRAY|" << _array._query->getInstanceID() << ">" << _chunk->_attrID
                       << "|ChunkIt::restart pos: " << _currPos
                       << " [" << _firstPos << ", " << _lastPos << "] arrowLen: " << _arrowLength
                       << " hasCurr: " << _hasCurrent);
     }
 
-    Value const& S3ChunkIterator::getItem()
+    Value const& XChunkIterator::getItem()
     {
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
@@ -385,7 +386,7 @@ namespace scidb {
         return _value;
     }
 
-    void S3ChunkIterator::operator ++()
+    void XChunkIterator::operator ++()
     {
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
@@ -401,10 +402,10 @@ namespace scidb {
             _currPos[i] = getCoord(i, _arrowIndex);
     }
 
-    bool S3ChunkIterator::setPosition(Coordinates const& pos)
+    bool XChunkIterator::setPosition(Coordinates const& pos)
     {
         // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << _array._query->getInstanceID() << ">" << _chunk->_attrID
+        LOG4CXX_DEBUG(logger, "XARRAY|" << _array._query->getInstanceID() << ">" << _chunk->_attrID
                       << "|ChunkIt::setPosition: " << pos);
 
         if (_arrowLength <= 0) {
@@ -452,45 +453,45 @@ namespace scidb {
         return _hasCurrent;
     }
 
-    int64_t S3ChunkIterator::getCoord(size_t dim, int64_t index)
+    int64_t XChunkIterator::getCoord(size_t dim, int64_t index)
     {
         return std::static_pointer_cast<arrow::Int64Array>(
             _arrowBatch->column(_nAtts + dim))->raw_values()[index];
     }
 
-    bool S3ChunkIterator::end()
+    bool XChunkIterator::end()
     {
         return !_hasCurrent;
     }
 
-    bool S3ChunkIterator::isEmpty() const
+    bool XChunkIterator::isEmpty() const
     {
         return _arrowLength == 0;
     }
 
-    int S3ChunkIterator::getMode() const
+    int XChunkIterator::getMode() const
     {
         return _iterationMode;
     }
 
-    Coordinates const& S3ChunkIterator::getPosition()
+    Coordinates const& XChunkIterator::getPosition()
     {
         return _currPos;
     }
 
-    ConstChunk const& S3ChunkIterator::getChunk()
+    ConstChunk const& XChunkIterator::getChunk()
     {
         return *_chunk;
     }
 
-    std::shared_ptr<Query> S3ChunkIterator::getQuery() {
+    std::shared_ptr<Query> XChunkIterator::getQuery() {
         return _array._query;
     }
 
     //
-    // S3 Chunk
+    // X Chunk
     //
-    S3Chunk::S3Chunk(S3Array& array, AttributeID attrID):
+    XChunk::XChunk(XArray& array, AttributeID attrID):
         _array(array),
         _dims(array._desc.getDimensions()),
         _nDims(array._desc.getDimensions().size()),
@@ -503,7 +504,7 @@ namespace scidb {
         _attrType(typeId2TypeEnum(array._desc.getAttributes().findattr(attrID).getType(), true))
     {}
 
-    void S3Chunk::download()
+    void XChunk::download()
     {
         if (_array._cache != NULL)
             _arrowBatch = _array._cache->get(_firstPos);
@@ -514,7 +515,7 @@ namespace scidb {
         }
     }
 
-    void S3Chunk::setPosition(Coordinates const& pos)
+    void XChunk::setPosition(Coordinates const& pos)
     {
         // Set _firstPos, _firstPosWithOverlap, _lastPos, and
         // _lastPosWithOverlap based on given pos
@@ -532,46 +533,46 @@ namespace scidb {
         }
     }
 
-    std::shared_ptr<ConstChunkIterator> S3Chunk::getConstIterator(int iterationMode) const
+    std::shared_ptr<ConstChunkIterator> XChunk::getConstIterator(int iterationMode) const
     {
         return std::shared_ptr<ConstChunkIterator>(
-            new S3ChunkIterator(_array, this, iterationMode, _arrowBatch));
+            new XChunkIterator(_array, this, iterationMode, _arrowBatch));
     }
 
-    Array const& S3Chunk::getArray() const
+    Array const& XChunk::getArray() const
     {
         return _array;
     }
 
-    const ArrayDesc& S3Chunk::getArrayDesc() const
+    const ArrayDesc& XChunk::getArrayDesc() const
     {
         return _array._desc;
     }
 
-    const AttributeDesc& S3Chunk::getAttributeDesc() const
+    const AttributeDesc& XChunk::getAttributeDesc() const
     {
         return _attrDesc;
     }
 
-    Coordinates const& S3Chunk::getFirstPosition(bool withOverlap) const
+    Coordinates const& XChunk::getFirstPosition(bool withOverlap) const
     {
         return withOverlap ? _firstPosWithOverlap : _firstPos;
     }
 
-    Coordinates const& S3Chunk::getLastPosition(bool withOverlap) const
+    Coordinates const& XChunk::getLastPosition(bool withOverlap) const
     {
         return withOverlap ? _lastPosWithOverlap : _lastPos;
     }
 
-    CompressorType S3Chunk::getCompressionMethod() const
+    CompressorType XChunk::getCompressionMethod() const
     {
         return _array._desc.getAttributes().findattr(_attrID).getDefaultCompressionMethod();
     }
 
     //
-    // S3 Array Iterator
+    // X Array Iterator
     //
-    S3ArrayIterator::S3ArrayIterator(S3Array& array, AttributeID attrID):
+    XArrayIterator::XArrayIterator(XArray& array, AttributeID attrID):
         ConstArrayIterator(array),
         _array(array),
         _attrID(attrID),
@@ -582,7 +583,7 @@ namespace scidb {
         restart();
     }
 
-    void S3ArrayIterator::operator ++()
+    void XArrayIterator::operator ++()
     {
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
@@ -596,7 +597,7 @@ namespace scidb {
         _nextChunk();
     }
 
-    void S3ArrayIterator::_nextChunk()
+    void XArrayIterator::_nextChunk()
     {
         _chunkInitialized = false;
 
@@ -608,7 +609,7 @@ namespace scidb {
         }
     }
 
-    bool S3ArrayIterator::setPosition(Coordinates const& pos)
+    bool XArrayIterator::setPosition(Coordinates const& pos)
     {
         Query::getValidQueryPtr(_array._query);
 
@@ -634,7 +635,7 @@ namespace scidb {
         return _hasCurrent;
     }
 
-    void S3ArrayIterator::restart()
+    void XArrayIterator::restart()
     {
         Query::getValidQueryPtr(_array._query);
 
@@ -642,7 +643,7 @@ namespace scidb {
         _nextChunk();
     }
 
-    ConstChunk const& S3ArrayIterator::getChunk()
+    ConstChunk const& XArrayIterator::getChunk()
     {
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
@@ -658,12 +659,12 @@ namespace scidb {
         return _chunk;
     }
 
-    bool S3ArrayIterator::end()
+    bool XArrayIterator::end()
     {
         return !_hasCurrent;
     }
 
-    Coordinates const& S3ArrayIterator::getPosition()
+    Coordinates const& XArrayIterator::getPosition()
     {
         if (!_hasCurrent)
             throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
@@ -672,11 +673,11 @@ namespace scidb {
     }
 
     //
-    // S3 Array
+    // X Array
     //
-    S3Array::S3Array(std::shared_ptr<Query> query,
+    XArray::XArray(std::shared_ptr<Query> query,
                      const ArrayDesc& desc,
-                     const std::shared_ptr<S3InputSettings> settings):
+                     const std::shared_ptr<XInputSettings> settings):
         _query(query),
         _desc(desc),
         _settings(settings),
@@ -685,7 +686,7 @@ namespace scidb {
         auto nInst = _query->getInstancesCount();
         SCIDB_ASSERT(nInst > 0 && _query->getInstanceID() < nInst);
 
-        _driver = makeDriver(_settings->getURL());
+        _driver = Driver::makeDriver(_settings->getURL());
         std::map<std::string, std::string> metadata;
         _driver->readMetadata(metadata);
 
@@ -694,36 +695,36 @@ namespace scidb {
             throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
                                  scidb::SCIDB_LE_UNKNOWN_ERROR)
                 << "compression missing from metadata";
-        auto compression = S3Metadata::string2Compression(compressionPair->second);
+        auto compression = XMetadata::string2Compression(compressionPair->second);
 
-        _arrowReader = std::make_shared<S3ArrowReader>(compression,
+        _arrowReader = std::make_shared<XArrowReader>(compression,
                                                        _driver);
 
         // If cache size is 0, the cache will be disabled
         auto cacheSize = settings->getCacheSize();
         if (cacheSize > 0)
-            _cache = std::make_unique<S3Cache>(_arrowReader,
+            _cache = std::make_unique<XCache>(_arrowReader,
                                                _driver->getURL(),
                                                _desc.getDimensions(),
                                                cacheSize);
     }
 
-    ArrayDesc const& S3Array::getArrayDesc() const {
+    ArrayDesc const& XArray::getArrayDesc() const {
         return _desc;
     }
 
-    std::shared_ptr<ConstArrayIterator> S3Array::getConstIteratorImpl(
+    std::shared_ptr<ConstArrayIterator> XArray::getConstIteratorImpl(
         const AttributeDesc& attr) const {
         return std::shared_ptr<ConstArrayIterator>(
-            new S3ArrayIterator(*(S3Array*)this, attr.getId()));
+            new XArrayIterator(*(XArray*)this, attr.getId()));
     }
 
-    void S3Array::readIndex() {
+    void XArray::readIndex() {
         const InstanceID instID = _query->getInstanceID();
 
         // -- - Get Count of Chunk Index Files - --
         size_t nIndex = _driver->count("index/");
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex nIndex:" << nIndex);
+        LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex nIndex:" << nIndex);
 
         // -- - Read Part of Chunk Index Files - --
         // Divide index files among instnaces
@@ -735,7 +736,7 @@ namespace scidb {
 
         // One coordBuf for each instance
         std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
-        S3ArrowReader arrowReader(S3Metadata::Compression::GZIP, _driver);
+        XArrowReader arrowReader(XMetadata::Compression::GZIP, _driver);
         std::shared_ptr<arrow::RecordBatch> arrowBatch;
 
         for (size_t iIndex = instID; iIndex < nIndex; iIndex += nInst) {
@@ -802,7 +803,7 @@ namespace scidb {
 
         _index.sort();
 
-        LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex size:" << _index.size());
-        // LOG4CXX_DEBUG(logger, "S3ARRAY|" << instID << "|readIndex:" << _index);
+        LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex size:" << _index.size());
+        // LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex:" << _index);
      }
-} // end scidb namespace
+} // scidb namespace

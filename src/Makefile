@@ -37,11 +37,11 @@ INC     += -I/opt/aws/include
 CPPFLAGS := $(CFLAGS) $(INC)
 # CPPFLAGS += -Wfatal-errors
 
-LIBS    := -shared -Wl,-soname,libs3bridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
+LIBS    := -shared -Wl,-soname,libbridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
 LIBS    += -rdynamic $(AWS_LIB)/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,$(AWS_LIB) $(CURL_LIB)
 
-SRCS    := plugin.cpp LogicalS3Save.cpp PhysicalS3Save.cpp LogicalS3Input.cpp PhysicalS3Input.cpp S3Array.cpp S3Index.cpp S3Driver.cpp FSDriver.cpp
-HEADERS := S3Common.h S3SaveSettings.h S3InputSettings.h S3Array.h S3Index.h
+SRCS    := plugin.cpp LogicalXSave.cpp PhysicalXSave.cpp LogicalXInput.cpp PhysicalXInput.cpp XArray.cpp XIndex.cpp S3Driver.cpp FSDriver.cpp DriverFactory.cpp
+HEADERS := Common.h XSaveSettings.h XInputSettings.h XArray.h XIndex.h
 OBJS    := $(SRCS:%.cpp=%.o)
 
 
@@ -56,29 +56,30 @@ else
   endif
 endif
 
-all: libs3bridge.so
+all: libbridge.so
 
 # %.o: %.cpp $(HEADERS)
 # 	$(CXX) $(CFLAGS) $(INC) -c $< -o $@
 
 plugin.o:
 
-LogicalS3Input.o: S3InputSettings.h Driver.h S3Driver.h FSDriver.h
-PhysicalS3Input.o: S3InputSettings.h S3Array.h S3Common.h S3Index.h
+LogicalXInput.o: XInputSettings.h Common.h Driver.h
+PhysicalXInput.o: XInputSettings.h Common.h XArray.h XIndex.h
 
-LogicalS3Save.o:  S3SaveSettings.h S3Common.h
-PhysicalS3Save.o: S3Common.h S3SaveSettings.h S3Common.h S3Index.h Driver.h S3Driver.h FSDriver.h
+LogicalXSave.o:  XSaveSettings.h Common.h
+PhysicalXSave.o: XSaveSettings.h Common.h XIndex.h Driver.h
 
-S3Array.o: S3Array.h S3Index.h  S3Common.h S3InputSettings.h S3Common.h Driver.h S3Driver.h FSDriver.h
-S3Index.o: S3Index.h
+XArray.o: XArray.h XIndex.h XInputSettings.h Common.h Driver.h
+XIndex.o: XIndex.h
 S3Driver.o: S3Driver.h Driver.h
 FSDriver.o: FSDriver.h Driver.h
+DriverFactory.o: S3Driver.h FSDriver.h Driver.h
 
-libs3bridge.so: $(OBJS)
+libbridge.so: $(OBJS)
 	@if test ! -d "$(SCIDB)"; then echo  "Error. Try:\n\nmake SCIDB=<PATH TO SCIDB INSTALL PATH>"; exit 1; fi
-	$(CXX) $(CFLAGS) $(INC) -o libs3bridge.so $(OBJS) $(LIBS)
+	$(CXX) $(CFLAGS) $(INC) -o libbridge.so $(OBJS) $(LIBS)
 	@echo "Now copy *.so to your SciDB lib/scidb/plugins directory and run"
-	@echo "iquery -aq \"load_library('s3bridge')\" # to load the plugin."
+	@echo "iquery -aq \"load_library('bridge')\" # to load the plugin."
 	@echo
 	@echo "Re-start SciDB if the plugin was already loaded previously."
 	@echo "Remember to copy the plugin to all your nodes in the cluster."

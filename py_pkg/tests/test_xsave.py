@@ -14,7 +14,7 @@ def test_one_chunk(scidb_con, url):
     schema = '<v:int64> [i=0:9]'
 
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, i),
   '{}')""".format(schema, url))
 
@@ -38,7 +38,7 @@ def test_multi_chunk(scidb_con, url):
     schema = '<v:int64> [i=0:19:0:5]'
 
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, i),
   '{}')""".format(schema, url))
 
@@ -64,7 +64,7 @@ def test_multi_dim(scidb_con, url):
     schema = '<v:int64> [i=0:9:0:5; j=10:19:0:5]'
 
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, i),
   '{}')""".format(schema, url))
 
@@ -93,7 +93,7 @@ def test_multi_atts(scidb_con, url):
     schema = '<v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]'
 
     scidb_con.iquery("""
-s3save(
+xsave(
   apply(
     build({}, i),
     w, double(v * v)),
@@ -125,7 +125,7 @@ def test_filter(scidb_con, url):
     schema = '<v:int64> [i=0:9:0:5; j=10:19:0:5]'
 
     scidb_con.iquery("""
-s3save(
+xsave(
   filter(
     build({}, i),
     (i < 3 or i > 5) and j > 15),
@@ -160,7 +160,7 @@ def test_empty_chunks(scidb_con, url):
     schema = '<v:int64> [i=0:19:0:5; j=10:49:0:10]'
 
     scidb_con.iquery("""
-s3save(
+xsave(
   filter(
     build({}, i + j),
     (i >= 5 and i < 10 or i >= 15) and (j < 20 or j >= 30 and j < 40)),
@@ -195,7 +195,7 @@ def test_one_index(scidb_con, url):
     schema = '<v:int64> [i=0:99:0:5; j=0:99:0:5]'
 
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, i + j),
   '{}')""".format(schema, url))
 
@@ -232,7 +232,7 @@ def test_multi_index(scidb_con, url, index_split):
     schema = '<v:int64> [i=0:99:0:5; j=0:99:0:5]'
 
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, i + j),
   '{}',
   index_split:{})""".format(schema, url, index_split))
@@ -276,7 +276,7 @@ def test_compression(scidb_con, url, compression, sz_min, sz_max):
     schema = '<v:int64> [i=0:19:0:5; j=10:49:0:10]'
 
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, i + j),
   '{}'{})""".format(schema,
                     url,
@@ -321,11 +321,16 @@ s3save(
                                  's3://',
                                  's3:\\',
                                  's3:\\\\',
+                                 'file',
+                                 'file:',
+                                 'file:/',
+                                 'file://',
+                                 'file:\\',
                                  ))
 def test_bad_url(scidb_con, url):
     schema = '<v:int64> [i=0:9]'
 
-    que = 's3save(build({}, i){})'.format(
+    que = 'xsave(build({}, i){})'.format(
         schema, '' if url is None else ", '{}'".format(url))
 
     with pytest.raises(requests.exceptions.HTTPError):

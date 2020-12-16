@@ -23,37 +23,22 @@
 * END_COPYRIGHT
 */
 
-#ifndef FS_DRIVER_H_
-#define FS_DRIVER_H_
-
-#include "Driver.h"
-
+#include "S3Driver.h"
+#include "FSDriver.h"
 
 namespace scidb {
 
-class FSDriver: public Driver {
-public:
-    FSDriver(const std::string &url);
+std::shared_ptr<Driver> Driver::makeDriver(
+    const std::string url)
+{
+    if (url.rfind("file://", 0) == 0)
+        return std::make_shared<FSDriver>(url);
 
-    void writeArrow(const std::string&,
-                    std::shared_ptr<const arrow::Buffer>) const;
+    if (url.rfind("s3://", 0) == 0)
+        return std::make_shared<S3Driver>(url);
 
-    void readMetadata(std::map<std::string, std::string>&) const;
-    void writeMetadata(const std::map<std::string, std::string>&) const;
-
-    // Count number of objects with specified prefix
-    size_t count(const std::string&) const;
-
-    // Return print-friendly path used by driver
-    const std::string& getURL() const;
-
-private:
-    const std::string _url;
-    std::string _prefix;
-
-    size_t _readArrow(const std::string&, std::shared_ptr<arrow::Buffer>&, bool) const;
-};
+    throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR)
+        << "Invalid URL " << url;
+}
 
 } // namespace scidb
-
-#endif  // FSDriver

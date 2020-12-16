@@ -5,38 +5,39 @@
 * Copyright (C) 2020 Paradigm4 Inc.
 * All Rights Reserved.
 *
-* s3bridge is a plugin for SciDB, an Open Source Array DBMS maintained
+* bridge is a plugin for SciDB, an Open Source Array DBMS maintained
 * by Paradigm4. See http://www.paradigm4.com/
 *
-* s3bridge is free software: you can redistribute it and/or modify
+* bridge is free software: you can redistribute it and/or modify
 * it under the terms of the AFFERO GNU General Public License as published by
 * the Free Software Foundation.
 *
-* s3bridge is distributed "AS-IS" AND WITHOUT ANY WARRANTY OF ANY KIND,
+* bridge is distributed "AS-IS" AND WITHOUT ANY WARRANTY OF ANY KIND,
 * INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY,
 * NON-INFRINGEMENT, OR FITNESS FOR A PARTICULAR PURPOSE. See
 * the AFFERO GNU General Public License for the complete license terms.
 *
 * You should have received a copy of the AFFERO GNU General Public License
-* along with s3bridge.  If not, see <http://www.gnu.org/licenses/agpl-3.0.html>
+* along with bridge.  If not, see <http://www.gnu.org/licenses/agpl-3.0.html>
 *
 * END_COPYRIGHT
 */
 
+#include "XInputSettings.h"
+#include "Driver.h"
+
+// SciDB
 #include <query/LogicalQueryPlan.h>
 #include <query/Parser.h>
 #include <util/OnScopeExit.h>
 
-#include "S3InputSettings.h"
 
+namespace scidb {
 
-namespace scidb
-{
-
-class LogicalS3Input : public  LogicalOperator
+class LogicalXInput : public  LogicalOperator
 {
 public:
-    LogicalS3Input(const std::string& logicalName, const std::string& alias):
+    LogicalXInput(const std::string& logicalName, const std::string& alias):
         LogicalOperator(logicalName, alias)
     {}
 
@@ -56,13 +57,13 @@ public:
 
     ArrayDesc inferSchema(std::vector<ArrayDesc> schemas, std::shared_ptr<Query> query)
     {
-        S3InputSettings settings(_parameters, _kwParameters, true, query);
+        XInputSettings settings(_parameters, _kwParameters, true, query);
 
         // Get Metadata
-        auto driver = makeDriver(settings.getURL());
+        auto driver = Driver::makeDriver(settings.getURL());
         std::map<std::string, std::string> metadata;
         driver->readMetadata(metadata);
-        LOG4CXX_DEBUG(logger, "S3INPUT|" << query->getInstanceID() << "|schema: " << metadata["schema"]);
+        LOG4CXX_DEBUG(logger, "XINPUT|" << query->getInstanceID() << "|schema: " << metadata["schema"]);
 
         // Build Fake Query and Extract Schema
         std::shared_ptr<Query> innerQuery = Query::createFakeQuery(
@@ -97,6 +98,6 @@ public:
     }
 };
 
-REGISTER_LOGICAL_OPERATOR_FACTORY(LogicalS3Input, "s3input");
+REGISTER_LOGICAL_OPERATOR_FACTORY(LogicalXInput, "xinput");
 
-} // end namespace scidb
+} // namespace scidb

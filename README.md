@@ -1,10 +1,10 @@
-# SciDB Save/Load to/from Simple Storage Service (S3)
+# SciDB Input/Output Using External Storage
 
 [![SciDB 19.11](https://img.shields.io/badge/SciDB-19.11-blue.svg)](https://forum.paradigm4.com/t/scidb-release-19-11/2411)
 [![arrow 0.16.0](https://img.shields.io/badge/arrow-0.16.0-blue.svg)](https://arrow.apache.org/release/0.16.0.html)
 
 This document contains installation and usage instructions of the
-`s3bridge` SciDB plugin.
+`bridge` SciDB plugin.
 
 1. [Installation](#installation)
 1. [Usage](#usage)
@@ -108,18 +108,18 @@ S3 bucket used.
 
 1. Checkout and compile the plug-in:
    ```
-   > git clone https://github.com/Paradigm4/s3bridge.git
-   s3bridge> make
+   > git clone https://github.com/Paradigm4/bridge.git
+   bridge> make
    ```
 1. Install in SciDB:
    ```
-   s3bridge> cp libs3bridge.so /opt/scidb/19.11/lib/scidb/plugins
+   bridge> cp libbridge.so /opt/scidb/19.11/lib/scidb/plugins
    ```
 1. Restart SciDB and load the plug-in:
    ```
    scidbctl.py stop mydb
    scidbctl.py start mydb
-   iquery --afl --query "load_library('s3bridge')"
+   iquery --afl --query "load_library('bridge')"
    ```
 
 ## Usage
@@ -129,22 +129,21 @@ Note: only single chunks arrays are currently supported.
 1. Save SciDB array in S3:
    ```
    > iquery --afl
-   AFL% s3save(
+   AFL% xsave(
           filter(
             apply(
               build(<v:int64>[i=0:9:0:5; j=10:19:0:5], j + i),
               w, double(v*v)),
             i >= 5 and w % 2 = 0),
-          bucket_name:'p4tests',
-          bucket_prefix:'s3bridge/foo');
+          's3://p4tests/bridge/foo');
    {chunk_no,dest_instance_id,source_instance_id} val
    ```
    The SciDB array is saved in the `p4tests` bucket in the `foo` object.
 1. Load SciDB array from S3 in Python:
    ```
    > python
-   >>> import scidbs3
-   >>> ar = scidbs3.S3Array(bucket_name='p4tests', bucket_prefix='s3bridge/foo')
+   >>> import scidbbridge
+   >>> ar = scidbbridge.Array('s3://p4tests/bridge/foo')
 
    >>> ar.metadata
    {'version': '1',
@@ -177,13 +176,13 @@ Note: only single chunks arrays are currently supported.
 ### Troubleshoot
 
 It is common for S3 to return _Access Denied_ for non-obvious cases
-like, for example, if the bucket specified does not exist. `s3save`
+like, for example, if the bucket specified does not exist. `xsave`
 includes an extended error message for this type of errors which
 include a link to a troubleshootting guide. E.g.:
 
 ```
-> iquery -aq "s3save(build(<v:int64>[i=0:9], i), bucket_name:'foo', object_path:'bar')"
-UserException in file: PhysicalS3Save.cpp function: uploadS3 line: 372 instance: s0-i1 (1)
+> iquery -aq "xsave(build(<v:int64>[i=0:9], i), bucket_name:'foo', object_path:'bar')"
+UserException in file: PhysicalXSave.cpp function: uploadS3 line: 372 instance: s0-i1 (1)
 Error id: scidb::SCIDB_SE_ARRAY_WRITER::SCIDB_LE_UNKNOWN_ERROR
 Error description: Error while saving array. Unknown error: Upload to
 s3://foo/bar failed. Access Denied. See

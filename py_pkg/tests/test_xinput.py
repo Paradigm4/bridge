@@ -17,12 +17,12 @@ def test_one_dim_one_attr(scidb_con, url, chunk_size):
 
     # Store
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, i),
   '{}')""".format(schema, url))
 
     # Input
-    array = scidb_con.iquery("s3input('{}')".format(url), fetch=True)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
     assert array.equals(
@@ -37,7 +37,7 @@ def test_multi_attr(scidb_con, url, chunk_size):
 
     # Store
     scidb_con.iquery("""
-s3save(
+xsave(
   redimension(
     apply(
       build({}, i),
@@ -48,7 +48,7 @@ s3save(
                   url))
 
     # Input
-    array = scidb_con.iquery("s3input('{}')".format(url), fetch=True)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
     assert array.equals(
@@ -71,12 +71,12 @@ def test_multi_dim(scidb_con, url, dim_start, dim_end, chunk_size):
 
     # Store
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, i),
   '{}')""".format(schema, url))
 
     # Input
-    array = scidb_con.iquery("s3input('{}')".format(url), fetch=True)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
 
     i_lst = []
@@ -140,11 +140,11 @@ def test_type(scidb_con, url, type_name, is_null, type_numpy, chunk_size):
             que = que.redimension(schema)
     else:
         que = scidb_con.build(schema, '{}(i)'.format(type_name))
-    que = que.s3save("'{}'".format(url))
+    que = que.xsave("'{}'".format(url))
     res = que.fetch()
 
     # Input
-    array = scidb_con.iquery("s3input('{}')".format(url), fetch=True)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
     if type_name in ('binary', 'char'):
@@ -184,12 +184,12 @@ def test_filter_before(scidb_con, url, dim_start, dim_end, chunk_size):
 
     # Store
     scidb_con.iquery("""
-s3save(
+xsave(
   filter(build({}, i), i % 3 = 0 and i > 7),
   '{}')""".format(schema, url))
 
     # Input
-    array = scidb_con.iquery("s3input('{}')".format(url), fetch=True)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
 
     i_lst = []
@@ -222,14 +222,14 @@ def test_filter_after(scidb_con, url, dim_start, dim_end, chunk_size):
 
     # Store
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, i),
   '{}')""".format(schema, url))
 
     # Input
     array = scidb_con.iquery("""
 filter(
-  s3input(
+  xinput(
     '{}'),
   i % 3 = 0 and i > 7)""".format(url), fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
@@ -257,12 +257,12 @@ def test_nulls(scidb_con, url):
 
     # Store
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, iif(i % 2 = 0, i, missing(i))),
   '{}')""".format(schema, url))
 
     # Input
-    array = scidb_con.iquery("s3input('{}')".format(url), fetch=True)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
     i_lst = []
@@ -287,12 +287,12 @@ def test_chunk_index(scidb_con, url):
 
     # Store
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, i),
   '{}')""".format(schema, url))
 
     # Input
-    array = scidb_con.iquery("s3input('{}')".format(url), fetch=True)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
     assert array.equals(
@@ -309,7 +309,7 @@ def test_cache(scidb_con, url, cache_size):
 
     # Store
     scidb_con.iquery("""
-s3save(
+xsave(
   redimension(
     filter(
       apply(
@@ -322,7 +322,7 @@ s3save(
                   url))
 
     # Input
-    que = "s3input('{}'{})".format(
+    que = "xinput('{}'{})".format(
         url,
         '' if cache_size is None else ', cache_size:{}'.format(cache_size))
 
@@ -350,7 +350,7 @@ def test_arrow_chunk(scidb_con, url):
     # Store
     # if url.startswith('s3://'):
     scidb_con.iquery("""
-s3save(
+xsave(
   build({}, i),
   '{}')""".format(schema, url))
 
@@ -381,7 +381,7 @@ s3save(
                           Key=s3_key)
 
     # Input
-    que = "s3input('{}')".format(url)
+    que = "xinput('{}')".format(url)
 
     with pytest.raises(requests.exceptions.HTTPError):
         array = scidb_con.iquery(que, fetch=True)

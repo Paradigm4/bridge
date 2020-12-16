@@ -5,29 +5,28 @@
 * Copyright (C) 2020 Paradigm4 Inc.
 * All Rights Reserved.
 *
-* s3bridge is a plugin for SciDB, an Open Source Array DBMS maintained
+* bridge is a plugin for SciDB, an Open Source Array DBMS maintained
 * by Paradigm4. See http://www.paradigm4.com/
 *
-* s3bridge is free software: you can redistribute it and/or modify
+* bridge is free software: you can redistribute it and/or modify
 * it under the terms of the AFFERO GNU General Public License as published by
 * the Free Software Foundation.
 *
-* s3bridge is distributed "AS-IS" AND WITHOUT ANY WARRANTY OF ANY KIND,
+* bridge is distributed "AS-IS" AND WITHOUT ANY WARRANTY OF ANY KIND,
 * INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY,
 * NON-INFRINGEMENT, OR FITNESS FOR A PARTICULAR PURPOSE. See
 * the AFFERO GNU General Public License for the complete license terms.
 *
 * You should have received a copy of the AFFERO GNU General Public License
-* along with s3bridge.  If not, see <http://www.gnu.org/licenses/agpl-3.0.html>
+* along with bridge.  If not, see <http://www.gnu.org/licenses/agpl-3.0.html>
 *
 * END_COPYRIGHT
 */
 
-#include "S3Common.h"
-#include "S3SaveSettings.h"
-#include "S3Index.h"
+#include "XSaveSettings.h"
+#include "XIndex.h"
+#include "Driver.h"
 
-#include <chrono>
 #include <thread>
 
 // SciDB
@@ -44,15 +43,14 @@
 #include <arrow/util/compression.h>
 
 
-namespace scidb
-{
+namespace scidb {
 
 class ArrowWriter
 {
 private:
     const size_t                                      _nAttrs;
     const size_t                                      _nDims;
-    const S3Metadata::Compression                     _compression;
+    const XMetadata::Compression                     _compression;
     std::vector<TypeEnum>                             _attrTypes;
     std::vector<std::vector<int64_t>>                 _dimValues;
 
@@ -67,7 +65,7 @@ private:
 public:
     ArrowWriter(const Attributes &attributes,
                 const Dimensions &dimensions,
-                S3Metadata::Compression compression):
+                XMetadata::Compression compression):
         _nAttrs(attributes.size()),
         _nDims(dimensions.size()),
         _compression(compression),
@@ -275,8 +273,8 @@ public:
         return finalize(arrowBuffer);
     }
 
-    arrow::Status writeArrowBuffer(const S3IndexCont::const_iterator begin,
-                                   const S3IndexCont::const_iterator end,
+    arrow::Status writeArrowBuffer(const XIndexCont::const_iterator begin,
+                                   const XIndexCont::const_iterator end,
                                    const size_t size,
                                    std::shared_ptr<arrow::Buffer>& arrowBuffer) {
         // Append to Arrow Builders
@@ -445,7 +443,7 @@ private:
         // Setup Arrow Compression, If Enabled
         std::shared_ptr<arrow::ipc::RecordBatchWriter> arrowWriter;
         std::shared_ptr<arrow::io::CompressedOutputStream> arrowCompressedStream;
-        if (_compression == S3Metadata::Compression::GZIP) {
+        if (_compression == XMetadata::Compression::GZIP) {
             std::unique_ptr<arrow::util::Codec> codec = *arrow::util::Codec::Create(
                 arrow::Compression::type::GZIP);
             ARROW_ASSIGN_OR_RAISE(
@@ -469,21 +467,21 @@ private:
         ARROW_RETURN_NOT_OK(arrowWriter->Close());
 
         // Close Arrow Compression Stream, If Enabled
-        if (_compression == S3Metadata::Compression::GZIP) {
+        if (_compression == XMetadata::Compression::GZIP) {
             ARROW_RETURN_NOT_OK(arrowCompressedStream->Close());
         }
 
         ARROW_ASSIGN_OR_RAISE(arrowBuffer, arrowBufferStream->Finish());
-        LOG4CXX_DEBUG(logger, "S3SAVE|arrowBuffer::size: " << arrowBuffer->size());
+        LOG4CXX_DEBUG(logger, "XSAVE|arrowBuffer::size: " << arrowBuffer->size());
 
         return arrow::Status::OK();
     }
 };
 
-class PhysicalS3Save : public PhysicalOperator
+class PhysicalXSave : public PhysicalOperator
 {
 public:
-    PhysicalS3Save(std::string const& logicalName,
+    PhysicalXSave(std::string const& logicalName,
                    std::string const& physicalName,
                    Parameters const& parameters,
                    ArrayDesc const& schema):
@@ -493,8 +491,8 @@ public:
     std::shared_ptr<Array> execute(std::vector< std::shared_ptr<Array> >& inputArrays,
                                    std::shared_ptr<Query> query)
     {
-        S3SaveSettings settings(_parameters, _kwParameters, false, query);
-        const S3Metadata::Compression compression = settings.getCompression();
+        XSaveSettings settings(_parameters, _kwParameters, false, query);
+        const XMetadata::Compression compression = settings.getCompression();
         std::shared_ptr<Array> result(new MemArray(_schema, query));
 
         std::shared_ptr<Array>& inputArray = inputArrays[0];
@@ -502,12 +500,12 @@ public:
         inputSchema.setName("");
         bool haveChunk_ = haveChunk(inputArray, inputSchema);
         LOG4CXX_DEBUG(logger,
-                      "S3SAVE|" << query->getInstanceID()
+                      "XSAVE|" << query->getInstanceID()
                       << "|execute isCoord " << query->isCoordinator()
                       << " haveChunk " << haveChunk_);
 
         // Chunk Coordinate Index
-        S3Index index(inputSchema);
+        XIndex index(inputSchema);
 
         // Exit Early
         if (!haveChunk_ && !query->isCoordinator()) {
@@ -516,19 +514,19 @@ public:
             return result;
         }
 
-        auto driver = makeDriver(settings.getURL());
+        auto driver = Driver::makeDriver(settings.getURL());
 
-        // Coordiantor Creates S3 Metadata Object
+        // Coordiantor Creates X Metadata Object
         if (query->isCoordinator()) {
             // Prep Metadata
             std::map<std::string, std::string> metadata;
             std::ostringstream out;
             printSchema(out, inputSchema);
             metadata["schema"] = out.str();
-            metadata["version"] = STR(S3BRIDGE_VERSION);
+            metadata["version"] = STR(BRIDGE_VERSION);
             metadata["attribute"] = "ALL";
             metadata["format"] = "arrow";
-            metadata["compression"] = S3Metadata::compression2String(compression);
+            metadata["compression"] = XMetadata::compression2String(compression);
 
             // Write Metadata
             driver->writeMetadata(metadata);
@@ -595,13 +593,13 @@ public:
             size_t szSplit = static_cast<int>(settings.getIndexSplit() / nDims);
             size_t split = 0;
 
-            LOG4CXX_DEBUG(logger, "S3SAVE|" << query->getInstanceID()
+            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
                           << "|execute szSplit:" << szSplit);
 
 
             ArrowWriter indexWriter(Attributes(),
-                                          inputSchema.getDimensions(),
-                                          S3Metadata::Compression::GZIP);
+                                    inputSchema.getDimensions(),
+                                    XMetadata::Compression::GZIP);
 
             auto splitPtr = index.begin();
             while (splitPtr != index.end()) {
@@ -639,6 +637,6 @@ private:
     }
 };
 
-REGISTER_PHYSICAL_OPERATOR_FACTORY(PhysicalS3Save, "s3save", "PhysicalS3Save");
+REGISTER_PHYSICAL_OPERATOR_FACTORY(PhysicalXSave, "xsave", "PhysicalXSave");
 
-} // end namespace scidb
+} // namespace scidb

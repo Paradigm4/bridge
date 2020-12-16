@@ -5,40 +5,41 @@
 * Copyright (C) 2020 Paradigm4 Inc.
 * All Rights Reserved.
 *
-* s3bridge is a plugin for SciDB, an Open Source Array DBMS maintained
+* bridge is a plugin for SciDB, an Open Source Array DBMS maintained
 * by Paradigm4. See http://www.paradigm4.com/
 *
-* s3bridge is free software: you can redistribute it and/or modify
+* bridge is free software: you can redistribute it and/or modify
 * it under the terms of the AFFERO GNU General Public License as published by
 * the Free Software Foundation.
 *
-* s3bridge is distributed "AS-IS" AND WITHOUT ANY WARRANTY OF ANY KIND,
+* bridge is distributed "AS-IS" AND WITHOUT ANY WARRANTY OF ANY KIND,
 * INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY,
 * NON-INFRINGEMENT, OR FITNESS FOR A PARTICULAR PURPOSE. See
 * the AFFERO GNU General Public License for the complete license terms.
 *
 * You should have received a copy of the AFFERO GNU General Public License
-* along with s3bridge.  If not, see <http://www.gnu.org/licenses/agpl-3.0.html>
+* along with bridge.  If not, see <http://www.gnu.org/licenses/agpl-3.0.html>
 *
 * END_COPYRIGHT
 */
 
-#ifndef S3_ARRAY_H_
-#define S3_ARRAY_H_
+#ifndef X_ARRAY_H_
+#define X_ARRAY_H_
 
 #include <mutex>
 
+// SciDB
 #include <array/DelegateArray.h>
 
-#include "S3Common.h"
-#include "S3Index.h"
+#include "Common.h"
+#include "XIndex.h"
 
 
 // Forward Declarastions to avoid including full headers - speed-up
 // compilation
 namespace scidb {
-    class S3InputSettings;       // #include "S3InputSettings.h"
-    class Driver;                // #include "Driver.h"
+    class XInputSettings;       // #include "XInputSettings.h"
+    class Driver;               // #include "Driver.h"
 }
 namespace arrow {
     class Array;
@@ -56,20 +57,19 @@ namespace arrow {
 // -- End of Forward Declarations
 
 
-namespace scidb
-{
+namespace scidb {
 
-class S3ArrowReader {
+class XArrowReader {
 public:
-    S3ArrowReader(S3Metadata::Compression,
-                  std::shared_ptr<const Driver>);
+    XArrowReader(XMetadata::Compression,
+                 std::shared_ptr<const Driver>);
 
     size_t readObject(const std::string &name,
                       bool reuse,
                       std::shared_ptr<arrow::RecordBatch>&);
 
 private:
-    const S3Metadata::Compression _compression;
+    const XMetadata::Compression _compression;
 
     std::shared_ptr<const Driver> _driver;
 
@@ -84,40 +84,39 @@ typedef struct {
     std::list<Coordinates>::iterator lruIt;
     std::shared_ptr<arrow::RecordBatch> arrowBatch;
     size_t arrowSize;
-} S3CacheCell;
+} XCacheCell;
 
-class S3Cache {
+class XCache {
 public:
-    S3Cache(
-        std::shared_ptr<S3ArrowReader>,
-        const std::string &path,
-        const Dimensions&,
-        size_t);
+    XCache(std::shared_ptr<XArrowReader>,
+           const std::string &path,
+           const Dimensions&,
+           size_t);
 
     std::shared_ptr<arrow::RecordBatch> get(Coordinates);
 
 private:
-    const std::shared_ptr<S3ArrowReader> _arrowReader;
+    const std::shared_ptr<XArrowReader> _arrowReader;
     const std::string _path;
     const Dimensions _dims;
     size_t _size;
     const size_t _sizeMax;
     std::list<Coordinates> _lru;
-    std::unordered_map<Coordinates, S3CacheCell, CoordinatesHash> _mem;
+    std::unordered_map<Coordinates, XCacheCell, CoordinatesHash> _mem;
     std::mutex _lock;
 };
 
-class S3Array;
-class S3ArrayIterator;
-class S3Chunk;
+class XArray;
+class XArrayIterator;
+class XChunk;
 
-class S3ChunkIterator : public ConstChunkIterator
+class XChunkIterator : public ConstChunkIterator
 {
 public:
-    S3ChunkIterator(const S3Array& array,
-                    S3Chunk const* chunk,
-                    int iterationMode,
-                    std::shared_ptr<arrow::RecordBatch> arrowBatch);
+    XChunkIterator(const XArray& array,
+                   XChunk const* chunk,
+                   int iterationMode,
+                   std::shared_ptr<arrow::RecordBatch> arrowBatch);
 
     int getMode() const override;
     bool isEmpty() const override;
@@ -133,10 +132,10 @@ public:
 private:
     int64_t getCoord(size_t dim, int64_t index);
 
-    const S3Array& _array;
+    const XArray& _array;
     const size_t _nAtts;
     const size_t _nDims;
-    const S3Chunk* const _chunk;
+    const XChunk* const _chunk;
     const int _iterationMode;
 
     Coordinates _firstPos;
@@ -159,12 +158,12 @@ private:
     bool _hasCurrent;
 };
 
-class S3Chunk : public ConstChunk
+class XChunk : public ConstChunk
 {
-    friend class S3ChunkIterator;
+    friend class XChunkIterator;
 
 public:
-    S3Chunk(S3Array& array, AttributeID attrID);
+    XChunk(XArray& array, AttributeID attrID);
 
     virtual const ArrayDesc& getArrayDesc() const;
     virtual const AttributeDesc& getAttributeDesc() const;
@@ -178,7 +177,7 @@ public:
     void download();
 
 private:
-    const S3Array& _array;
+    const XArray& _array;
     const Dimensions _dims;
     const size_t _nDims;
     Coordinates _firstPos;
@@ -192,10 +191,10 @@ private:
     std::shared_ptr<arrow::RecordBatch> _arrowBatch;
 };
 
-class S3ArrayIterator : public ConstArrayIterator
+class XArrayIterator : public ConstArrayIterator
 {
 public:
-    S3ArrayIterator(S3Array& array, AttributeID attrID);
+    XArrayIterator(XArray& array, AttributeID attrID);
 
     ConstChunk const& getChunk() override;
     bool end() override;
@@ -207,27 +206,27 @@ public:
 private:
     void _nextChunk();
 
-    const S3Array& _array;
+    const XArray& _array;
     const AttributeID _attrID;
     const Dimensions _dims;
-    S3Chunk _chunk;
+    XChunk _chunk;
 
     Coordinates _currPos;
     bool _hasCurrent;
     bool _chunkInitialized;
-    S3IndexCont::const_iterator _currIndex;
+    XIndexCont::const_iterator _currIndex;
 };
 
-class S3Array : public Array
+class XArray : public Array
 {
-    friend class S3ArrayIterator;
-    friend class S3ChunkIterator;
-    friend class S3Chunk;
+    friend class XArrayIterator;
+    friend class XChunkIterator;
+    friend class XChunk;
 
 public:
-    S3Array(std::shared_ptr<Query> query,
-            const ArrayDesc& desc,
-            const std::shared_ptr<S3InputSettings> settings);
+    XArray(std::shared_ptr<Query> query,
+           const ArrayDesc& desc,
+           const std::shared_ptr<XInputSettings> settings);
 
     virtual ArrayDesc const& getArrayDesc() const;
 
@@ -242,15 +241,15 @@ private:
     // SciDB members
     std::shared_ptr<Query> _query;
     const ArrayDesc _desc;
-    const std::shared_ptr<const S3InputSettings> _settings;
+    const std::shared_ptr<const XInputSettings> _settings;
 
-    // S3Bridge members
+    // XBridge members
     std::shared_ptr<const Driver> _driver;
-    std::shared_ptr<S3ArrowReader> _arrowReader;
-    S3Index _index;
-    std::unique_ptr<S3Cache> _cache;
+    std::shared_ptr<XArrowReader> _arrowReader;
+    XIndex _index;
+    std::unique_ptr<XCache> _cache;
 };
 
-}
+} // namespace scidb
 
-#endif
+#endif  // XArray
