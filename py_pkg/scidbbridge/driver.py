@@ -51,8 +51,8 @@ class Driver:
         if parts.scheme == 's3':
             bucket = parts.netloc
             key = parts.path[1:] + '/'
-            pages = Driver.s3_client().get_paginator('list_objects_v2').paginate(
-                Bucket=bucket, Prefix=key)
+            pages = Driver.s3_client().get_paginator(
+                'list_objects_v2').paginate(Bucket=bucket, Prefix=key)
             for page in pages:
                 for obj in page['Contents']:
                     yield 's3://{}/{}'.format(bucket, obj['Key'])
@@ -108,8 +108,8 @@ class Driver:
                 writer.close()
                 stream.close()
                 Driver.s3_client().put_object(Body=buf.getvalue().to_pybytes(),
-                                           Bucket=bucket,
-                                           Key=key)
+                                              Bucket=bucket,
+                                              Key=key)
 
         # File System
         elif parts.scheme == 'file':
@@ -125,7 +125,6 @@ class Driver:
 
         else:
             raise Exception('URL {} not supported'.format(url))
-
 
     @staticmethod
     def delete(url):
