@@ -141,7 +141,10 @@ class S3Array(_Array):
 
         table = pyarrow.Table.from_batches(batches)
         index = table.to_pandas(split_blocks=True, self_destruct=True)
-        return index.sort_values(by=list(index.columns), ignore_index=True)
+        index.sort_values(by=list(index.columns),
+                          inplace=True,
+                          ignore_index=True)
+        return index
 
     def get_chunk(self, *argv):
         return S3Chunk(self, *argv)
@@ -183,7 +186,10 @@ class FSArray(_Array):
 
         table = pyarrow.Table.from_batches(batches)
         index = table.to_pandas(split_blocks=True, self_destruct=True)
-        return index.sort_values(by=list(index.columns), ignore_index=True)
+        index.sort_values(by=list(index.columns),
+                          inplace=True,
+                          ignore_index=True)
+        return index
 
     def get_chunk(self, *argv):
         return FSChunk(self, *argv)
