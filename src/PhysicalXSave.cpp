@@ -27,8 +27,6 @@
 #include "XIndex.h"
 #include "Driver.h"
 
-#include <thread>
-
 // SciDB
 #include <array/TileIteratorAdaptors.h>
 #include <network/Network.h>
@@ -586,7 +584,7 @@ public:
                     index.deserialize_insert(BufReceive(remoteID, query));
 
             // Sort Chunk Coordinate List
-            // index.sort();
+            index.sort();
 
             // Serialize Chunk Coordinate List
             size_t nDims = dims.size();

@@ -61,6 +61,7 @@ public:
                             std::shared_ptr<arrow::Buffer> &buffer) const {
         return _readArrow(suffix, buffer, false);
     }
+
     inline size_t readArrow(const std::string &suffix,
                             std::shared_ptr<arrow::ResizableBuffer> buffer) const {
         auto buf = std::static_pointer_cast<arrow::Buffer>(buffer);

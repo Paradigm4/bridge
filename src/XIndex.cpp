@@ -90,16 +90,7 @@ std::shared_ptr<SharedBuffer> XIndex::serialize() const {
 }
 
 void XIndex::sort() {
-    // TODO Remove
-    auto start = std::chrono::high_resolution_clock::now();
-
     std::sort(_values.begin(), _values.end(), CoordinatesLess());
-
-    // TODO Remove
-    auto stop = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-        stop - start);
-    LOG4CXX_DEBUG(logger, "XINDEX||Sort time:" << duration.count() << " microseconds");
 }
 
 const XIndexCont::const_iterator XIndex::begin() const {
