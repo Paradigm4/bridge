@@ -59,9 +59,9 @@ namespace arrow {
 
 namespace scidb {
 
-class XArrowReader {
+class ArrowReader {
 public:
-    XArrowReader(XMetadata::Compression,
+    ArrowReader(XMetadata::Compression,
                  std::shared_ptr<const Driver>);
 
     size_t readObject(const std::string &name,
@@ -88,7 +88,7 @@ typedef struct {
 
 class XCache {
 public:
-    XCache(std::shared_ptr<XArrowReader>,
+    XCache(std::shared_ptr<ArrowReader>,
            const std::string &path,
            const Dimensions&,
            size_t);
@@ -96,7 +96,7 @@ public:
     std::shared_ptr<arrow::RecordBatch> get(Coordinates);
 
 private:
-    const std::shared_ptr<XArrowReader> _arrowReader;
+    const std::shared_ptr<ArrowReader> _arrowReader;
     const std::string _path;
     const Dimensions _dims;
     size_t _size;
@@ -245,7 +245,7 @@ private:
 
     // XBridge members
     std::shared_ptr<const Driver> _driver;
-    std::shared_ptr<XArrowReader> _arrowReader;
+    std::shared_ptr<ArrowReader> _arrowReader;
     XIndex _index;
     std::unique_ptr<XCache> _cache;
 };

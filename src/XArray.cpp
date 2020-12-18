@@ -62,9 +62,9 @@
 namespace scidb {
 
     //
-    // X Arrow Reader
+    // Arrow Reader
     //
-    XArrowReader::XArrowReader(
+    ArrowReader::ArrowReader(
         XMetadata::Compression compression,
         std::shared_ptr<const Driver> driver):
         _compression(compression),
@@ -77,7 +77,7 @@ namespace scidb {
                 arrow::Compression::type::GZIP);
     }
 
-    size_t XArrowReader::readObject(
+    size_t ArrowReader::readObject(
         const std::string &name,
         bool reuse,
         std::shared_ptr<arrow::RecordBatch> &arrowBatch)
@@ -145,7 +145,7 @@ namespace scidb {
     // X Cache
     //
     XCache::XCache(
-        std::shared_ptr<XArrowReader> arrowReader,
+        std::shared_ptr<ArrowReader> arrowReader,
         const std::string &path,
         const Dimensions &dims,
         size_t cacheSize):
@@ -697,7 +697,7 @@ namespace scidb {
                 << "compression missing from metadata";
         auto compression = XMetadata::string2Compression(compressionPair->second);
 
-        _arrowReader = std::make_shared<XArrowReader>(compression,
+        _arrowReader = std::make_shared<ArrowReader>(compression,
                                                        _driver);
 
         // If cache size is 0, the cache will be disabled
@@ -736,7 +736,7 @@ namespace scidb {
 
         // One coordBuf for each instance
         std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
-        XArrowReader arrowReader(XMetadata::Compression::GZIP, _driver);
+        ArrowReader arrowReader(XMetadata::Compression::GZIP, _driver);
         std::shared_ptr<arrow::RecordBatch> arrowBatch;
 
         for (size_t iIndex = instID; iIndex < nIndex; iIndex += nInst) {
