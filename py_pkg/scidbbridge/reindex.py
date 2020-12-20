@@ -44,7 +44,7 @@ reader = Driver.reader('{}/index.arrow.gz'.format(url), 'gzip')
 table = reader.read_all()
 
 i = 0
-for offset in range(0, table.num_rows, INDEX_SPLIT_SIZE):
+for offset in range(0, table.num_rows, INDEX_SPLIT_SIZE // table.num_columns):
     sink = Driver.writer('/'.join((url, 'index/{}'.format(i))),
                          table.schema,
                          'gzip')
