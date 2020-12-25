@@ -32,8 +32,7 @@ class LogicalXSave : public  LogicalOperator
 public:
     LogicalXSave(const std::string& logicalName, const std::string& alias):
         LogicalOperator(logicalName, alias)
-    {
-    }
+    {}
 
     static PlistSpec const* makePlistSpec()
     {
