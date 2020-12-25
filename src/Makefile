@@ -21,11 +21,24 @@ ifeq ($(SCIDB_THIRDPARTY_PREFIX),)
   SCIDB_THIRDPARTY_PREFIX := $(SCIDB_3RDPARTY)
 endif
 
-# -- - Ubuntu - --
-AWS_LIB := /opt/aws/lib
-# -- - CentOS - --
-# AWS_LIB := /opt/aws/lib64
-# CURL_LIB := -Wl,-rpath,/opt/curl/lib
+
+ifneq ("$(wildcard /opt/aws/lib)","")
+  # -- - Ubuntu - --
+  AWS_LIB := /opt/aws/lib
+else ifneq ("$(wildcard /opt/aws/lib64)","")
+  # -- - CentOS - --
+  AWS_LIB := /opt/aws/lib64
+  ifneq ("$(wildcard /opt/curl/lib)","")
+    CURL_LIB := -Wl,-rpath,/opt/curl/lib
+  else
+    $(warning CentOS/RHEL setup infered but custom cURL not found in /opt/curl/lib. Make sure the system cURL is compiled with OpenSSL support and not NSS. Use curl -V to check.)
+  endif
+else
+  $(error AWS SDK libraries not found in /opt/aws)
+endif
+$(info Using AWS_LIB=$(AWS_LIB))
+$(info Using CURL_LIB=$(CURL_LIB))
+
 
 # Debug:
 CFLAGS  := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -Wall -Wextra -Wno-long-long -Wno-strict-aliasing -Wno-system-headers -Wno-unused -Wno-unused-parameter -Wno-variadic-macros -fPIC -fno-omit-frame-pointer -g -std=c++14
