@@ -694,7 +694,7 @@ namespace scidb {
         if (compressionPair == metadata.end())
             throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
                                  scidb::SCIDB_LE_UNKNOWN_ERROR)
-                << "compression missing from metadata";
+                << "Compression missing from metadata";
         auto compression = XMetadata::string2Compression(compressionPair->second);
 
         _arrowReader = std::make_shared<ArrowReader>(compression,

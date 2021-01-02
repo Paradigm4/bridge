@@ -84,7 +84,7 @@ public:
             if (schemaPair == metadata.end())
                 throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
                                      scidb::SCIDB_LE_UNKNOWN_ERROR)
-                    << "schema missing from metadata";
+                    << "Schema missing from metadata";
             out << "input(" << schemaPair->second << ", '/dev/null')";
             innerQuery->queryString = out.str();
             innerQuery->logicalPlan = std::make_shared<LogicalPlan>(

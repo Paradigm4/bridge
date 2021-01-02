@@ -52,6 +52,8 @@ private:
     std::string _prefix;
 
     size_t _readArrow(const std::string&, std::shared_ptr<arrow::Buffer>&, bool) const;
+
+    static void fail(const std::string &op, const std::string &path);
 };
 
 } // namespace scidb
