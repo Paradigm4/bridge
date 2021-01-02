@@ -31,7 +31,7 @@ else ifneq ("$(wildcard /opt/aws/lib64)","")
   ifneq ("$(wildcard /opt/curl/lib)","")
     CURL_LIB := -Wl,-rpath,/opt/curl/lib
   else
-    $(warning CentOS/RHEL setup infered but custom cURL not found in /opt/curl/lib. Make sure the system cURL is compiled with OpenSSL support and not NSS. Use curl -V to check.)
+    $(warning CentOS/RHEL setup infered but custom cURL not found in /opt/curl/lib. Make sure the system cURL is compiled with OpenSSL support and not NSS, otherwise the AWS connection will fail at runtime. Use curl -V to check.)
   endif
 else
   $(error AWS SDK libraries not found in /opt/aws)
