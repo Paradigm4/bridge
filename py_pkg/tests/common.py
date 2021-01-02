@@ -36,8 +36,10 @@ base_metadata = {'version':     '1',
 s3_bucket = 'p4tests'
 fs_base = '/tmp/{}'.format(base_prefix)
 
-test_urls = ('s3://{}/{}'.format(s3_bucket, base_prefix),
-             'file://{}'.format(fs_base))
+test_urls = (
+    's3://{}/{}'.format(s3_bucket, base_prefix),
+    'file://{}'.format(fs_base),
+)
 
 s3_con = boto3.client('s3')
 

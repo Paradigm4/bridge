@@ -188,7 +188,9 @@ class FSArray(_Array):
         index = table.to_pandas(split_blocks=True, self_destruct=True)
         index.sort_values(by=list(index.columns),
                           inplace=True,
-                          ignore_index=True)
+                          # ignore_index=True  # Pandas >= 1.0.0
+                          )
+        index.reset_index(inplace=True, drop=True)  # Pandas < 1.0.0
         return index
 
     def get_chunk(self, *argv):
