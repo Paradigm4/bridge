@@ -164,7 +164,7 @@ namespace scidb {
             std::shared_ptr<arrow::RecordBatch> arrowBatch;
             if (_mem.find(pos) == _mem.end()) {
                 // Download Chunk
-                auto objectName = coord2ObjectName(pos, _dims);
+                auto objectName = "chunks/" + coord2ObjectName(pos, _dims);
                 auto arrowSize = _arrowReader->readObject(objectName,
                                                           false,
                                                           arrowBatch);

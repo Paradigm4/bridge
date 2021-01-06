@@ -58,13 +58,14 @@ namespace scidb {
                 fail("Access directory", _prefix);
             }
         else
-            try {
-                // Not an error if the directory exists
-                boost::filesystem::create_directory(_prefix);
-            }
-            catch (const std::exception &ex) {
-                fail("Create directory", _prefix);
-            }
+            for (const std::string &postfix : {"", "/index", "/chunks"})
+                try {
+                    // Not an error if the directory exists
+                    boost::filesystem::create_directory(_prefix + postfix);
+                }
+                catch (const std::exception &ex) {
+                    fail("Create directory", _prefix + postfix);
+                }
     }
 
     size_t FSDriver::_readArrow(const std::string &suffix,

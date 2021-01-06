@@ -565,7 +565,7 @@ public:
                         dataWriter.writeArrowBuffer(inputChunkIters, arrowBuffer));
 
                     // Write Chunk
-                    driver->writeArrow(coord2ObjectName(pos, dims), arrowBuffer);
+                    driver->writeArrow("chunks/" + coord2ObjectName(pos, dims), arrowBuffer);
                 }
 
                 // Advance Array Iterators
