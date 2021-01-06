@@ -29,10 +29,10 @@
 namespace scidb {
 
 std::shared_ptr<Driver> Driver::makeDriver(
-    const std::string url)
+    const std::string url, const bool readOnly)
 {
     if (url.rfind("file://", 0) == 0)
-        return std::make_shared<FSDriver>(url);
+        return std::make_shared<FSDriver>(url, readOnly);
 
     if (url.rfind("s3://", 0) == 0)
         return std::make_shared<S3Driver>(url);

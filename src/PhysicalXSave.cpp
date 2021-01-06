@@ -512,7 +512,7 @@ public:
             return result;
         }
 
-        auto driver = Driver::makeDriver(settings.getURL());
+        auto driver = Driver::makeDriver(settings.getURL(), false);
 
         // Coordiantor Creates X Metadata Object
         if (query->isCoordinator()) {

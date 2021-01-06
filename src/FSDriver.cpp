@@ -37,9 +37,10 @@ namespace scidb {
     //
     // FSDriver
     //
-    FSDriver::FSDriver(const std::string &url):
+    FSDriver::FSDriver(const std::string &url, const bool readOnly):
         _url(url)
     {
+        // Check the URL is valid
         const size_t prefix_len = 7; // "file://"
         if (_url.rfind("file://", 0) != 0) {
             std::ostringstream out;
@@ -48,13 +49,22 @@ namespace scidb {
         }
 
         _prefix = _url.substr(prefix_len);
-        try {
-            // Not an error if the directory exists
-            boost::filesystem::create_directory(_prefix);
-        }
-        catch (const std::exception &ex) {
-            fail("Create directory", _prefix);
-        }
+        if (readOnly)
+            try {
+                if (!boost::filesystem::is_directory(_prefix))
+                    fail("Find directory", _prefix);
+            }
+            catch (const std::exception &ex) {
+                fail("Access directory", _prefix);
+            }
+        else
+            try {
+                // Not an error if the directory exists
+                boost::filesystem::create_directory(_prefix);
+            }
+            catch (const std::exception &ex) {
+                fail("Create directory", _prefix);
+            }
     }
 
     size_t FSDriver::_readArrow(const std::string &suffix,

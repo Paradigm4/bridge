@@ -81,7 +81,7 @@ public:
     // Return print-friendly path used by driver
     virtual const std::string& getURL() const = 0;
 
-    static std::shared_ptr<Driver> makeDriver(const std::string url);
+    static std::shared_ptr<Driver> makeDriver(const std::string url, const bool readOnly=true);
 
 private:
     virtual size_t _readArrow(const std::string&,

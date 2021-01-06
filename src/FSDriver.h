@@ -33,7 +33,7 @@ namespace scidb {
 
 class FSDriver: public Driver {
 public:
-    FSDriver(const std::string &url);
+    FSDriver(const std::string &url, const bool readOnly);
 
     void writeArrow(const std::string&,
                     std::shared_ptr<const arrow::Buffer>) const;
