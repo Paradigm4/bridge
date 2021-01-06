@@ -259,12 +259,6 @@ namespace scidb {
             _hasCurrent = true;
         else
             _hasCurrent = false;
-
-        // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "XARRAY|" << _array._query->getInstanceID() << ">" << _chunk->_attrID
-                      << "|ChunkIt::restart pos: " << _currPos
-                      << " [" << _firstPos << ", " << _lastPos << "] arrowLen: " << _arrowLength
-                      << " hasCurr: " << _hasCurrent);
     }
 
     Value const& XChunkIterator::getItem()
@@ -404,10 +398,6 @@ namespace scidb {
 
     bool XChunkIterator::setPosition(Coordinates const& pos)
     {
-        // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "XARRAY|" << _array._query->getInstanceID() << ">" << _chunk->_attrID
-                      << "|ChunkIt::setPosition: " << pos);
-
         if (_arrowLength <= 0) {
             _hasCurrent = false;
             return _hasCurrent;
@@ -803,7 +793,9 @@ namespace scidb {
 
         _index.sort();
 
+        // TODO Remove (debugging)
         LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex size:" << _index.size());
+        // LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex begin:" << *_index.begin());
         // LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex:" << _index);
      }
 } // scidb namespace
