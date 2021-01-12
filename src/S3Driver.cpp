@@ -86,6 +86,9 @@ namespace scidb {
         Aws::ShutdownAPI(_sdkOptions);
     }
 
+    void S3Driver::init()
+    {}
+
     size_t S3Driver::_readArrow(const std::string &suffix,
                                 std::shared_ptr<arrow::Buffer> &buffer,
                                 bool reuse) const

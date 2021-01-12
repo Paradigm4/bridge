@@ -486,6 +486,16 @@ public:
         PhysicalOperator(logicalName, physicalName, parameters, schema)
     {}
 
+    void preSingleExecute(std::shared_ptr<Query> query)
+    {
+        XSaveSettings settings(_parameters, _kwParameters, false, query);
+        auto driver = Driver::makeDriver(
+            settings.getURL(),
+            settings.isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
+        // Coordinator Creates Directories
+        driver->init();
+    }
+
     std::shared_ptr<Array> execute(std::vector< std::shared_ptr<Array> >& inputArrays,
                                    std::shared_ptr<Query> query)
     {
@@ -512,9 +522,11 @@ public:
             return result;
         }
 
-        auto driver = Driver::makeDriver(settings.getURL(), false);
+        auto driver = Driver::makeDriver(
+            settings.getURL(),
+            settings.isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
 
-        // Coordiantor Creates X Metadata Object
+        // Coordinator Creates Metadata
         if (query->isCoordinator()) {
             // Prep Metadata
             std::map<std::string, std::string> metadata;
@@ -593,7 +605,6 @@ public:
 
             LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
                           << "|execute szSplit:" << szSplit);
-
 
             ArrowWriter indexWriter(Attributes(),
                                     inputSchema.getDimensions(),

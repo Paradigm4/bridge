@@ -50,6 +50,7 @@ public:
                       RE(PP(PLACEHOLDER_CONSTANT, TID_STRING))
                   })
             },
+            { KW_UPDATE,        RE(PP(PLACEHOLDER_CONSTANT, TID_BOOL))   },
             { KW_FORMAT,        RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
             { KW_COMPRESSION,   RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
             { KW_INDEX_SPLIT,   RE(PP(PLACEHOLDER_CONSTANT, TID_INT64))  }
@@ -57,7 +58,8 @@ public:
         return &argSpec;
     }
 
-    ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, std::shared_ptr< Query> query)
+    ArrayDesc inferSchema(std::vector< ArrayDesc> schemas,
+                          std::shared_ptr<Query> query)
     {
         XSaveSettings settings (_parameters, _kwParameters, true, query);
         std::vector<DimensionDesc> dimensions(3);

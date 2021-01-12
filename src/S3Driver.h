@@ -49,6 +49,8 @@ public:
     S3Driver(const std::string &url);
     ~S3Driver();
 
+    void init();
+
     void writeArrow(const std::string&,
                     std::shared_ptr<const arrow::Buffer>) const;
 

@@ -57,6 +57,8 @@ class Driver {
 public:
     virtual ~Driver() = 0;
 
+    virtual void init() = 0;
+
     inline size_t readArrow(const std::string &suffix,
                             std::shared_ptr<arrow::Buffer> &buffer) const {
         return _readArrow(suffix, buffer, false);
@@ -81,7 +83,14 @@ public:
     // Return print-friendly path used by driver
     virtual const std::string& getURL() const = 0;
 
-    static std::shared_ptr<Driver> makeDriver(const std::string url, const bool readOnly=true);
+    enum Mode {
+        READ   = 0,
+        WRITE  = 1,
+        UPDATE = 2
+    };
+
+    static std::shared_ptr<Driver> makeDriver(const std::string url,
+                                              const Mode mode=Mode::READ);
 
 private:
     virtual size_t _readArrow(const std::string&,

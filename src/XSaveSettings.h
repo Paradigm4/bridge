@@ -38,6 +38,7 @@ namespace scidb {
 // Logger for operator. static to prevent visibility of variable outside of file
 static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.xsave"));
 
+static const char* const KW_UPDATE	  = "update";
 static const char* const KW_FORMAT	  = "format";
 static const char* const KW_COMPRESSION	  = "compression";
 static const char* const KW_INDEX_SPLIT	  = "index_split";
@@ -47,23 +48,32 @@ typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t;
 class XSaveSettings
 {
 private:
-    std::string                 _url;
-    XMetadata::Format          _format;
-    XMetadata::Compression     _compression;
-    size_t                      _indexSplit;
+    std::string            _url;
+    bool                   _isUpdate;
+    XMetadata::Format      _format;
+    XMetadata::Compression _compression;
+    size_t                 _indexSplit;
 
-    void checkIfSet(bool alreadySet, const char* kw)
+    void failIfUpdate(std::string param)
     {
-        if (alreadySet)
+        if (_isUpdate)
         {
-            std::ostringstream error;
-            error << "Illegal attempt to set " << kw << " multiple times";
-            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << error.str().c_str();
+            std::stringstream out;
+            out << param << " cannot be specified for update queries";
+            throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+                << out.str();
         }
+    }
+
+    void setParamUpdate(std::vector<bool> isUpdate)
+    {
+        _isUpdate = isUpdate[0];
     }
 
     void setParamFormat(std::vector<std::string> format)
     {
+        failIfUpdate("format");
+
         if (format[0] == "arrow")
             _format = XMetadata::Format::ARROW;
         else
@@ -73,6 +83,8 @@ private:
 
     void setParamCompression(std::vector<std::string> compression)
     {
+        failIfUpdate("compression");
+
         if (compression[0] == "none")
             _compression = XMetadata::Compression::NONE;
         else if (compression[0] == "gzip")
@@ -84,6 +96,8 @@ private:
 
     void setParamIndexSplit(std::vector<int64_t> indexSplit)
     {
+        failIfUpdate("index_split");
+
         _indexSplit = indexSplit[0];
         if(_indexSplit < INDEX_SPLIT_MIN) {
             std::ostringstream err;
@@ -98,6 +112,42 @@ private:
         return kwPair == kwp.end() ? Parameter() : kwPair->second;
     }
 
+    bool getParamContentBool(Parameter& param)
+    {
+        bool paramContent;
+
+        if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
+            ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
+            paramContent = evaluate(paramExpr->getExpression(), TID_BOOL).getBool();
+        }
+        else {
+            OperatorParamPhysicalExpression* exp =
+                dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
+            SCIDB_ASSERT(exp != nullptr);
+            paramContent = exp->getExpression()->evaluate().getBool();
+            LOG4CXX_DEBUG(logger, "XSAVE|param bool:" << paramContent)
+        }
+        return paramContent;
+    }
+
+    int64_t getParamContentInt64(Parameter& param)
+    {
+        int64_t paramContent;
+
+        if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
+            ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
+            paramContent = evaluate(paramExpr->getExpression(), TID_INT64).getInt64();
+        }
+        else {
+            OperatorParamPhysicalExpression* exp =
+                dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
+            SCIDB_ASSERT(exp != nullptr);
+            paramContent = exp->getExpression()->evaluate().getInt64();
+            LOG4CXX_DEBUG(logger, "XSAVE|param integer:" << paramContent)
+        }
+        return paramContent;
+    }
+
     std::string getParamContentString(Parameter& param)
     {
         std::string paramContent;
@@ -110,34 +160,17 @@ private:
                 dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
             SCIDB_ASSERT(exp != nullptr);
             paramContent = exp->getExpression()->evaluate().getString();
+            LOG4CXX_DEBUG(logger, "XSAVE|param string:" << paramContent)
         }
         return paramContent;
     }
 
-    int64_t getParamContentInt64(Parameter& param)
+    bool setKeywordParamBool(KeywordParameters const& kwParams,
+                             const char* const kw,
+                             void (XSaveSettings::* innersetter)(std::vector<bool>) )
     {
-        size_t paramContent;
-
-        if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
-            ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
-            paramContent = evaluate(paramExpr->getExpression(), TID_INT64).getInt64();
-        }
-        else {
-            OperatorParamPhysicalExpression* exp =
-                dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
-            SCIDB_ASSERT(exp != nullptr);
-            paramContent = exp->getExpression()->evaluate().getInt64();
-            LOG4CXX_DEBUG(logger, "aio_save integer param is " << paramContent)
-
-        }
-        return paramContent;
-    }
-
-    bool setKeywordParamString(KeywordParameters const& kwParams,
-                               const char* const kw,
-                               void (XSaveSettings::* innersetter)(std::vector<std::string>) )
-    {
-        std::vector <std::string> paramContent;
+        std::vector<bool> paramContent;
+        size_t numParams;
         bool retSet = false;
 
         Parameter kwParam = getKeywordParam(kwParams, kw);
@@ -145,17 +178,19 @@ private:
             if (kwParam->getParamType() == PARAM_NESTED) {
                 auto group = dynamic_cast<OperatorParamNested*>(kwParam.get());
                 Parameters& gParams = group->getParameters();
-                for (size_t i = 0; i < gParams.size(); ++i) {
-                    paramContent.push_back(getParamContentString(gParams[i]));
-                }
-            } else {
-                paramContent.push_back(getParamContentString(kwParam));
+                numParams = gParams.size();
+                for (size_t i = 0; i < numParams; ++i)
+                    paramContent.push_back(getParamContentBool(gParams[i]));
             }
+            else
+                paramContent.push_back(getParamContentBool(kwParam));
+
             (this->*innersetter)(paramContent);
             retSet = true;
-        } else {
-            LOG4CXX_DEBUG(logger, "XSAVE|findKeyword null: " << kw);
         }
+        else
+            LOG4CXX_DEBUG(logger, "XSAVE|findKeyword null:" << kw);
+
         return retSet;
     }
 
@@ -183,19 +218,47 @@ private:
             retSet = true;
         }
         else
-            LOG4CXX_DEBUG(logger, "aio_save findKeyword null: " << kw);
+            LOG4CXX_DEBUG(logger, "XSAVE|findKeyword null:" << kw);
 
         return retSet;
     }
+
+    bool setKeywordParamString(KeywordParameters const& kwParams,
+                               const char* const kw,
+                               void (XSaveSettings::* innersetter)(std::vector<std::string>) )
+    {
+        std::vector<std::string> paramContent;
+        bool retSet = false;
+
+        Parameter kwParam = getKeywordParam(kwParams, kw);
+        if (kwParam) {
+            if (kwParam->getParamType() == PARAM_NESTED) {
+                auto group = dynamic_cast<OperatorParamNested*>(kwParam.get());
+                Parameters& gParams = group->getParameters();
+                for (size_t i = 0; i < gParams.size(); ++i) {
+                    paramContent.push_back(getParamContentString(gParams[i]));
+                }
+            } else {
+                paramContent.push_back(getParamContentString(kwParam));
+            }
+            (this->*innersetter)(paramContent);
+            retSet = true;
+        } else {
+            LOG4CXX_DEBUG(logger, "XSAVE|findKeyword null:" << kw);
+        }
+        return retSet;
+    }
+
 
 public:
     XSaveSettings(std::vector<std::shared_ptr<OperatorParam> > const& operatorParameters,
                    KeywordParameters const& kwParams,
                    bool logical,
                    std::shared_ptr<Query>& query):
-                _format(XMetadata::Format::ARROW),
-                _compression(XMetadata::Compression::NONE),
-                _indexSplit(INDEX_SPLIT_DEFAULT)
+        _isUpdate(false),
+        _format(XMetadata::Format::ARROW),
+        _compression(XMetadata::Compression::NONE),
+        _indexSplit(INDEX_SPLIT_DEFAULT)
     {
         if (operatorParameters.size() != 1)
             throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << "illegal number of parameters passed to xsave";
@@ -205,6 +268,7 @@ public:
         else
             _url = ((std::shared_ptr<OperatorParamPhysicalExpression>&) param)->getExpression()->evaluate().getString();
 
+        setKeywordParamBool(  kwParams, KW_UPDATE,        &XSaveSettings::setParamUpdate);
         setKeywordParamString(kwParams, KW_FORMAT,        &XSaveSettings::setParamFormat);
         setKeywordParamString(kwParams, KW_COMPRESSION,   &XSaveSettings::setParamCompression);
         setKeywordParamInt64( kwParams, KW_INDEX_SPLIT,   &XSaveSettings::setParamIndexSplit);
@@ -213,6 +277,11 @@ public:
     const std::string& getURL() const
     {
         return _url;
+    }
+
+    bool isUpdate() const
+    {
+        return _isUpdate;
     }
 
     bool isArrowFormat() const

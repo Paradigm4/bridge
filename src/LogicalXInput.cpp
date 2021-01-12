@@ -59,8 +59,11 @@ public:
     {
         XInputSettings settings(_parameters, _kwParameters, true, query);
 
-        // Get Metadata
+        // Initialize Driver
         auto driver = Driver::makeDriver(settings.getURL());
+        driver->init();
+
+        // Get Metadata
         std::map<std::string, std::string> metadata;
         driver->readMetadata(metadata);
         LOG4CXX_DEBUG(logger, "XINPUT|" << query->getInstanceID() << "|schema: " << metadata["schema"]);

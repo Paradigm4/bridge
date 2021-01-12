@@ -33,7 +33,9 @@ namespace scidb {
 
 class FSDriver: public Driver {
 public:
-    FSDriver(const std::string &url, const bool readOnly);
+    FSDriver(const std::string &url, const Driver::Mode mode);
+
+    void init();
 
     void writeArrow(const std::string&,
                     std::shared_ptr<const arrow::Buffer>) const;
@@ -49,11 +51,10 @@ public:
 
 private:
     const std::string _url;
+    const Driver::Mode _mode;
     std::string _prefix;
 
     size_t _readArrow(const std::string&, std::shared_ptr<arrow::Buffer>&, bool) const;
-
-    static void fail(const std::string &op, const std::string &path);
 };
 
 } // namespace scidb

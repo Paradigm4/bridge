@@ -29,6 +29,14 @@
 #include <fstream>
 #include <log4cxx/logger.h>
 
+#define FAIL(op, path)                                                  \
+    {                                                                   \
+        std::ostringstream out;                                         \
+        out << (op) << " failed for " << (path);                        \
+        throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR) \
+            << out.str();                                               \
+    }
+
 
 namespace scidb {
 
@@ -37,8 +45,9 @@ namespace scidb {
     //
     // FSDriver
     //
-    FSDriver::FSDriver(const std::string &url, const bool readOnly):
-        _url(url)
+    FSDriver::FSDriver(const std::string &url, const Driver::Mode mode):
+        _url(url),
+        _mode(mode)
     {
         // Check the URL is valid
         const size_t prefix_len = 7; // "file://"
@@ -49,23 +58,32 @@ namespace scidb {
         }
 
         _prefix = _url.substr(prefix_len);
-        if (readOnly)
-            try {
-                if (!boost::filesystem::is_directory(_prefix))
-                    fail("Find directory", _prefix);
-            }
-            catch (const std::exception &ex) {
-                fail("Access directory", _prefix);
-            }
-        else
+    }
+
+    void FSDriver::init()
+    {
+        if (_mode == Driver::Mode::READ
+            || _mode == Driver::Mode::UPDATE) {
+            // Check that path exists and is a directory
+            if (!boost::filesystem::exists(_prefix) ||
+                !boost::filesystem::is_directory(_prefix))
+                FAIL("Find directory", _prefix);
+        }
+        else if (_mode == Driver::Mode::WRITE) {
+            // Check that path does NOT exist
+            if (boost::filesystem::exists(_prefix))
+                FAIL("Path exists. Path", _prefix);
+
+            // Create base, index, and chunks directories
             for (const std::string &postfix : {"", "/index", "/chunks"})
                 try {
                     // Not an error if the directory exists
                     boost::filesystem::create_directory(_prefix + postfix);
                 }
                 catch (const std::exception &ex) {
-                    fail("Create directory", _prefix + postfix);
+                    FAIL("Create directory", _prefix + postfix);
                 }
+        }
     }
 
     size_t FSDriver::_readArrow(const std::string &suffix,
@@ -74,26 +92,26 @@ namespace scidb {
     {
         auto path = _prefix + "/" + suffix;
         std::ifstream stream(path, std::ifstream::binary);
-        if (stream.fail()) fail("Open", path);
+        if (stream.fail()) FAIL("Open", path);
 
         auto begin = stream.tellg();
-        if (stream.fail()) fail("Get position", path);
+        if (stream.fail()) FAIL("Get position", path);
 
         stream.seekg(0, std::ios_base::end);
-        if (stream.fail()) fail("Set position", path);
+        if (stream.fail()) FAIL("Set position", path);
 
         auto end = stream.tellg();
-        if (stream.fail()) fail("Get position", path);
+        if (stream.fail()) FAIL("Get position", path);
 
         auto length = end - begin;
         _setBuffer(suffix, buffer, reuse, length);
 
         stream.seekg(0);
-        if (stream.fail()) fail("Set position", path);
+        if (stream.fail()) FAIL("Set position", path);
 
         stream.read(reinterpret_cast<char*>(buffer->mutable_data()),
                     length);
-        if (!stream) fail("Read", path);
+        if (!stream) FAIL("Read", path);
 
         return length;
     }
@@ -115,21 +133,21 @@ namespace scidb {
                     boost::filesystem::create_directory(path);
                 }
                 catch (const std::exception &ex) {
-                    fail("Create directory", path);
+                    FAIL("Create directory", path);
                 }
             }
         }
 
         path = _prefix + "/" + suffix;
         std::ofstream stream(path, std::ofstream::binary);
-        if (stream.fail()) fail("Open", path);
+        if (stream.fail()) FAIL("Open", path);
 
         stream.write(reinterpret_cast<const char*>(buffer->data()),
                      buffer->size());
-        if (!stream) fail("Read", path);
+        if (!stream) FAIL("Read", path);
 
         stream.close();
-        if (stream.fail()) fail("Close", path);
+        if (stream.fail()) FAIL("Close", path);
     }
 
     void FSDriver::readMetadata(std::map<std::string,
@@ -137,7 +155,7 @@ namespace scidb {
     {
         auto path = _prefix + "/metadata";
         std::ifstream stream(path);
-        if (stream.fail()) fail("Open", path);
+        if (stream.fail()) FAIL("Open", path);
 
         std::string line;
         while (std::getline(stream, line) && stream.good()) {
@@ -151,7 +169,7 @@ namespace scidb {
             }
             metadata[key] = value;
         }
-        if (!stream.eof() && stream.fail()) fail("Read", path);
+        if (!stream.eof() && stream.fail()) FAIL("Read", path);
     }
 
     void FSDriver::writeMetadata(const std::map<std::string,
@@ -159,11 +177,11 @@ namespace scidb {
     {
         auto path = _prefix + "/metadata";
         std::ofstream stream(path);
-        if (stream.fail()) fail("Open", path);
+        if (stream.fail()) FAIL("Open", path);
 
         for (auto i = metadata.begin(); i != metadata.end(); ++i) {
             stream << i->first << "\t" << i->second << "\n";
-            if (stream.fail()) fail("Write", path);
+            if (stream.fail()) FAIL("Write", path);
         }
     }
 
@@ -179,7 +197,7 @@ namespace scidb {
                     count++;
         }
         catch (const std::exception &ex) {
-            fail("List directory", path.native());
+            FAIL("List directory", path.native());
         }
         return count;
     }
@@ -187,11 +205,5 @@ namespace scidb {
     const std::string& FSDriver::getURL() const
     {
         return _url;
-    }
-
-    void FSDriver::fail(const std::string &op, const std::string &path) {
-        std::ostringstream out;
-        out << op << " failed for " << path;
-        throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR) << out.str();
     }
 } // namespace scidb
