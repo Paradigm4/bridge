@@ -324,10 +324,10 @@ xsave(
 
     if url.startswith('s3://'):
         sz = s3_con.head_object(Bucket=s3_bucket,
-                                Key='{}/{}/c_0_0'.format(
+                                Key='{}/{}/chunks/c_0_0'.format(
                                     base_prefix, prefix))['ContentLength']
     elif url.startswith('file://'):
-        sz = os.path.getsize('{}/{}/c_0_0'.format(fs_base, prefix))
+        sz = os.path.getsize('{}/{}/chunks/c_0_0'.format(fs_base, prefix))
 
     assert sz > sz_min
     assert sz < sz_max

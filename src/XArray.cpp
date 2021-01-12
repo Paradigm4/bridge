@@ -500,7 +500,7 @@ namespace scidb {
             _arrowBatch = _array._cache->get(_firstPos);
         else {
             // Cache is disabled
-            auto objectName = coord2ObjectName(_firstPos, _dims);
+            auto objectName = "chunks/" + coord2ObjectName(_firstPos, _dims);
             _array._arrowReader->readObject(objectName, true, _arrowBatch);
         }
     }

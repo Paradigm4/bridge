@@ -266,7 +266,8 @@ class S3Chunk(Chunk):
     def to_pandas(self):
         obj = self.array._client.get_object(
             Bucket=self.array.bucket_name,
-            Key='{}/{}'.format(self.array.bucket_prefix, self.url_suffix))
+            Key='{}/chunks/{}'.format(self.array.bucket_prefix,
+                                     self.url_suffix))
         strm = pyarrow.input_stream(
             pyarrow.BufferReader(obj["Body"].read()),
             compression=self.array.metadata['compression'])
@@ -281,6 +282,6 @@ class FSChunk(Chunk):
 
     def to_pandas(self):
         strm = pyarrow.input_stream(
-            self.array.path + '/' + self.url_suffix,
+            self.array.path + '/chunks/' + self.url_suffix,
             compression=self.array.metadata['compression'])
         return pyarrow.RecordBatchStreamReader(strm).read_pandas()
