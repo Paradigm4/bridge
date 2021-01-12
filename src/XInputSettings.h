@@ -46,18 +46,6 @@ typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t ;
 
 class XInputSettings
 {
-public:
-    static size_t chunkDataOffset()
-    {
-        return (sizeof(ConstRLEPayload::Header) + 2 * sizeof(ConstRLEPayload::Segment) + sizeof(varpart_offset_t) + 5);
-    }
-
-    static size_t chunkSizeOffset()
-    {
-        return (sizeof(ConstRLEPayload::Header) + 2 * sizeof(ConstRLEPayload::Segment) + sizeof(varpart_offset_t) + 1);
-    }
-
-
 private:
     enum FormatType
     {
@@ -67,16 +55,6 @@ private:
     std::string			_url;
     FormatType                  _format;
     size_t                      _cacheSize;
-
-    void checkIfSet(bool alreadySet, const char* kw)
-    {
-        if (alreadySet)
-        {
-            std::ostringstream error;
-            error << "illegal attempt to set " << kw << " multiple times";
-            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << error.str().c_str();
-        }
-    }
 
     void setParamFormat(std::vector<std::string> format)
     {

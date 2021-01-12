@@ -46,17 +46,6 @@ typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t;
 
 class XSaveSettings
 {
-public:
-    static size_t chunkDataOffset()
-    {
-        return (sizeof(ConstRLEPayload::Header) + 2 * sizeof(ConstRLEPayload::Segment) + sizeof(varpart_offset_t) + 5);
-    }
-
-    static size_t chunkSizeOffset()
-    {
-        return (sizeof(ConstRLEPayload::Header) + 2 * sizeof(ConstRLEPayload::Segment) + sizeof(varpart_offset_t) + 1);
-    }
-
 private:
     std::string                 _url;
     XMetadata::Format          _format;
