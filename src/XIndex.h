@@ -2,7 +2,7 @@
 **
 * BEGIN_COPYRIGHT
 *
-* Copyright (C) 2020 Paradigm4 Inc.
+* Copyright (C) 2020-2021 Paradigm4 Inc.
 * All Rights Reserved.
 *
 * bridge is a plugin for SciDB, an Open Source Array DBMS maintained

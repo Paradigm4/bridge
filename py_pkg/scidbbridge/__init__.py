@@ -1,6 +1,6 @@
 # BEGIN_COPYRIGHT
 #
-# Copyright (C) 2020 Paradigm4 Inc.
+# Copyright (C) 2020-2021 Paradigm4 Inc.
 # All Rights Reserved.
 #
 # scidbbridge is a plugin for SciDB, an Open Source Array DBMS
@@ -267,7 +267,7 @@ class S3Chunk(Chunk):
         obj = self.array._client.get_object(
             Bucket=self.array.bucket_name,
             Key='{}/chunks/{}'.format(self.array.bucket_prefix,
-                                     self.url_suffix))
+                                      self.url_suffix))
         strm = pyarrow.input_stream(
             pyarrow.BufferReader(obj["Body"].read()),
             compression=self.array.metadata['compression'])
