@@ -52,7 +52,7 @@
                 exceptionOutput                                         \
                     << "See https://aws.amazon.com/premiumsupport/"     \
                     << "knowledge-center/s3-troubleshoot-403/";         \
-            throw USER_EXCEPTION(                                       \
+            throw SYSTEM_EXCEPTION(                                     \
                 SCIDB_SE_NETWORK,                                       \
                 SCIDB_LE_UNKNOWN_ERROR) << exceptionOutput.str();       \
         }                                                               \
@@ -72,7 +72,7 @@ namespace scidb {
         size_t pos = _url.find("/", prefix_len);
         if (_url.rfind("s3://", 0) != 0 || pos == std::string::npos)
             throw USER_EXCEPTION(SCIDB_SE_METADATA,
-                                 SCIDB_LE_UNKNOWN_ERROR)
+                                 SCIDB_LE_ILLEGAL_OPERATION)
                 << "Invalid S3 URL " << _url;
         _bucket = _url.substr(prefix_len, pos - prefix_len).c_str();
         _prefix = _url.substr(pos + 1);
@@ -134,7 +134,8 @@ namespace scidb {
                 || !std::getline(stream, value)) {
                 std::ostringstream out;
                 out << "Invalid metadata line '" << line << "'";
-                throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR) << out.str();
+                throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR)
+                    << out.str();
             }
             metadata[key] = value;
         }

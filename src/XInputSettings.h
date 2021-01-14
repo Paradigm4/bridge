@@ -64,7 +64,8 @@ private:
         }
         else
         {
-            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << "format must be 'arrow'";
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+                << "format must be 'arrow'";
         }
     }
 
@@ -178,7 +179,8 @@ public:
                 _cacheSize(CACHE_SIZE_DEFAULT)
     {
         if (operatorParameters.size() != 1)
-            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << "illegal number of parameters passed to xinput";
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+                << "illegal number of parameters passed to xinput";
         std::shared_ptr<OperatorParam>const& param = operatorParameters[0];
         if (logical)
             _url = evaluate(((std::shared_ptr<OperatorParamLogicalExpression>&) param)->getExpression(), TID_STRING).getString();

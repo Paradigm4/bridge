@@ -38,18 +38,6 @@
 #include <arrow/util/compression.h>
 
 
-// TODO use __builtin_expect
-#define THROW_NOT_OK(status)                                            \
-    {                                                                   \
-        arrow::Status _status = (status);                               \
-        if (!_status.ok())                                              \
-        {                                                               \
-            throw USER_EXCEPTION(                                       \
-                SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)      \
-                    << _status.ToString().c_str();                      \
-        }                                                               \
-    }
-
 #define ASSIGN_OR_THROW(lhs, rexpr)                     \
     {                                                   \
         auto status_name = (rexpr);                     \
@@ -122,8 +110,8 @@ namespace scidb {
             std::ostringstream out;
             out << "More than one Arrow Record Batch found in "
                 << _driver->getURL() << "/" << name;
-            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                 SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+            throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                   SCIDB_LE_UNKNOWN_ERROR) << out.str();
         }
 
         return arrowSize;
@@ -176,8 +164,8 @@ namespace scidb {
                         << _path << "/" << objectName
                         << " for position " << pos
                         << " is bigger than cache size " << _sizeMax;
-                    throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                         SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+                    throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                           SCIDB_LE_UNKNOWN_ERROR) << out.str();
                 }
 
                 // Make Space in Cache
@@ -264,7 +252,7 @@ namespace scidb {
     Value const& XChunkIterator::getItem()
     {
         if (!_hasCurrent)
-            throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
         if (_chunk->getAttributeDesc().isEmptyIndicator())
             return _trueValue;
@@ -297,8 +285,8 @@ namespace scidb {
                     std::ostringstream out;
                     out << "Invalid value for attribute "
                         << _chunk->getArrayDesc().getAttributes(true).findattr(_chunk->_attrID).getName();
-                    throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                         SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+                    throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                           SCIDB_LE_ILLEGAL_OPERATION) << out.str();
                 }
                 _value.setChar(str[0]);
                 break;
@@ -369,13 +357,13 @@ namespace scidb {
                 out << "Type "
                     << _chunk->getArrayDesc().getAttributes(true).findattr(_chunk->_attrID).getType()
                     << " not supported";
-                throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                     SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+                throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                       SCIDB_LE_ILLEGAL_OPERATION) << out.str();
             }
             }
 
         if (!_nullable && _value.isNull())
-            throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_ASSIGNING_NULL_TO_NON_NULLABLE);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_ASSIGNING_NULL_TO_NON_NULLABLE);
 
         return _value;
     }
@@ -383,7 +371,7 @@ namespace scidb {
     void XChunkIterator::operator ++()
     {
         if (!_hasCurrent)
-            throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
         _arrowIndex++;
         if (_arrowIndex >= _arrowLength) {
@@ -577,10 +565,10 @@ namespace scidb {
     void XArrayIterator::operator ++()
     {
         if (!_hasCurrent)
-            throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
         if (_currIndex == _array._index.end())
-            throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
         Query::getValidQueryPtr(_array._query);
 
@@ -637,7 +625,7 @@ namespace scidb {
     ConstChunk const& XArrayIterator::getChunk()
     {
         if (!_hasCurrent)
-            throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
         Query::getValidQueryPtr(_array._query);
 
@@ -658,7 +646,7 @@ namespace scidb {
     Coordinates const& XArrayIterator::getPosition()
     {
         if (!_hasCurrent)
-            throw USER_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
         return _currPos;
     }
@@ -683,8 +671,8 @@ namespace scidb {
 
         auto compressionPair = metadata.find("compression");
         if (compressionPair == metadata.end())
-            throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
-                                 scidb::SCIDB_LE_UNKNOWN_ERROR)
+            throw SYSTEM_EXCEPTION(scidb::SCIDB_SE_METADATA,
+                                   scidb::SCIDB_LE_UNKNOWN_ERROR)
                 << "Compression missing from metadata";
         auto compression = Metadata::string2Compression(compressionPair->second);
 
@@ -742,8 +730,8 @@ namespace scidb {
                 out.str("");
                 out << objectName
                     << " Invalid number of columns";
-                throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
-                                     scidb::SCIDB_LE_UNKNOWN_ERROR)
+                throw SYSTEM_EXCEPTION(scidb::SCIDB_SE_METADATA,
+                                       scidb::SCIDB_LE_UNKNOWN_ERROR)
                     << out.str();
             }
             std::vector<const int64_t*> columns(nDims);

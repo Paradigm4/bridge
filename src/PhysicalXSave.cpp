@@ -254,8 +254,8 @@ public:
                 error << "Type "
                       << _attrTypes[attrIdx]
                       << " not supported in arrow format";
-                throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                     SCIDB_LE_ILLEGAL_OPERATION) << error.str();
+                throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                       SCIDB_LE_ILLEGAL_OPERATION) << error.str();
             }
             }
 
@@ -367,7 +367,8 @@ public:
             default: {
                 std::ostringstream error;
                 error << "Type " << type << " not supported in arrow format";
-                throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION) << error.str();
+                throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                       SCIDB_LE_ILLEGAL_OPERATION) << error.str();
             }
             }
 
@@ -479,9 +480,9 @@ class PhysicalXSave : public PhysicalOperator
 {
 public:
     PhysicalXSave(std::string const& logicalName,
-                   std::string const& physicalName,
-                   Parameters const& parameters,
-                   ArrayDesc const& schema):
+                  std::string const& physicalName,
+                  Parameters const& parameters,
+                  ArrayDesc const& schema):
         PhysicalOperator(logicalName, physicalName, parameters, schema)
     {}
 

@@ -73,7 +73,7 @@ std::shared_ptr<Driver> Driver::makeDriver(const std::string url,
     if (url.rfind("s3://", 0) == 0)
         return std::make_shared<S3Driver>(url);
 
-    throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR)
+    throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
         << "Invalid URL " << url;
 }
 

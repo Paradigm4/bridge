@@ -29,12 +29,12 @@
 #include <fstream>
 #include <log4cxx/logger.h>
 
-#define FAIL(op, path)                                                  \
-    {                                                                   \
-        std::ostringstream out;                                         \
-        out << (op) << " failed for " << (path);                        \
-        throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR) \
-            << out.str();                                               \
+#define FAIL(op, path)                                                          \
+    {                                                                           \
+        std::ostringstream out;                                                 \
+        out << (op) << " failed for " << (path);                                \
+        throw SYSTEM_EXCEPTION(SCIDB_SE_NETWORK, SCIDB_LE_UNKNOWN_ERROR)        \
+            << out.str();                                                       \
     }
 
 
@@ -54,7 +54,8 @@ namespace scidb {
         if (_url.rfind("file://", 0) != 0) {
             std::ostringstream out;
             out << "Invalid file system URL " << _url;
-            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR) << out.str();
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+                << out.str();
         }
 
         _prefix = _url.substr(prefix_len);
@@ -165,7 +166,8 @@ namespace scidb {
                 || !std::getline(stream, value)) {
                 std::ostringstream out;
                 out << "Invalid metadata line '" << line << "' in " << path;
-                throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR) << out.str();
+                throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR)
+                    << out.str();
             }
             metadata[key] = value;
         }

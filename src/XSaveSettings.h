@@ -60,7 +60,7 @@ private:
         {
             std::stringstream out;
             out << param << " cannot be specified for update queries";
-            throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
                 << out.str();
         }
     }

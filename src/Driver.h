@@ -55,7 +55,7 @@
         arrow::Status _status = (status);                               \
         if (!_status.ok())                                              \
         {                                                               \
-            throw USER_EXCEPTION(                                       \
+            throw SYSTEM_EXCEPTION(                                     \
                 SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)      \
                     << _status.ToString().c_str();                      \
         }                                                               \
@@ -144,8 +144,8 @@ protected:
             out << "Object " << getURL() << "/" << suffix
                 << " size " << length
                 << " exeeds max allowed " << CHUNK_MAX_SIZE;
-            throw USER_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                 SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+            throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                   SCIDB_LE_ILLEGAL_OPERATION) << out.str();
         }
         if (reuse) {
             THROW_NOT_OK(std::static_pointer_cast<arrow::ResizableBuffer>(

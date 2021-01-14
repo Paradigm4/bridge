@@ -84,8 +84,8 @@ public:
             std::ostringstream out;
             auto schemaPair = metadata.find("schema");
             if (schemaPair == metadata.end())
-                throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
-                                     scidb::SCIDB_LE_UNKNOWN_ERROR)
+                throw SYSTEM_EXCEPTION(scidb::SCIDB_SE_METADATA,
+                                       scidb::SCIDB_LE_UNKNOWN_ERROR)
                     << "Schema missing from metadata";
             out << "input(" << schemaPair->second << ", '/dev/null')";
             innerQuery->queryString = out.str();
