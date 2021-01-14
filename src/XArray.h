@@ -31,7 +31,7 @@
 // SciDB
 #include <array/DelegateArray.h>
 
-#include "Common.h"
+#include "Driver.h"
 #include "XIndex.h"
 
 
@@ -39,7 +39,6 @@
 // compilation
 namespace scidb {
     class XInputSettings;       // #include "XInputSettings.h"
-    class Driver;               // #include "Driver.h"
 }
 namespace arrow {
     class Array;
@@ -61,15 +60,15 @@ namespace scidb {
 
 class ArrowReader {
 public:
-    ArrowReader(XMetadata::Compression,
-                 std::shared_ptr<const Driver>);
+    ArrowReader(Metadata::Compression,
+                std::shared_ptr<const Driver>);
 
     size_t readObject(const std::string &name,
                       bool reuse,
                       std::shared_ptr<arrow::RecordBatch>&);
 
 private:
-    const XMetadata::Compression _compression;
+    const Metadata::Compression _compression;
 
     std::shared_ptr<const Driver> _driver;
 

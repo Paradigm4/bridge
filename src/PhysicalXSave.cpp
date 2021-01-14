@@ -25,7 +25,6 @@
 
 #include "XSaveSettings.h"
 #include "XIndex.h"
-#include "Driver.h"
 
 // SciDB
 #include <array/TileIteratorAdaptors.h>
@@ -48,7 +47,7 @@ class ArrowWriter
 private:
     const size_t                                      _nAttrs;
     const size_t                                      _nDims;
-    const XMetadata::Compression                     _compression;
+    const Metadata::Compression                       _compression;
     std::vector<TypeEnum>                             _attrTypes;
     std::vector<std::vector<int64_t>>                 _dimValues;
 
@@ -63,7 +62,7 @@ private:
 public:
     ArrowWriter(const Attributes &attributes,
                 const Dimensions &dimensions,
-                XMetadata::Compression compression):
+                Metadata::Compression compression):
         _nAttrs(attributes.size()),
         _nDims(dimensions.size()),
         _compression(compression),
@@ -441,7 +440,7 @@ private:
         // Setup Arrow Compression, If Enabled
         std::shared_ptr<arrow::ipc::RecordBatchWriter> arrowWriter;
         std::shared_ptr<arrow::io::CompressedOutputStream> arrowCompressedStream;
-        if (_compression == XMetadata::Compression::GZIP) {
+        if (_compression == Metadata::Compression::GZIP) {
             std::unique_ptr<arrow::util::Codec> codec = *arrow::util::Codec::Create(
                 arrow::Compression::type::GZIP);
             ARROW_ASSIGN_OR_RAISE(
@@ -465,7 +464,7 @@ private:
         ARROW_RETURN_NOT_OK(arrowWriter->Close());
 
         // Close Arrow Compression Stream, If Enabled
-        if (_compression == XMetadata::Compression::GZIP) {
+        if (_compression == Metadata::Compression::GZIP) {
             ARROW_RETURN_NOT_OK(arrowCompressedStream->Close());
         }
 
@@ -500,7 +499,7 @@ public:
                                    std::shared_ptr<Query> query)
     {
         XSaveSettings settings(_parameters, _kwParameters, false, query);
-        const XMetadata::Compression compression = settings.getCompression();
+        const Metadata::Compression compression = settings.getCompression();
         std::shared_ptr<Array> result(new MemArray(_schema, query));
 
         std::shared_ptr<Array>& inputArray = inputArrays[0];
@@ -536,7 +535,7 @@ public:
             metadata["version"] = STR(BRIDGE_VERSION);
             metadata["attribute"] = "ALL";
             metadata["format"] = "arrow";
-            metadata["compression"] = XMetadata::compression2String(compression);
+            metadata["compression"] = Metadata::compression2String(compression);
 
             // Write Metadata
             driver->writeMetadata(metadata);
@@ -577,7 +576,9 @@ public:
                         dataWriter.writeArrowBuffer(inputChunkIters, arrowBuffer));
 
                     // Write Chunk
-                    driver->writeArrow("chunks/" + coord2ObjectName(pos, dims), arrowBuffer);
+                    driver->writeArrow(
+                        "chunks/" +
+                        Metadata::coord2ObjectName(pos, dims), arrowBuffer);
                 }
 
                 // Advance Array Iterators
@@ -608,7 +609,7 @@ public:
 
             ArrowWriter indexWriter(Attributes(),
                                     inputSchema.getDimensions(),
-                                    XMetadata::Compression::GZIP);
+                                    Metadata::Compression::GZIP);
 
             auto splitPtr = index.begin();
             while (splitPtr != index.end()) {

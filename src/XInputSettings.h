@@ -26,7 +26,7 @@
 #ifndef X_INPUT_SETTINGS
 #define X_INPUT_SETTINGS
 
-#include "Common.h"
+#include "Driver.h"
 
 // SciDB
 #include <query/Expression.h>

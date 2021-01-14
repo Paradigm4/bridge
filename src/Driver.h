@@ -31,13 +31,23 @@
 #include <sstream>
 
 // SciDB
+#include <array/DimensionDesc.h>
+#include <array/Dimensions.h>
 #include <system/UserException.h>
 
 // Arrow
 #include <arrow/buffer.h>
 
-
+#define BRIDGE_VERSION 1
+#define INDEX_SPLIT_MIN 100
+#define INDEX_SPLIT_DEFAULT 100000  // Number of Coordinates =
+                                    // (Number-of-Chunks *
+                                    // Number-of-Dimensions)
+#define CACHE_SIZE_DEFAULT 268435456 // 256MB in Bytes
 #define CHUNK_MAX_SIZE 2147483648
+
+#define _STR(x) #x
+#define STR(x) _STR(x)
 
 // TODO use __builtin_expect
 #define THROW_NOT_OK(status)                                            \
@@ -52,6 +62,33 @@
     }
 
 namespace scidb {
+
+class Metadata {
+public:
+    enum Format {
+        ARROW  = 0
+    };
+
+    enum Compression {
+        NONE  = 0,
+        GZIP  = 1
+    };
+
+    // Metadata()
+    // {}
+
+    // const ArrayDesc& getArrayDesc()
+    // {}
+
+    static std::string compression2String(const Metadata::Compression compression);
+    static Metadata::Compression string2Compression(const std::string &compressionStr);
+    static std::string coord2ObjectName(const Coordinates &pos,
+                                        const Dimensions &dims);
+
+private:
+    std::map<std::string, std::string> _metadata;
+};
+
 
 class Driver {
 public:

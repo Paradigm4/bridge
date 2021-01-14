@@ -53,8 +53,8 @@ CPPFLAGS := $(CFLAGS) $(INC)
 LIBS    := -shared -Wl,-soname,libbridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
 LIBS    += -rdynamic $(AWS_LIB)/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,$(AWS_LIB) $(CURL_LIB)
 
-SRCS    := plugin.cpp LogicalXSave.cpp PhysicalXSave.cpp LogicalXInput.cpp PhysicalXInput.cpp XArray.cpp XIndex.cpp S3Driver.cpp FSDriver.cpp DriverFactory.cpp
-HEADERS := Common.h XSaveSettings.h XInputSettings.h XArray.h XIndex.h
+SRCS    := plugin.cpp LogicalXSave.cpp PhysicalXSave.cpp LogicalXInput.cpp PhysicalXInput.cpp XArray.cpp XIndex.cpp S3Driver.cpp FSDriver.cpp Driver.cpp
+HEADERS := XSaveSettings.h XInputSettings.h XArray.h XIndex.h Driver.h FSDriver.h S3Driver.h
 OBJS    := $(SRCS:%.cpp=%.o)
 
 
@@ -76,17 +76,17 @@ all: libbridge.so
 
 plugin.o:
 
-LogicalXInput.o: XInputSettings.h Common.h Driver.h
-PhysicalXInput.o: XInputSettings.h Common.h XArray.h XIndex.h
+LogicalXInput.o: XInputSettings.h Driver.h
+PhysicalXInput.o: XInputSettings.h XArray.h XIndex.h Driver.h
 
-LogicalXSave.o:  XSaveSettings.h Common.h
-PhysicalXSave.o: XSaveSettings.h Common.h XIndex.h Driver.h
+LogicalXSave.o:  XSaveSettings.h Driver.h
+PhysicalXSave.o: XSaveSettings.h XIndex.h Driver.h
 
-XArray.o: XArray.h XIndex.h XInputSettings.h Common.h Driver.h
+XArray.o: XArray.h XIndex.h XInputSettings.h Driver.h
 XIndex.o: XIndex.h
 S3Driver.o: S3Driver.h Driver.h
 FSDriver.o: FSDriver.h Driver.h
-DriverFactory.o: S3Driver.h FSDriver.h Driver.h
+Driver.o: S3Driver.h FSDriver.h Driver.h
 
 libbridge.so: $(OBJS)
 	@if test ! -d "$(SCIDB)"; then echo  "Error. Try:\n\nmake SCIDB=<PATH TO SCIDB INSTALL PATH>"; exit 1; fi

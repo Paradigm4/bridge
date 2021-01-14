@@ -26,7 +26,7 @@
 #ifndef X_SAVE_SETTINGS
 #define X_SAVE_SETTINGS
 
-#include "Common.h"
+#include "Driver.h"
 
 // SciDB
 #include <query/Expression.h>
@@ -50,8 +50,8 @@ class XSaveSettings
 private:
     std::string            _url;
     bool                   _isUpdate;
-    XMetadata::Format      _format;
-    XMetadata::Compression _compression;
+    Metadata::Format       _format;
+    Metadata::Compression  _compression;
     size_t                 _indexSplit;
 
     void failIfUpdate(std::string param)
@@ -75,7 +75,7 @@ private:
         failIfUpdate("format");
 
         if (format[0] == "arrow")
-            _format = XMetadata::Format::ARROW;
+            _format = Metadata::Format::ARROW;
         else
             throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
                 << "format must be 'arrow'";
@@ -86,9 +86,9 @@ private:
         failIfUpdate("compression");
 
         if (compression[0] == "none")
-            _compression = XMetadata::Compression::NONE;
+            _compression = Metadata::Compression::NONE;
         else if (compression[0] == "gzip")
-            _compression = XMetadata::Compression::GZIP;
+            _compression = Metadata::Compression::GZIP;
         else
             throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
                 << "unsupported compression";
@@ -252,12 +252,12 @@ private:
 
 public:
     XSaveSettings(std::vector<std::shared_ptr<OperatorParam> > const& operatorParameters,
-                   KeywordParameters const& kwParams,
-                   bool logical,
-                   std::shared_ptr<Query>& query):
+                  KeywordParameters const& kwParams,
+                  bool logical,
+                  std::shared_ptr<Query>& query):
         _isUpdate(false),
-        _format(XMetadata::Format::ARROW),
-        _compression(XMetadata::Compression::NONE),
+        _format(Metadata::Format::ARROW),
+        _compression(Metadata::Compression::NONE),
         _indexSplit(INDEX_SPLIT_DEFAULT)
     {
         if (operatorParameters.size() != 1)
@@ -286,10 +286,10 @@ public:
 
     bool isArrowFormat() const
     {
-        return _format == XMetadata::Format::ARROW;
+        return _format == Metadata::Format::ARROW;
     }
 
-    XMetadata::Compression getCompression() const
+    Metadata::Compression getCompression() const
     {
         return _compression;
     }

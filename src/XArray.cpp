@@ -25,7 +25,6 @@
 
 #include "XArray.h"
 #include "XInputSettings.h"
-#include "Driver.h"
 
 // SciDB
 #include <array/MemoryBuffer.h>
@@ -65,14 +64,14 @@ namespace scidb {
     // Arrow Reader
     //
     ArrowReader::ArrowReader(
-        XMetadata::Compression compression,
+        Metadata::Compression compression,
         std::shared_ptr<const Driver> driver):
         _compression(compression),
         _driver(driver)
     {
         THROW_NOT_OK(arrow::AllocateResizableBuffer(0, &_arrowResizableBuffer));
 
-        if (_compression == XMetadata::Compression::GZIP)
+        if (_compression == Metadata::Compression::GZIP)
             _arrowCodec = *arrow::util::Codec::Create(
                 arrow::Compression::type::GZIP);
     }
@@ -101,7 +100,7 @@ namespace scidb {
         }
 
         // Setup Arrow Compression, If Enabled
-        if (_compression != XMetadata::Compression::NONE) {
+        if (_compression != Metadata::Compression::NONE) {
             ASSIGN_OR_THROW(_arrowCompressedStream,
                             arrow::io::CompressedInputStream::Make(
                                 _arrowCodec.get(), _arrowBufferReader));
@@ -164,7 +163,8 @@ namespace scidb {
             std::shared_ptr<arrow::RecordBatch> arrowBatch;
             if (_mem.find(pos) == _mem.end()) {
                 // Download Chunk
-                auto objectName = "chunks/" + coord2ObjectName(pos, _dims);
+                auto objectName =
+                    "chunks/" + Metadata::coord2ObjectName(pos, _dims);
                 auto arrowSize = _arrowReader->readObject(objectName,
                                                           false,
                                                           arrowBatch);
@@ -500,7 +500,8 @@ namespace scidb {
             _arrowBatch = _array._cache->get(_firstPos);
         else {
             // Cache is disabled
-            auto objectName = "chunks/" + coord2ObjectName(_firstPos, _dims);
+            auto objectName =
+                "chunks/" + Metadata::coord2ObjectName(_firstPos, _dims);
             _array._arrowReader->readObject(objectName, true, _arrowBatch);
         }
     }
@@ -685,7 +686,7 @@ namespace scidb {
             throw USER_EXCEPTION(scidb::SCIDB_SE_METADATA,
                                  scidb::SCIDB_LE_UNKNOWN_ERROR)
                 << "Compression missing from metadata";
-        auto compression = XMetadata::string2Compression(compressionPair->second);
+        auto compression = Metadata::string2Compression(compressionPair->second);
 
         _arrowReader = std::make_shared<ArrowReader>(compression,
                                                        _driver);
@@ -726,7 +727,7 @@ namespace scidb {
 
         // One coordBuf for each instance
         std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
-        ArrowReader arrowReader(XMetadata::Compression::GZIP, _driver);
+        ArrowReader arrowReader(Metadata::Compression::GZIP, _driver);
         std::shared_ptr<arrow::RecordBatch> arrowBatch;
 
         for (size_t iIndex = instID; iIndex < nIndex; iIndex += nInst) {

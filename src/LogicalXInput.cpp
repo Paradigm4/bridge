@@ -24,7 +24,6 @@
 */
 
 #include "XInputSettings.h"
-#include "Driver.h"
 
 // SciDB
 #include <query/LogicalQueryPlan.h>
