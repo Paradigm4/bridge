@@ -26,6 +26,13 @@
 #include "S3Driver.h"
 #include "FSDriver.h"
 
+// SciDB
+#include <query/LogicalQueryPlan.h>
+#include <query/Parser.h>
+#include <query/Query.h>
+#include <util/OnScopeExit.h>
+
+
 namespace scidb {
 
 std::string Metadata::compression2String(
@@ -62,6 +69,44 @@ std::string Metadata::coord2ObjectName(const Coordinates &pos,
         out << "_" << (pos[i] -
                        dims[i].getStartMin()) / dims[i].getChunkInterval();
     return out.str();
+}
+
+const ArrayDesc& Metadata::getArrayDesc(std::shared_ptr<Query> query)
+{
+    if (_hasSchema)
+        return _schema;
+
+    // Build Fake Query and Extract Schema
+    std::shared_ptr<Query> innerQuery = Query::createFakeQuery(
+        query->getPhysicalCoordinatorID(),
+        query->mapLogicalToPhysical(query->getInstanceID()),
+        query->getCoordinatorLiveness());
+
+    // Create a scope where the query's arena is responsible for
+    // memory allocation.
+    {
+        arena::ScopedArenaTLS arenaTLS(innerQuery->getArena());
+
+        OnScopeExit fqd([&innerQuery] () {
+                            Query::destroyFakeQuery(innerQuery.get()); });
+
+        std::ostringstream out;
+        auto schemaPair = find("schema");
+        if (schemaPair == end())
+            throw SYSTEM_EXCEPTION(scidb::SCIDB_SE_METADATA,
+                                   scidb::SCIDB_LE_UNKNOWN_ERROR)
+                << "Schema missing from metadata";
+        out << "input(" << schemaPair->second << ", '/dev/null')";
+        innerQuery->queryString = out.str();
+        innerQuery->logicalPlan = std::make_shared<LogicalPlan>(
+            parseStatement(innerQuery, true));
+    }
+
+    // Extract Schema and Set Distribution
+    _schema = innerQuery->logicalPlan->inferTypes(innerQuery);
+    _hasSchema = true;
+
+    return _schema;
 }
 
 std::shared_ptr<Driver> Driver::makeDriver(const std::string url,

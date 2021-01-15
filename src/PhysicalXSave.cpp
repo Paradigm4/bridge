@@ -529,7 +529,7 @@ public:
         // Coordinator Creates Metadata
         if (query->isCoordinator()) {
             // Prep Metadata
-            std::map<std::string, std::string> metadata;
+            Metadata metadata;
             std::ostringstream out;
             printSchema(out, inputSchema);
             metadata["schema"] = out.str();

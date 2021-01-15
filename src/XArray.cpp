@@ -666,7 +666,7 @@ namespace scidb {
         SCIDB_ASSERT(nInst > 0 && _query->getInstanceID() < nInst);
 
         _driver = Driver::makeDriver(_settings->getURL());
-        std::map<std::string, std::string> metadata;
+        Metadata metadata;
         _driver->readMetadata(metadata);
 
         auto compressionPair = metadata.find("compression");

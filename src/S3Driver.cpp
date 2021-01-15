@@ -119,8 +119,7 @@ namespace scidb {
         _putRequest(key, data);
     }
 
-    void S3Driver::readMetadata(std::map<std::string,
-                                         std::string> &metadata) const
+    void S3Driver::readMetadata(Metadata &metadata) const
     {
         Aws::String key((_prefix + "/metadata").c_str());
 
@@ -141,8 +140,7 @@ namespace scidb {
         }
     }
 
-    void S3Driver::writeMetadata(const std::map<std::string,
-                                                std::string> &metadata) const
+    void S3Driver::writeMetadata(const Metadata &metadata) const
     {
         Aws::String key((_prefix + "/metadata").c_str());
 

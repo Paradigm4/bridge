@@ -31,6 +31,7 @@
 #include <sstream>
 
 // SciDB
+#include <array/ArrayDesc.h>
 #include <array/DimensionDesc.h>
 #include <array/Dimensions.h>
 #include <system/UserException.h>
@@ -61,6 +62,15 @@
         }                                                               \
     }
 
+
+// Forward Declarastions to avoid including full headers - speed-up
+// compilation
+namespace scidb {
+    class Query;                // #include "Query.h"
+}
+// -- End of Forward Declarations
+
+
 namespace scidb {
 
 class Metadata {
@@ -74,11 +84,32 @@ public:
         GZIP  = 1
     };
 
-    // Metadata()
-    // {}
+    Metadata():
+        _hasSchema(false)
+    {}
 
-    // const ArrayDesc& getArrayDesc()
-    // {}
+    inline std::string& operator[](const std::string &key)
+    {
+        return _metadata[key];
+    }
+
+    inline std::map<std::string, std::string>::const_iterator find(
+        const std::string &key) const
+    {
+        return _metadata.find(key);
+    }
+
+    inline std::map<std::string, std::string>::const_iterator begin() const
+    {
+        return _metadata.begin();
+    }
+
+    inline std::map<std::string, std::string>::const_iterator end() const
+    {
+        return _metadata.end();
+    }
+
+    const ArrayDesc& getArrayDesc(std::shared_ptr<Query> query);
 
     static std::string compression2String(const Metadata::Compression compression);
     static Metadata::Compression string2Compression(const std::string &compressionStr);
@@ -87,6 +118,8 @@ public:
 
 private:
     std::map<std::string, std::string> _metadata;
+    bool _hasSchema;
+    ArrayDesc _schema;
 };
 
 
@@ -110,9 +143,8 @@ public:
     virtual void writeArrow(const std::string&,
                             std::shared_ptr<const arrow::Buffer>) const = 0;
 
-    virtual void readMetadata(std::map<std::string, std::string>&) const = 0;
-    virtual void writeMetadata(const std::map<std::string,
-                                              std::string>&) const = 0;
+    virtual void readMetadata(Metadata&) const = 0;
+    virtual void writeMetadata(const Metadata&) const = 0;
 
     // Count number of objects with specified prefix
     virtual size_t count(const std::string&) const = 0;

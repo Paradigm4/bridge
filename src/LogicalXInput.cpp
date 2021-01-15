@@ -25,12 +25,6 @@
 
 #include "XInputSettings.h"
 
-// SciDB
-#include <query/LogicalQueryPlan.h>
-#include <query/Parser.h>
-#include <util/OnScopeExit.h>
-
-
 namespace scidb {
 
 class LogicalXInput : public  LogicalOperator
@@ -63,38 +57,11 @@ public:
         driver->init();
 
         // Get Metadata
-        std::map<std::string, std::string> metadata;
+        Metadata metadata;
         driver->readMetadata(metadata);
         LOG4CXX_DEBUG(logger, "XINPUT|" << query->getInstanceID() << "|schema: " << metadata["schema"]);
 
-        // Build Fake Query and Extract Schema
-        std::shared_ptr<Query> innerQuery = Query::createFakeQuery(
-                         query->getPhysicalCoordinatorID(),
-                         query->mapLogicalToPhysical(query->getInstanceID()),
-                         query->getCoordinatorLiveness());
-
-        // Create a scope where the query's arena is responsible for
-        // memory allocation.
-        {
-            arena::ScopedArenaTLS arenaTLS(innerQuery->getArena());
-
-            OnScopeExit fqd([&innerQuery] () {
-                                Query::destroyFakeQuery(innerQuery.get()); });
-
-            std::ostringstream out;
-            auto schemaPair = metadata.find("schema");
-            if (schemaPair == metadata.end())
-                throw SYSTEM_EXCEPTION(scidb::SCIDB_SE_METADATA,
-                                       scidb::SCIDB_LE_UNKNOWN_ERROR)
-                    << "Schema missing from metadata";
-            out << "input(" << schemaPair->second << ", '/dev/null')";
-            innerQuery->queryString = out.str();
-            innerQuery->logicalPlan = std::make_shared<LogicalPlan>(
-                parseStatement(innerQuery, true));
-        }
-
-        // Extract Schema and Set Distribution
-        ArrayDesc schema = innerQuery->logicalPlan->inferTypes(innerQuery);
+        ArrayDesc schema = metadata.getArrayDesc(query);
         schema.setDistribution(createDistribution(defaultDistType()));
         return schema;
     }

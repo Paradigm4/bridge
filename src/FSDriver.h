@@ -40,8 +40,8 @@ public:
     void writeArrow(const std::string&,
                     std::shared_ptr<const arrow::Buffer>) const;
 
-    void readMetadata(std::map<std::string, std::string>&) const;
-    void writeMetadata(const std::map<std::string, std::string>&) const;
+    void readMetadata(Metadata&) const;
+    void writeMetadata(const Metadata&) const;
 
     // Count number of objects with specified prefix
     size_t count(const std::string&) const;

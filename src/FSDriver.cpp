@@ -151,8 +151,7 @@ namespace scidb {
         if (stream.fail()) FAIL("Close", path);
     }
 
-    void FSDriver::readMetadata(std::map<std::string,
-                                         std::string> &metadata) const
+    void FSDriver::readMetadata(Metadata &metadata) const
     {
         auto path = _prefix + "/metadata";
         std::ifstream stream(path);
@@ -174,8 +173,7 @@ namespace scidb {
         if (!stream.eof() && stream.fail()) FAIL("Read", path);
     }
 
-    void FSDriver::writeMetadata(const std::map<std::string,
-                                                std::string> &metadata) const
+    void FSDriver::writeMetadata(const Metadata &metadata) const
     {
         auto path = _prefix + "/metadata";
         std::ofstream stream(path);
