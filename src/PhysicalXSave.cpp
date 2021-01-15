@@ -488,19 +488,21 @@ public:
 
     void preSingleExecute(std::shared_ptr<Query> query)
     {
-        XSaveSettings settings(_parameters, _kwParameters, false, query);
-        auto driver = Driver::makeDriver(
-            settings.getURL(),
-            settings.isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
+        _settings = std::make_shared<XSaveSettings>(_parameters, _kwParameters, false, query);
+        _driver = Driver::makeDriver(
+            _settings->getURL(),
+            _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
         // Coordinator Creates Directories
-        driver->init();
+        _driver->init();
     }
 
     std::shared_ptr<Array> execute(std::vector< std::shared_ptr<Array> >& inputArrays,
                                    std::shared_ptr<Query> query)
     {
-        XSaveSettings settings(_parameters, _kwParameters, false, query);
-        const Metadata::Compression compression = settings.getCompression();
+        if (_settings == NULL)
+            _settings = std::make_shared<XSaveSettings>(_parameters, _kwParameters, false, query);
+
+        const Metadata::Compression compression = _settings->getCompression();
         std::shared_ptr<Array> result(new MemArray(_schema, query));
 
         std::shared_ptr<Array>& inputArray = inputArrays[0];
@@ -522,9 +524,10 @@ public:
             return result;
         }
 
-        auto driver = Driver::makeDriver(
-            settings.getURL(),
-            settings.isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
+        if (_driver == NULL)
+            _driver = Driver::makeDriver(
+                _settings->getURL(),
+                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
 
         // Coordinator Creates Metadata
         if (query->isCoordinator()) {
@@ -539,7 +542,7 @@ public:
             metadata["compression"] = Metadata::compression2String(compression);
 
             // Write Metadata
-            driver->writeMetadata(metadata);
+            _driver->writeMetadata(metadata);
         }
 
         const Dimensions &dims = inputSchema.getDimensions();
@@ -552,10 +555,10 @@ public:
                 inputArrayIters[attr.getId()] = inputArray->getConstIterator(attr);
 
             // Init Writer
-            // if (settings.isArrowFormat())
+            // if (_settings->isArrowFormat())
             ArrowWriter dataWriter(inputSchema.getAttributes(true),
                                    inputSchema.getDimensions(),
-                                   settings.getCompression());
+                                   _settings->getCompression());
 
             while (!inputArrayIters[0]->end()) {
                 if (!inputArrayIters[0]->getChunk().getConstIterator(
@@ -577,7 +580,7 @@ public:
                         dataWriter.writeArrowBuffer(inputChunkIters, arrowBuffer));
 
                     // Write Chunk
-                    driver->writeArrow(
+                    _driver->writeArrow(
                         "chunks/" +
                         Metadata::coord2ObjectName(pos, dims), arrowBuffer);
                 }
@@ -602,7 +605,7 @@ public:
 
             // Serialize Chunk Coordinate List
             size_t nDims = dims.size();
-            size_t szSplit = static_cast<int>(settings.getIndexSplit() / nDims);
+            size_t szSplit = static_cast<int>(_settings->getIndexSplit() / nDims);
             size_t split = 0;
 
             LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
@@ -624,7 +627,7 @@ public:
                 // Write Chunk Coordinate List
                 std::ostringstream out;
                 out << "index/" << split;
-                driver->writeArrow(out.str(), arrowBuffer);
+                _driver->writeArrow(out.str(), arrowBuffer);
 
                 // Advance to Next Index Split
                 splitPtr += std::min<size_t>(
@@ -640,6 +643,9 @@ public:
     }
 
 private:
+    std::shared_ptr<XSaveSettings> _settings;
+    std::shared_ptr<Driver> _driver;
+
     bool haveChunk(std::shared_ptr<Array>& array, ArrayDesc const& schema)
     {
         std::shared_ptr<ConstArrayIterator> iter = array->getConstIterator(
