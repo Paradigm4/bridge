@@ -379,11 +379,11 @@ xsave(
 
     # Re-write one SciDB Chunk file to use multiple Arrow Chunks
     if url.startswith('s3://'):
-        s3_key = '{}/{}/c_0'.format(base_prefix, prefix)
+        s3_key = '{}/{}/chunks/c_0'.format(base_prefix, prefix)
         obj = s3_con.get_object(Bucket=s3_bucket, Key=s3_key)
         reader = pyarrow.ipc.open_stream(obj['Body'].read())
     elif url.startswith('file://'):
-        fn = '{}/{}/c_0'.format(fs_base, prefix)
+        fn = '{}/{}/chunks/c_0'.format(fs_base, prefix)
         reader = pyarrow.open_stream(pyarrow.OSFile(fn))
 
     tbl = reader.read_all()
