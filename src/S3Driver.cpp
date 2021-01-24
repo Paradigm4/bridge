@@ -62,6 +62,8 @@
 namespace scidb {
     static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3driver"));
 
+    std::atomic<size_t> S3AWSInit::_count(0);
+
     //
     // S3Driver
     //
@@ -77,13 +79,7 @@ namespace scidb {
         _bucket = _url.substr(prefix_len, pos - prefix_len).c_str();
         _prefix = _url.substr(pos + 1);
 
-        Aws::InitAPI(_sdkOptions);
         _client = std::make_unique<Aws::S3::S3Client>();
-    }
-
-    S3Driver::~S3Driver()
-    {
-        Aws::ShutdownAPI(_sdkOptions);
     }
 
     void S3Driver::init()

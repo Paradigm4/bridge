@@ -44,10 +44,31 @@ namespace Aws {
 
 namespace scidb {
 
+class S3AWSInit {
+public:
+    S3AWSInit() {
+        const size_t origCount = _count++;
+        if (origCount == 0)
+            Aws::InitAPI(_awsOptions);
+    }
+
+    ~S3AWSInit() {
+        const size_t newCount = --_count;
+        if (newCount == 0)
+            Aws::ShutdownAPI(_awsOptions);
+    }
+
+    S3AWSInit(const S3AWSInit&) = delete;
+    S3AWSInit& operator=(const S3AWSInit&) = delete;
+
+private:
+    const Aws::SDKOptions _awsOptions;
+    static std::atomic<size_t> _count;
+};
+
 class S3Driver: public Driver {
 public:
     S3Driver(const std::string &url);
-    ~S3Driver();
 
     void init();
 
@@ -64,10 +85,10 @@ public:
     const std::string& getURL() const;
 
 private:
+    const S3AWSInit _awsInit;
     const std::string _url;
     Aws::String _bucket;
     std::string _prefix;
-    const Aws::SDKOptions _sdkOptions;
     std::shared_ptr<Aws::S3::S3Client> _client;
 
     size_t _readArrow(const std::string&, std::shared_ptr<arrow::Buffer>&, bool) const;
