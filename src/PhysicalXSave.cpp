@@ -494,9 +494,28 @@ public:
             _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
         // Coordinator Creates Directories
         _driver->init();
+
+        if (_settings->isUpdate()) {
+            // Get Metadata
+            Metadata metadata;
+            _driver->readMetadata(metadata);
+            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID() << "|schema: " << metadata["schema"]);
+
+            ArrayDesc existingSchema = metadata.getArrayDesc(query);
+            if (existingSchema != _schema) {
+                std::ostringstream error;
+                error << "Existing schema "
+                      << existingSchema
+                      << " and provided schema "
+                      << _schema
+                      << " do not match";
+                throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                       SCIDB_LE_ILLEGAL_OPERATION) << error.str();
+            }
+        }
     }
 
-    std::shared_ptr<Array> execute(std::vector< std::shared_ptr<Array> >& inputArrays,
+    std::shared_ptr<Array> execute(std::vector<std::shared_ptr<Array> >& inputArrays,
                                    std::shared_ptr<Query> query)
     {
         if (_settings == NULL)

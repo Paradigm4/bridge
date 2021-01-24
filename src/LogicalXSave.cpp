@@ -58,7 +58,7 @@ public:
         return &argSpec;
     }
 
-    ArrayDesc inferSchema(std::vector< ArrayDesc> schemas,
+    ArrayDesc inferSchema(std::vector<ArrayDesc> schemas,
                           std::shared_ptr<Query> query)
     {
         XSaveSettings settings (_parameters, _kwParameters, true, query);

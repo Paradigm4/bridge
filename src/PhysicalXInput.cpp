@@ -46,7 +46,7 @@ public:
         std::vector< std::shared_ptr<Array> >& inputArrays,
         std::shared_ptr<Query> query)
     {
-        LOG4CXX_DEBUG(logger, "XINPUT|" << query->getInstanceID() << "|Execute");
+        LOG4CXX_DEBUG(logger, "XINPUT|" << query->getInstanceID() << "|execute");
 
         std::shared_ptr<XInputSettings> settings = std::make_shared<XInputSettings>(
             _parameters, _kwParameters, false, query);
