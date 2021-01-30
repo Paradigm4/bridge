@@ -28,6 +28,8 @@
 
 #include "Driver.h"
 
+#include <mutex>
+
 #include <aws/core/Aws.h>
 #include <aws/s3/model/GetObjectResult.h>
 
@@ -44,27 +46,20 @@ namespace Aws {
 
 namespace scidb {
 
-class S3AWSInit {
+class S3Init {
 public:
-    S3AWSInit() {
-        const size_t origCount = _count++;
-        if (origCount == 0)
-            Aws::InitAPI(_awsOptions);
-    }
-
-    ~S3AWSInit() {
-        const size_t newCount = --_count;
-        if (newCount == 0)
-            Aws::ShutdownAPI(_awsOptions);
-    }
-
-    S3AWSInit(const S3AWSInit&) = delete;
-    S3AWSInit& operator=(const S3AWSInit&) = delete;
+    S3Init();
+    S3Init(const S3Init&) = delete;
+    S3Init& operator=(const S3Init&) = delete;
 
 private:
-    const Aws::SDKOptions _awsOptions;
-    static std::atomic<size_t> _count;
+    static size_t s_count;
+
+    // const
+    Aws::SDKOptions _awsOptions;
+    std::mutex _lock;
 };
+
 
 class S3Driver: public Driver {
 public:
@@ -85,7 +80,7 @@ public:
     const std::string& getURL() const;
 
 private:
-    const S3AWSInit _awsInit;
+    const S3Init _awsInit;
     const std::string _url;
     Aws::String _bucket;
     std::string _prefix;

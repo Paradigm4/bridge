@@ -62,7 +62,32 @@
 namespace scidb {
     static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3driver"));
 
-    std::atomic<size_t> S3AWSInit::_count(0);
+    //
+    // ScopedMutex
+    //
+    class ScopedMutex {
+    public:
+        ScopedMutex(std::mutex &lock):_lock(lock) { _lock.lock(); }
+        ~ScopedMutex() { _lock.unlock(); }
+    private:
+        std::mutex &_lock;
+    };
+
+    //
+    // S3Init
+    //
+    S3Init::S3Init()
+    {
+        {
+             ScopedMutex lock(_lock); // LOCK
+
+             if (s_count == 0)
+                 Aws::InitAPI(_awsOptions);
+             s_count++;
+        }
+    }
+
+    size_t S3Init::s_count = 0;
 
     //
     // S3Driver
