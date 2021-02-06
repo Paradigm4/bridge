@@ -140,7 +140,7 @@ namespace scidb {
         _putRequest(key, data);
     }
 
-    void S3Driver::readMetadata(Metadata &metadata) const
+    void S3Driver::_readMetadataFile(Metadata &metadata) const
     {
         Aws::String key((_prefix + "/metadata").c_str());
 

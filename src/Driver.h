@@ -109,6 +109,8 @@ public:
         return _metadata.end();
     }
 
+    void validate() const;
+
     const ArrayDesc& getArrayDesc(std::shared_ptr<Query> query);
 
     static std::string compression2String(const Metadata::Compression compression);
@@ -143,7 +145,10 @@ public:
     virtual void writeArrow(const std::string&,
                             std::shared_ptr<const arrow::Buffer>) const = 0;
 
-    virtual void readMetadata(Metadata&) const = 0;
+    inline void readMetadata(Metadata &metadata) const {
+        _readMetadataFile(metadata);
+        metadata.validate();
+    }
     virtual void writeMetadata(const Metadata&) const = 0;
 
     // Count number of objects with specified prefix
@@ -167,6 +172,8 @@ private:
                               bool reuse) const = 0;
 
 protected:
+    virtual void _readMetadataFile(Metadata&) const = 0;
+
     inline void _setBuffer(const std::string &suffix,
                            std::shared_ptr<arrow::Buffer> &buffer,
                            bool reuse,

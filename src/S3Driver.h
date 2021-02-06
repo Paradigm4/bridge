@@ -70,7 +70,6 @@ public:
     void writeArrow(const std::string&,
                     std::shared_ptr<const arrow::Buffer>) const;
 
-    void readMetadata(Metadata&) const;
     void writeMetadata(const Metadata&) const;
 
     // Count number of objects with specified prefix
@@ -78,6 +77,9 @@ public:
 
     // Return print-friendly path used by driver
     const std::string& getURL() const;
+
+protected:
+    void _readMetadataFile(Metadata&) const;
 
 private:
     const S3Init _awsInit;

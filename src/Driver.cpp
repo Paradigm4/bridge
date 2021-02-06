@@ -71,6 +71,19 @@ std::string Metadata::coord2ObjectName(const Coordinates &pos,
     return out.str();
 }
 
+void Metadata::validate() const
+{
+    for (std::string key : {"schema", "version", "attribute", "format", "compression"})
+        if (_metadata.find(key) == _metadata.end()) {
+            std::ostringstream error;
+            error << "Key '" << key << "' missing from metadata";
+            throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+                << error.str();
+        }
+
+    string2Compression(_metadata.at("compression"));
+}
+
 const ArrayDesc& Metadata::getArrayDesc(std::shared_ptr<Query> query)
 {
     if (_hasSchema)

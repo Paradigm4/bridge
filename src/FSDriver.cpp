@@ -151,7 +151,7 @@ namespace scidb {
         if (stream.fail()) FAIL("Close", path);
     }
 
-    void FSDriver::readMetadata(Metadata &metadata) const
+    void FSDriver::_readMetadataFile(Metadata &metadata) const
     {
         auto path = _prefix + "/metadata";
         std::ifstream stream(path);
