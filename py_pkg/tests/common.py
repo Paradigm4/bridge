@@ -59,7 +59,7 @@ def scidb_con():
         pass
 
     # S3 Cleanup
-    result = s3_con.list_objects_v2(Bucket=s3_bucket, Prefix=base_prefix)
+    result = s3_con.list_objects_v2(Bucket=s3_bucket, Prefix=base_prefix + '/')
     if 'Contents' in result.keys():
         objects = [{'Key': e['Key']} for e in result['Contents']]
         s3_con.delete_objects(Bucket=s3_bucket,
