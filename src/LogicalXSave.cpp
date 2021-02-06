@@ -61,7 +61,7 @@ public:
     ArrayDesc inferSchema(std::vector<ArrayDesc> schemas,
                           std::shared_ptr<Query> query)
     {
-        XSaveSettings settings (_parameters, _kwParameters, true, query);
+        XSaveSettings settings(_parameters, _kwParameters, true, query);
         std::vector<DimensionDesc> dimensions(3);
         size_t const nInstances = query->getInstancesCount();
         dimensions[0] = DimensionDesc("chunk_no",    0, 0, CoordinateBounds::getMax(), CoordinateBounds::getMax(), 1, 0);
