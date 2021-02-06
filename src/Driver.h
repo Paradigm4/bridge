@@ -124,9 +124,19 @@ private:
     ArrayDesc _schema;
 };
 
-
 class Driver {
 public:
+    enum Mode {
+        READ   = 0,
+        WRITE  = 1,
+        UPDATE = 2
+    };
+
+    Driver(const std::string &url, const Driver::Mode mode):
+        _url(url),
+        _mode(mode)
+    {}
+
     virtual ~Driver() = 0;
 
     virtual void init() = 0;
@@ -157,21 +167,13 @@ public:
     // Return print-friendly path used by driver
     virtual const std::string& getURL() const = 0;
 
-    enum Mode {
-        READ   = 0,
-        WRITE  = 1,
-        UPDATE = 2
-    };
-
     static std::shared_ptr<Driver> makeDriver(const std::string url,
                                               const Mode mode=Mode::READ);
 
-private:
-    virtual size_t _readArrow(const std::string&,
-                              std::shared_ptr<arrow::Buffer>&,
-                              bool reuse) const = 0;
-
 protected:
+    const std::string _url;
+    const Driver::Mode _mode;
+
     virtual void _readMetadataFile(Metadata&) const = 0;
 
     inline void _setBuffer(const std::string &suffix,
@@ -194,6 +196,12 @@ protected:
             THROW_NOT_OK(arrow::AllocateBuffer(length, &buffer));
         }
     }
+
+private:
+    virtual size_t _readArrow(const std::string&,
+                              std::shared_ptr<arrow::Buffer>&,
+                              bool reuse) const = 0;
+
 };
 
 inline Driver::~Driver() {}

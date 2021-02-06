@@ -63,7 +63,7 @@ private:
 
 class S3Driver: public Driver {
 public:
-    S3Driver(const std::string &url);
+    S3Driver(const std::string &url, const Driver::Mode);
 
     void init();
 
@@ -83,7 +83,7 @@ protected:
 
 private:
     const S3Init _awsInit;
-    const std::string _url;
+
     Aws::String _bucket;
     std::string _prefix;
     std::shared_ptr<Aws::S3::S3Client> _client;
@@ -97,7 +97,8 @@ private:
     Outcome _retryLoop(const std::string &name,
                        const Aws::String &key,
                        const Request &request,
-                       RequestFunc requestFunc) const;
+                       RequestFunc requestFunc,
+                       bool throwIfFails=true) const;
 
 };
 

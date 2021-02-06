@@ -33,7 +33,7 @@ namespace scidb {
 
 class FSDriver: public Driver {
 public:
-    FSDriver(const std::string &url, const Driver::Mode mode);
+    FSDriver(const std::string &url, const Driver::Mode);
 
     void init();
 
@@ -52,8 +52,6 @@ protected:
     void _readMetadataFile(Metadata&) const;
 
 private:
-    const std::string _url;
-    const Driver::Mode _mode;
     std::string _prefix;
 
     size_t _readArrow(const std::string&, std::shared_ptr<arrow::Buffer>&, bool) const;

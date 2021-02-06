@@ -58,6 +58,14 @@
         }                                                               \
     }
 
+#define FAIL(reason, bucket, key)                                               \
+    {                                                                           \
+        std::ostringstream out;                                                 \
+        out << (reason) << " s3://" << (bucket) << "/" << (key);                \
+        throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_UNKNOWN_ERROR)      \
+            << out.str();                                                       \
+    }
+
 
 namespace scidb {
     static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3driver"));
@@ -92,8 +100,8 @@ namespace scidb {
     //
     // S3Driver
     //
-    S3Driver::S3Driver(const std::string &url):
-        _url(url)
+    S3Driver::S3Driver(const std::string &url, const Driver::Mode mode):
+        Driver(url, mode)
     {
         const size_t prefix_len = 5; // "s3://"
         size_t pos = _url.find("/", prefix_len);
@@ -108,7 +116,31 @@ namespace scidb {
     }
 
     void S3Driver::init()
-    {}
+    {
+
+        Aws::String key((_prefix + "/metadata").c_str());
+
+        Aws::S3::Model::GetObjectRequest request;
+        request.SetBucket(_bucket);
+        request.SetKey(key);
+
+        auto outcome = _retryLoop<Aws::S3::Model::GetObjectOutcome>(
+            "Get", key, request, &Aws::S3::S3Client::GetObject, false);
+
+        if (_mode == Driver::Mode::READ
+            || _mode == Driver::Mode::UPDATE) {
+            // metadata *needs to* exist
+            if (!outcome.IsSuccess()) {
+                FAIL("Array not found, missing metadata", _bucket, key);
+            }
+        }
+        else if (_mode == Driver::Mode::WRITE) {
+            // metadata *cannot* exist
+            if (outcome.IsSuccess()) {
+                FAIL("Array found, metadata exists", _bucket, key);
+            }
+        }
+    }
 
     size_t S3Driver::_readArrow(const std::string &suffix,
                                 std::shared_ptr<arrow::Buffer> &buffer,
@@ -220,7 +252,8 @@ namespace scidb {
     Outcome S3Driver::_retryLoop(const std::string &name,
                                  const Aws::String &key,
                                  const Request &request,
-                                 RequestFunc requestFunc) const
+                                 RequestFunc requestFunc,
+                                 bool throwIfFails) const
     {
         LOG4CXX_DEBUG(logger, "S3DRIVER|" << name << ":" << key);
         auto outcome = ((*_client).*requestFunc)(request);
@@ -239,7 +272,9 @@ namespace scidb {
             outcome = ((*_client).*requestFunc)(request);
         }
 
-        S3_EXCEPTION_NOT_SUCCESS(name);
+        if (throwIfFails) {
+            S3_EXCEPTION_NOT_SUCCESS(name);
+        }
         return outcome;
     }
 } // namespace scidb

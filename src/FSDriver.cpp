@@ -33,7 +33,7 @@
     {                                                                           \
         std::ostringstream out;                                                 \
         out << (op) << " failed for " << (path);                                \
-        throw SYSTEM_EXCEPTION(SCIDB_SE_NETWORK, SCIDB_LE_UNKNOWN_ERROR)        \
+        throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_UNKNOWN_ERROR)      \
             << out.str();                                                       \
     }
 
@@ -46,8 +46,7 @@ namespace scidb {
     // FSDriver
     //
     FSDriver::FSDriver(const std::string &url, const Driver::Mode mode):
-        _url(url),
-        _mode(mode)
+        Driver(url, mode)
     {
         // Check the URL is valid
         const size_t prefix_len = 7; // "file://"
@@ -63,6 +62,7 @@ namespace scidb {
 
     void FSDriver::init()
     {
+        // Chech path and/or create directories
         if (_mode == Driver::Mode::READ
             || _mode == Driver::Mode::UPDATE) {
             // Check that path exists and is a directory
