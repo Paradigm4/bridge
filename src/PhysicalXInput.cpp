@@ -54,8 +54,6 @@ public:
         std::shared_ptr<XArray> array = std::make_shared<XArray>(
             query, _schema, settings);
 
-        array->readIndex();
-
         return array;
     }
 };

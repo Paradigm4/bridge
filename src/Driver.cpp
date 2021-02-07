@@ -81,6 +81,7 @@ void Metadata::validate() const
                 << error.str();
         }
 
+    // Throws Exception If Not Supported
     string2Compression(_metadata.at("compression"));
 }
 

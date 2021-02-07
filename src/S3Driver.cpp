@@ -117,7 +117,6 @@ namespace scidb {
 
     void S3Driver::init()
     {
-
         Aws::String key((_prefix + "/metadata").c_str());
 
         Aws::S3::Model::GetObjectRequest request;

@@ -26,6 +26,8 @@
 #ifndef X_INDEX_H_
 #define X_INDEX_H_
 
+#include "Driver.h"
+
 // SciDB
 #include <array/Coordinate.h>
 #include <array/Dimensions.h>
@@ -38,19 +40,56 @@ namespace scidb {
     class ArrayDesc;
     class Query;
     class SharedBuffer;
+    class XIndex;
+}
+namespace arrow {
+    class Array;
+    class RecordBatch;
+    class RecordBatchReader;
+    class ResizableBuffer;
+    namespace io {
+        class BufferReader;
+        class CompressedInputStream;
+    }
+    namespace util {
+        class Codec;
+    }
 }
 // -- End of Forward Declarations
 
 
-namespace scidb {
-    class XIndex;
-} // namespace scidb
 namespace std {
     std::ostream& operator<<(std::ostream&, const scidb::Coordinates&);
     std::ostream& operator<<(std::ostream&, const scidb::XIndex&);
 } // namespace std
 
 namespace scidb {
+
+// --
+// -- - ArrowReader - --
+// --
+class ArrowReader {
+public:
+    ArrowReader(Metadata::Compression,
+                std::shared_ptr<const Driver>);
+
+    size_t readObject(const std::string &name,
+                      bool reuse,
+                      std::shared_ptr<arrow::RecordBatch>&);
+
+private:
+    const Metadata::Compression _compression;
+
+    std::shared_ptr<const Driver> _driver;
+
+    std::shared_ptr<arrow::ResizableBuffer> _arrowResizableBuffer;
+    std::shared_ptr<arrow::io::BufferReader> _arrowBufferReader;
+    std::unique_ptr<arrow::util::Codec> _arrowCodec;
+    std::shared_ptr<arrow::io::CompressedInputStream> _arrowCompressedStream;
+    std::shared_ptr<arrow::RecordBatchReader> _arrowBatchReader;
+};
+
+
 // --
 // -- - XIndex - --
 // --
@@ -66,6 +105,8 @@ class XIndex {
     size_t size() const;
     void insert(const Coordinates&);
     void sort();
+
+    void load(std::shared_ptr<const Driver>, std::shared_ptr<Query>);
 
     // Serialize & De-serialize for inter-instance comms
     std::shared_ptr<SharedBuffer> serialize() const;

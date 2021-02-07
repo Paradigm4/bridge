@@ -40,44 +40,10 @@
 namespace scidb {
     class XInputSettings;       // #include "XInputSettings.h"
 }
-namespace arrow {
-    class Array;
-    class RecordBatch;
-    class RecordBatchReader;
-    class ResizableBuffer;
-    namespace io {
-        class BufferReader;
-        class CompressedInputStream;
-    }
-    namespace util {
-        class Codec;
-    }
-}
 // -- End of Forward Declarations
 
 
 namespace scidb {
-
-class ArrowReader {
-public:
-    ArrowReader(Metadata::Compression,
-                std::shared_ptr<const Driver>);
-
-    size_t readObject(const std::string &name,
-                      bool reuse,
-                      std::shared_ptr<arrow::RecordBatch>&);
-
-private:
-    const Metadata::Compression _compression;
-
-    std::shared_ptr<const Driver> _driver;
-
-    std::shared_ptr<arrow::ResizableBuffer> _arrowResizableBuffer;
-    std::shared_ptr<arrow::io::BufferReader> _arrowBufferReader;
-    std::unique_ptr<arrow::util::Codec> _arrowCodec;
-    std::shared_ptr<arrow::io::CompressedInputStream> _arrowCompressedStream;
-    std::shared_ptr<arrow::RecordBatchReader> _arrowBatchReader;
-};
 
 typedef struct {
     std::list<Coordinates>::iterator lruIt;
@@ -231,10 +197,8 @@ public:
 
     std::shared_ptr<ConstArrayIterator> getConstIteratorImpl(const AttributeDesc& attr) const override;
 
-    /// @see Array::hasInputPipe
+    // @see Array::hasInputPipe
     bool hasInputPipe() const override { return false; }
-
-    void readIndex();
 
 private:
     // SciDB members

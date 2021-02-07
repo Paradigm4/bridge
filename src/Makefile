@@ -83,7 +83,7 @@ LogicalXSave.o:  XSaveSettings.h Driver.h
 PhysicalXSave.o: XSaveSettings.h XIndex.h Driver.h
 
 XArray.o: XArray.h XIndex.h XInputSettings.h Driver.h
-XIndex.o: XIndex.h
+XIndex.o: XIndex.h Driver.h
 S3Driver.o: S3Driver.h Driver.h
 FSDriver.o: FSDriver.h Driver.h
 Driver.o: S3Driver.h FSDriver.h Driver.h

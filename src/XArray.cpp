@@ -28,94 +28,14 @@
 
 // SciDB
 #include <array/MemoryBuffer.h>
-#include <network/Network.h>
 
 // Arrow
 #include <arrow/builder.h>
-#include <arrow/io/compressed.h>
-#include <arrow/io/memory.h>
 #include <arrow/ipc/reader.h>
 #include <arrow/util/compression.h>
 
 
-#define ASSIGN_OR_THROW(lhs, rexpr)                     \
-    {                                                   \
-        auto status_name = (rexpr);                     \
-        THROW_NOT_OK(status_name.status());             \
-        lhs = std::move(status_name).ValueOrDie();      \
-    }
-
-
 namespace scidb {
-
-    //
-    // Arrow Reader
-    //
-    ArrowReader::ArrowReader(
-        Metadata::Compression compression,
-        std::shared_ptr<const Driver> driver):
-        _compression(compression),
-        _driver(driver)
-    {
-        THROW_NOT_OK(arrow::AllocateResizableBuffer(0, &_arrowResizableBuffer));
-
-        if (_compression == Metadata::Compression::GZIP)
-            _arrowCodec = *arrow::util::Codec::Create(
-                arrow::Compression::type::GZIP);
-    }
-
-    size_t ArrowReader::readObject(
-        const std::string &name,
-        bool reuse,
-        std::shared_ptr<arrow::RecordBatch> &arrowBatch)
-    {
-        // Download Chunk
-        size_t arrowSize;
-        if (reuse) {
-            // Reuse an Arrow ResizableBuffer
-            arrowSize = _driver->readArrow(name, _arrowResizableBuffer);
-
-            _arrowBufferReader = std::make_shared<arrow::io::BufferReader>(
-                _arrowResizableBuffer);
-        }
-        else {
-            // Get a new Arrow Buffer
-            std::shared_ptr<arrow::Buffer> arrowBuffer;
-            arrowSize = _driver->readArrow(name, arrowBuffer);
-
-            _arrowBufferReader = std::make_shared<arrow::io::BufferReader>(
-                arrowBuffer);
-        }
-
-        // Setup Arrow Compression, If Enabled
-        if (_compression != Metadata::Compression::NONE) {
-            ASSIGN_OR_THROW(_arrowCompressedStream,
-                            arrow::io::CompressedInputStream::Make(
-                                _arrowCodec.get(), _arrowBufferReader));
-            // Read Record Batch using Stream Reader
-            THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
-                             _arrowCompressedStream, &_arrowBatchReader));
-        }
-        else {
-            THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
-                             _arrowBufferReader, &_arrowBatchReader));
-        }
-
-        THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatch));
-
-        // No More Record Batches are Expected
-        std::shared_ptr<arrow::RecordBatch> arrowBatchNext;
-        THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatchNext));
-        if (arrowBatchNext != NULL) {
-            std::ostringstream out;
-            out << "More than one Arrow Record Batch found in "
-                << _driver->getURL() << "/" << name;
-            throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                   SCIDB_LE_UNKNOWN_ERROR) << out.str();
-        }
-
-        return arrowSize;
-    }
 
     //
     // ScopedMutex
@@ -129,7 +49,7 @@ namespace scidb {
     };
 
     //
-    // X Cache
+    // XCache
     //
     XCache::XCache(
         std::shared_ptr<ArrowReader> arrowReader,
@@ -203,7 +123,7 @@ namespace scidb {
     }
 
     //
-    // X Chunk Iterator
+    // XChunk Iterator
     //
     XChunkIterator::XChunkIterator(const XArray& array,
                                      const XChunk* chunk,
@@ -686,6 +606,9 @@ namespace scidb {
                                                _driver->getURL(),
                                                _desc.getDimensions(),
                                                cacheSize);
+
+        // Load index
+        _index.load(_driver, _query);
     }
 
     ArrayDesc const& XArray::getArrayDesc() const {
@@ -697,94 +620,4 @@ namespace scidb {
         return std::shared_ptr<ConstArrayIterator>(
             new XArrayIterator(*(XArray*)this, attr.getId()));
     }
-
-    void XArray::readIndex() {
-        const InstanceID instID = _query->getInstanceID();
-
-        // -- - Get Count of Chunk Index Files - --
-        size_t nIndex = _driver->count("index/");
-        LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex nIndex:" << nIndex);
-
-        // -- - Read Part of Chunk Index Files - --
-        // Divide index files among instnaces
-
-        const size_t nInst = _query->getInstancesCount();
-        const Dimensions dims = _desc.getDimensions();
-        const size_t nDims = dims.size();
-        scidb::Coordinates pos(nDims);
-
-        // One coordBuf for each instance
-        std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
-        ArrowReader arrowReader(Metadata::Compression::GZIP, _driver);
-        std::shared_ptr<arrow::RecordBatch> arrowBatch;
-
-        for (size_t iIndex = instID; iIndex < nIndex; iIndex += nInst) {
-
-            // Download One Chunk Index
-            std::ostringstream out;
-            out << "index/" << iIndex;
-            std::string objectName(out.str());
-            arrowReader.readObject(objectName, true, arrowBatch);
-
-            if (arrowBatch->num_columns() != static_cast<int>(nDims)) {
-                out.str("");
-                out << objectName
-                    << " Invalid number of columns";
-                throw SYSTEM_EXCEPTION(scidb::SCIDB_SE_METADATA,
-                                       scidb::SCIDB_LE_UNKNOWN_ERROR)
-                    << out.str();
-            }
-            std::vector<const int64_t*> columns(nDims);
-            for (size_t i = 0; i < nDims; i++)
-                columns[i] = std::static_pointer_cast<arrow::Int64Array>(arrowBatch->column(i))->raw_values();
-            size_t columnLen = arrowBatch->column(0)->length();
-
-            for (size_t j = 0; j < columnLen; j++) {
-                for (size_t i = 0; i < nDims; i++)
-                    pos[i] = (
-                        columns[i][j]
-                        // * dims[i].getChunkInterval()
-                        // + dims[i].getStartMin()
-                        );
-
-                InstanceID primaryID = _desc.getPrimaryInstanceId(pos, nInst);
-                if (primaryID == instID)
-                    _index.insert(pos);
-                else
-                    // Serialize in the right coordBuf
-                    std::copy(pos.begin(), pos.end(), std::back_inserter(coordBuf[primaryID]));
-            }
-        }
-
-        // Distribute Index Splits to Each Instance
-        for (InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
-            if (remoteID != instID) {
-                // Prepare Shared Buffer
-                std::shared_ptr<SharedBuffer> buf;
-                if (coordBuf[remoteID].size() == 0)
-                    buf = std::shared_ptr<SharedBuffer>(new MemoryBuffer(NULL, 1));
-                else
-                    buf = std::shared_ptr<SharedBuffer>(
-                        // Have to copy it
-                        new MemoryBuffer(
-                            coordBuf[remoteID].data(),
-                            coordBuf[remoteID].size() * sizeof(Coordinate)));
-
-                // Send Shared Buffer
-                BufSend(remoteID, buf, _query);
-            }
-
-        for (InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
-            if (remoteID != instID) {
-                auto buf = BufReceive(remoteID, _query);
-                _index.deserialize_insert(buf);
-            }
-
-        _index.sort();
-
-        // TODO Remove (debugging)
-        LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex size:" << _index.size());
-        // LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex begin:" << *_index.begin());
-        // LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex:" << _index);
-     }
 } // scidb namespace

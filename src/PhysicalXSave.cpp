@@ -492,13 +492,15 @@ public:
         _driver = Driver::makeDriver(
             _settings->getURL(),
             _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
-        // Coordinator Creates Directories
+
+        // Coordinator Creates/Checks Directories
         _driver->init();
     }
 
     std::shared_ptr<Array> execute(std::vector<std::shared_ptr<Array> >& inputArrays,
                                    std::shared_ptr<Query> query)
     {
+        // Create Settings if not already set
         if (_settings == NULL)
             _settings = std::make_shared<XSaveSettings>(_parameters, _kwParameters, false, query);
 
@@ -524,11 +526,13 @@ public:
             return result;
         }
 
+        // Create Driver if not already set
         if (_driver == NULL)
             _driver = Driver::makeDriver(
                 _settings->getURL(),
                 _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
 
+        // If Update, Read metadata and check that it matches
         if (_settings->isUpdate()) {
             // Get Metadata
             Metadata metadata;
@@ -536,10 +540,12 @@ public:
 
             LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID() << "|found schema: " << metadata["schema"]);
             ArrayDesc existingSchema = metadata.getArrayDesc(query);
+            std::ostringstream error;
+
+            // Check Schema
             if (!inputSchema.sameSchema(
                     existingSchema,
                     ArrayDesc::SchemaFieldSelector().wildcardInterval(true))) {
-                std::ostringstream error;
                 error << "Existing schema "
                       << existingSchema
                       << " and provided schema "
@@ -548,23 +554,58 @@ public:
                 throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
                                        SCIDB_LE_ILLEGAL_OPERATION) << error.str();
             }
-        }
 
-        // Coordinator Creates Metadata
-        if (query->isCoordinator()) {
-            // Prep Metadata
-            Metadata metadata;
-            std::ostringstream out;
-            printSchema(out, inputSchema);
-            metadata["schema"] = out.str();
-            metadata["version"] = STR(BRIDGE_VERSION);
-            metadata["attribute"] = "ALL";
-            metadata["format"] = "arrow";
-            metadata["compression"] = Metadata::compression2String(compression);
+            // Check Version
+            if (STR(BRIDGE_VERSION) != metadata["version"]) {
+                error << "Existing array Bridge version "
+                      << metadata["version"]
+                      << " and current version "
+                      << BRIDGE_VERSION
+                      << " do not match";
+                throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                       SCIDB_LE_ILLEGAL_OPERATION) << error.str();
+            }
 
-            // Write Metadata
-            _driver->writeMetadata(metadata);
+            // Check Attributes
+            if ("ALL" != metadata["attribute"]) {
+                error << "Existing array attributes "
+                      << metadata["attributes"]
+                      << " and current attributes "
+                      << "ALL"
+                      << " do not match";
+                throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                       SCIDB_LE_ILLEGAL_OPERATION) << error.str();
+            }
+
+            // Check Format
+            if ("arrow" != metadata["format"]) {
+                error << "Existing array format "
+                      << metadata["format"]
+                      << " and current format "
+                      << "arrow"
+                      << " do not match";
+                throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                       SCIDB_LE_ILLEGAL_OPERATION) << error.str();
+            }
+
+            // Compression Not Allowed for Updates
         }
+        else
+            // Coordinator Creates Metadata
+            if (query->isCoordinator()) {
+                // Prep Metadata
+                Metadata metadata;
+                std::ostringstream out;
+                printSchema(out, inputSchema);
+                metadata["schema"] = out.str();
+                metadata["version"] = STR(BRIDGE_VERSION);
+                metadata["attribute"] = "ALL";
+                metadata["format"] = "arrow";
+                metadata["compression"] = Metadata::compression2String(compression);
+
+                // Write Metadata
+                _driver->writeMetadata(metadata);
+            }
 
         const Dimensions &dims = inputSchema.getDimensions();
         if (haveChunk_) {
@@ -584,6 +625,7 @@ public:
             while (!inputArrayIters[0]->end()) {
                 if (!inputArrayIters[0]->getChunk().getConstIterator(
                         ConstChunkIterator::IGNORE_OVERLAPS)->end()) {
+
                     // Init Iterators for Current Chunk
                     for(size_t i = 0; i < nAttrs; ++i)
                         inputChunkIters[i] = inputArrayIters[i]->getChunk(
