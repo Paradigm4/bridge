@@ -57,11 +57,11 @@ public:
         driver->init();
 
         // Get Metadata
-        Metadata metadata;
+        std::shared_ptr<Metadata> metadata = std::make_shared<Metadata>();
         driver->readMetadata(metadata);
-        LOG4CXX_DEBUG(logger, "XINPUT|" << query->getInstanceID() << "|schema: " << metadata["schema"]);
+        LOG4CXX_DEBUG(logger, "XINPUT|" << query->getInstanceID() << "|schema: " << (*metadata)["schema"]);
 
-        ArrayDesc schema = metadata.getArrayDesc(query);
+        ArrayDesc schema = metadata->getArrayDesc(query);
         schema.setDistribution(createDistribution(defaultDistType()));
         return schema;
     }

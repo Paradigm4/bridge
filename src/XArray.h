@@ -189,9 +189,12 @@ class XArray : public Array
     friend class XChunk;
 
 public:
-    XArray(std::shared_ptr<Query> query,
-           const ArrayDesc& desc,
-           const std::shared_ptr<XInputSettings> settings);
+    XArray(std::shared_ptr<Query>,
+           const ArrayDesc&,
+           std::shared_ptr<const Driver>,
+           std::shared_ptr<const Metadata>,
+           std::shared_ptr<const XIndex>,
+           const size_t cacheSize);
 
     virtual ArrayDesc const& getArrayDesc() const;
 
@@ -204,12 +207,11 @@ private:
     // SciDB members
     std::shared_ptr<Query> _query;
     const ArrayDesc _desc;
-    const std::shared_ptr<const XInputSettings> _settings;
 
     // XBridge members
     std::shared_ptr<const Driver> _driver;
-    std::shared_ptr<ArrowReader> _arrowReader;
-    XIndex _index;
+    std::shared_ptr<const XIndex> _index;
+    std::shared_ptr<ArrowReader> _arrowReader; // Array Reader
     std::unique_ptr<XCache> _cache;
 };
 

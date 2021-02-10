@@ -24,7 +24,10 @@
 */
 
 #include "XInputSettings.h"
+
+#include "Driver.h"
 #include "XArray.h"
+#include "XIndex.h"
 
 // SciDB
 #include <query/PhysicalOperator.h>
@@ -51,8 +54,16 @@ public:
         std::shared_ptr<XInputSettings> settings = std::make_shared<XInputSettings>(
             _parameters, _kwParameters, false, query);
 
+        auto driver = Driver::makeDriver(settings->getURL());
+
+        std::shared_ptr<Metadata> metadata = std::make_shared<Metadata>();
+        driver->readMetadata(*metadata);
+
+        std::shared_ptr<XIndex> index = std::make_shared<XIndex>(_schema);
+        index->load(driver, query);
+
         std::shared_ptr<XArray> array = std::make_shared<XArray>(
-            query, _schema, settings);
+            query, _schema, driver, metadata, index, settings->getCacheSize());
 
         return array;
     }

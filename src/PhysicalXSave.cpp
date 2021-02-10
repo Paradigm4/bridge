@@ -24,6 +24,9 @@
 */
 
 #include "XSaveSettings.h"
+
+#include "Driver.h"
+#include "XArray.h"
 #include "XIndex.h"
 
 // SciDB
@@ -517,12 +520,13 @@ public:
                       << " haveChunk " << haveChunk_);
 
         // Chunk Coordinate Index
-        XIndex index(inputSchema);
+        std::shared_ptr<XIndex> index = std::make_shared<XIndex>(inputSchema);
+        std::shared_ptr<Metadata> metadata = std::make_shared<Metadata>();
 
         // Exit Early
         if (!haveChunk_ && !query->isCoordinator()) {
             // Send EMPTY Index to Coordinator
-            BufSend(query->getCoordinatorID(), index.serialize(), query);
+            BufSend(query->getCoordinatorID(), index->serialize(), query);
             return result;
         }
 
@@ -535,11 +539,10 @@ public:
         // If Update, Read metadata and check that it matches
         if (_settings->isUpdate()) {
             // Get Metadata
-            Metadata metadata;
             _driver->readMetadata(metadata);
 
-            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID() << "|found schema: " << metadata["schema"]);
-            ArrayDesc existingSchema = metadata.getArrayDesc(query);
+            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID() << "|found schema: " << (*metadata)["schema"]);
+            ArrayDesc existingSchema = metadata->getArrayDesc(query);
             std::ostringstream error;
 
             // Check Schema
@@ -556,9 +559,9 @@ public:
             }
 
             // Check Version
-            if (STR(BRIDGE_VERSION) != metadata["version"]) {
+            if (STR(BRIDGE_VERSION) != (*metadata)["version"]) {
                 error << "Existing array Bridge version "
-                      << metadata["version"]
+                      << (*metadata)["version"]
                       << " and current version "
                       << BRIDGE_VERSION
                       << " do not match";
@@ -567,9 +570,9 @@ public:
             }
 
             // Check Attributes
-            if ("ALL" != metadata["attribute"]) {
+            if ("ALL" != (*metadata)["attribute"]) {
                 error << "Existing array attributes "
-                      << metadata["attributes"]
+                      << (*metadata)["attributes"]
                       << " and current attributes "
                       << "ALL"
                       << " do not match";
@@ -578,9 +581,9 @@ public:
             }
 
             // Check Format
-            if ("arrow" != metadata["format"]) {
+            if ("arrow" != (*metadata)["format"]) {
                 error << "Existing array format "
-                      << metadata["format"]
+                      << (*metadata)["format"]
                       << " and current format "
                       << "arrow"
                       << " do not match";
@@ -594,21 +597,35 @@ public:
             // Coordinator Creates Metadata
             if (query->isCoordinator()) {
                 // Prep Metadata
-                Metadata metadata;
                 std::ostringstream out;
                 printSchema(out, inputSchema);
-                metadata["schema"] = out.str();
-                metadata["version"] = STR(BRIDGE_VERSION);
-                metadata["attribute"] = "ALL";
-                metadata["format"] = "arrow";
-                metadata["compression"] = Metadata::compression2String(compression);
+                (*metadata)["schema"] = out.str();
+                (*metadata)["version"] = STR(BRIDGE_VERSION);
+                (*metadata)["attribute"] = "ALL";
+                (*metadata)["format"] = "arrow";
+                (*metadata)["compression"] = Metadata::compression2String(compression);
 
                 // Write Metadata
-                _driver->writeMetadata(metadata);
+                _driver->writeMetadata(*metadata);
             }
 
         const Dimensions &dims = inputSchema.getDimensions();
         if (haveChunk_) {
+            std::shared_ptr<XArray> existingArray;
+            std::shared_ptr<ConstArrayIterator> existingArrayItFirst;
+            if (_settings->isUpdate()) {
+                // Load Index
+                index->load(_driver, query);
+
+                // Init Existing Array
+                existingArray = std::make_shared<XArray>(
+                    query, inputSchema, _driver, metadata, index, 0);
+
+                existingArrayItFirst = existingArray->getConstIterator(
+                    _schema.getAttributes(true).firstDataAttribute());
+            }
+
+
             // Init Array & Chunk Iterators
             size_t const nAttrs = inputSchema.getAttributes(true).size();
             std::vector<std::shared_ptr<ConstArrayIterator> > inputArrayIters(nAttrs);
@@ -634,8 +651,13 @@ public:
                     // Set Object Name using Top-Left Coordinates
                     Coordinates const &pos = inputChunkIters[0]->getFirstPosition();
 
-                    // Add Chunk Coordinates to the Chunk Index
-                    index.insert(pos);
+                    if (_settings->isUpdate() &&
+                        existingArrayItFirst->setPosition(pos))
+                        // Merge Chunks
+                        ;
+                    else
+                        // Add Chunk Coordinates to Index
+                        index->insert(pos);
 
                     // Serialize Chunk
                     std::shared_ptr<arrow::Buffer> arrowBuffer;
@@ -653,7 +675,7 @@ public:
             }
         }
 
-        // Centralize Chunk Coordinate Lists
+        // Centralize Index
         if (query->isCoordinator()) {
             size_t const nInst = query->getInstancesCount();
             InstanceID localID = query->getInstanceID();
@@ -661,12 +683,12 @@ public:
             for(InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
                 if(remoteID != localID)
                     // Receive and De-Serialize Index
-                    index.deserialize_insert(BufReceive(remoteID, query));
+                    index->deserialize_insert(BufReceive(remoteID, query));
 
-            // Sort Chunk Coordinate List
-            index.sort();
+            // Sort Index
+            index->sort();
 
-            // Serialize Chunk Coordinate List
+            // Serialize Index
             size_t nDims = dims.size();
             size_t szSplit = static_cast<int>(_settings->getIndexSplit() / nDims);
             size_t split = 0;
@@ -678,16 +700,16 @@ public:
                                     inputSchema.getDimensions(),
                                     Metadata::Compression::GZIP);
 
-            auto splitPtr = index.begin();
-            while (splitPtr != index.end()) {
+            auto splitPtr = index->begin();
+            while (splitPtr != index->end()) {
                 // Convert to Arrow
                 std::shared_ptr<arrow::Buffer> arrowBuffer;
                 THROW_NOT_OK(indexWriter.writeArrowBuffer(splitPtr,
-                                                          index.end(),
+                                                          index->end(),
                                                           szSplit,
                                                           arrowBuffer));
 
-                // Write Chunk Coordinate List
+                // Write Index
                 std::ostringstream out;
                 out << "index/" << split;
                 _driver->writeArrow(out.str(), arrowBuffer);
@@ -695,12 +717,15 @@ public:
                 // Advance to Next Index Split
                 splitPtr += std::min<size_t>(
                     szSplit,
-                    std::distance(splitPtr, index.end()));
+                    std::distance(splitPtr, index->end()));
                 split++;
             }
+
+            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
+                          << "|execute index:" << index);
         }
         else
-            BufSend(query->getCoordinatorID(), index.serialize(), query);
+            BufSend(query->getCoordinatorID(), index->serialize(), query);
 
         return result;
     }

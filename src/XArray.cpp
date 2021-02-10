@@ -126,9 +126,9 @@ namespace scidb {
     // XChunk Iterator
     //
     XChunkIterator::XChunkIterator(const XArray& array,
-                                     const XChunk* chunk,
-                                     int iterationMode,
-                                     std::shared_ptr<arrow::RecordBatch> arrowBatch):
+                                   const XChunk* chunk,
+                                   int iterationMode,
+                                   std::shared_ptr<arrow::RecordBatch> arrowBatch):
         _array(array),
         _nAtts(array._desc.getAttributes(true).size()),
         _nDims(array._desc.getDimensions().size()),
@@ -487,7 +487,7 @@ namespace scidb {
         if (!_hasCurrent)
             throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
-        if (_currIndex == _array._index.end())
+        if (_currIndex == _array._index->end())
             throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
         Query::getValidQueryPtr(_array._query);
@@ -500,7 +500,7 @@ namespace scidb {
     {
         _chunkInitialized = false;
 
-        if (_currIndex == _array._index.end())
+        if (_currIndex == _array._index->end())
             _hasCurrent = false;
         else {
             _hasCurrent = true;
@@ -525,8 +525,8 @@ namespace scidb {
         _array._desc.getChunkPositionFor(chunkPos);
 
         _chunkInitialized = false;
-        _currIndex = _array._index.find(chunkPos);
-        if (_currIndex != _array._index.end())
+        _currIndex = _array._index->find(chunkPos);
+        if (_currIndex != _array._index->end())
             _hasCurrent = true;
         else
             _hasCurrent = false;
@@ -538,7 +538,7 @@ namespace scidb {
     {
         Query::getValidQueryPtr(_array._query);
 
-        _currIndex = _array._index.begin();
+        _currIndex = _array._index->begin();
         _nextChunk();
     }
 
@@ -575,22 +575,21 @@ namespace scidb {
     // X Array
     //
     XArray::XArray(std::shared_ptr<Query> query,
-                     const ArrayDesc& desc,
-                     const std::shared_ptr<XInputSettings> settings):
+                   const ArrayDesc& desc,
+                   std::shared_ptr<const Driver> driver,
+                   std::shared_ptr<const Metadata> metadata,
+                   std::shared_ptr<const XIndex> index,
+                   const size_t cacheSize):
         _query(query),
         _desc(desc),
-        _settings(settings),
-        _index(desc)
+        _driver(driver),
+        _index(index)
     {
         auto nInst = _query->getInstancesCount();
         SCIDB_ASSERT(nInst > 0 && _query->getInstanceID() < nInst);
 
-        _driver = Driver::makeDriver(_settings->getURL());
-        Metadata metadata;
-        _driver->readMetadata(metadata);
-
-        auto compressionPair = metadata.find("compression");
-        if (compressionPair == metadata.end())
+        auto compressionPair = metadata->find("compression");
+        if (compressionPair == metadata->end())
             throw SYSTEM_EXCEPTION(scidb::SCIDB_SE_METADATA,
                                    scidb::SCIDB_LE_UNKNOWN_ERROR)
                 << "Compression missing from metadata";
@@ -600,15 +599,11 @@ namespace scidb {
                                                        _driver);
 
         // If cache size is 0, the cache will be disabled
-        auto cacheSize = settings->getCacheSize();
         if (cacheSize > 0)
             _cache = std::make_unique<XCache>(_arrowReader,
                                                _driver->getURL(),
                                                _desc.getDimensions(),
                                                cacheSize);
-
-        // Load index
-        _index.load(_driver, _query);
     }
 
     ArrayDesc const& XArray::getArrayDesc() const {

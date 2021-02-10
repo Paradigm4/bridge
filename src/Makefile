@@ -77,10 +77,10 @@ all: libbridge.so
 plugin.o:
 
 LogicalXInput.o: XInputSettings.h Driver.h
-PhysicalXInput.o: XInputSettings.h XArray.h XIndex.h Driver.h
+PhysicalXInput.o: XInputSettings.h Driver.h XIndex.h XArray.h
 
 LogicalXSave.o:  XSaveSettings.h Driver.h
-PhysicalXSave.o: XSaveSettings.h XIndex.h Driver.h
+PhysicalXSave.o: XSaveSettings.h Driver.h XIndex.h XArray.h
 
 XArray.o: XArray.h XIndex.h XInputSettings.h Driver.h
 XIndex.o: XIndex.h Driver.h
