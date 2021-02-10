@@ -189,8 +189,8 @@ class XArray : public Array
     friend class XChunk;
 
 public:
-    XArray(std::shared_ptr<Query>,
-           const ArrayDesc&,
+    XArray(const ArrayDesc&,
+           std::shared_ptr<Query>,
            std::shared_ptr<const Driver>,
            std::shared_ptr<const Metadata>,
            std::shared_ptr<const XIndex>,
@@ -205,8 +205,8 @@ public:
 
 private:
     // SciDB members
-    std::shared_ptr<Query> _query;
     const ArrayDesc _desc;
+    std::shared_ptr<Query> _query;
 
     // XBridge members
     std::shared_ptr<const Driver> _driver;

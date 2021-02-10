@@ -574,14 +574,14 @@ namespace scidb {
     //
     // X Array
     //
-    XArray::XArray(std::shared_ptr<Query> query,
-                   const ArrayDesc& desc,
+    XArray::XArray(const ArrayDesc& desc,
+                   std::shared_ptr<Query> query,
                    std::shared_ptr<const Driver> driver,
                    std::shared_ptr<const Metadata> metadata,
                    std::shared_ptr<const XIndex> index,
                    const size_t cacheSize):
-        _query(query),
         _desc(desc),
+        _query(query),
         _driver(driver),
         _index(index)
     {
