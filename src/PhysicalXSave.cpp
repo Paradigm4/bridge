@@ -513,7 +513,8 @@ public:
         std::shared_ptr<Array>& inputArray = inputArrays[0];
         ArrayDesc inputSchema(inputArray->getArrayDesc());
         inputSchema.setName("");
-        bool haveChunk_ = haveChunk(inputArray, inputSchema);
+        bool haveChunk_ = !inputArray->getConstIterator(
+            _schema.getAttributes(true).firstDataAttribute())->end();
         LOG4CXX_DEBUG(logger,
                       "XSAVE|" << query->getInstanceID()
                       << "|execute isCoord " << query->isCoordinator()
@@ -733,13 +734,6 @@ public:
 private:
     std::shared_ptr<XSaveSettings> _settings;
     std::shared_ptr<Driver> _driver;
-
-    bool haveChunk(std::shared_ptr<Array>& array, ArrayDesc const& schema)
-    {
-        std::shared_ptr<ConstArrayIterator> iter = array->getConstIterator(
-            schema.getAttributes(true).firstDataAttribute());
-        return !(iter->end());
-    }
 };
 
 REGISTER_PHYSICAL_OPERATOR_FACTORY(PhysicalXSave, "xsave", "PhysicalXSave");
