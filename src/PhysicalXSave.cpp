@@ -606,7 +606,7 @@ public:
                 (*metadata)["compression"] = Metadata::compression2String(compression);
 
                 // Write Metadata
-                _driver->writeMetadata(*metadata);
+                _driver->writeMetadata(metadata);
             }
 
         const Dimensions &dims = inputSchema.getDimensions();

@@ -171,7 +171,7 @@ namespace scidb {
         _putRequest(key, data);
     }
 
-    void S3Driver::_readMetadataFile(Metadata &metadata) const
+    void S3Driver::_readMetadataFile(std::shared_ptr<Metadata> metadata) const
     {
         Aws::String key((_prefix + "/metadata").c_str());
 
@@ -188,17 +188,17 @@ namespace scidb {
                 throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR)
                     << out.str();
             }
-            metadata[key] = value;
+            (*metadata)[key] = value;
         }
     }
 
-    void S3Driver::writeMetadata(const Metadata &metadata) const
+    void S3Driver::writeMetadata(std::shared_ptr<const Metadata> metadata) const
     {
         Aws::String key((_prefix + "/metadata").c_str());
 
         std::shared_ptr<Aws::IOStream> data =
             Aws::MakeShared<Aws::StringStream>("");
-        for (auto i = metadata.begin(); i != metadata.end(); ++i)
+        for (auto i = metadata->begin(); i != metadata->end(); ++i)
             *data << i->first << "\t" << i->second << "\n";
 
         _putRequest(key, data);

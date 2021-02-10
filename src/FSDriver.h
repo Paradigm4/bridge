@@ -40,7 +40,7 @@ public:
     void writeArrow(const std::string&,
                     std::shared_ptr<const arrow::Buffer>) const;
 
-    void writeMetadata(const Metadata&) const;
+    void writeMetadata(std::shared_ptr<const Metadata>) const;
 
     // Count number of objects with specified prefix
     size_t count(const std::string&) const;
@@ -49,7 +49,7 @@ public:
     const std::string& getURL() const;
 
 protected:
-    void _readMetadataFile(Metadata&) const;
+    void _readMetadataFile(std::shared_ptr<Metadata>) const;
 
 private:
     std::string _prefix;

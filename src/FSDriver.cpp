@@ -151,7 +151,7 @@ namespace scidb {
         if (stream.fail()) FAIL("Close", path);
     }
 
-    void FSDriver::_readMetadataFile(Metadata &metadata) const
+    void FSDriver::_readMetadataFile(std::shared_ptr<Metadata> metadata) const
     {
         auto path = _prefix + "/metadata";
         std::ifstream stream(path);
@@ -168,18 +168,18 @@ namespace scidb {
                 throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_UNKNOWN_ERROR)
                     << out.str();
             }
-            metadata[key] = value;
+            (*metadata)[key] = value;
         }
         if (!stream.eof() && stream.fail()) FAIL("Read", path);
     }
 
-    void FSDriver::writeMetadata(const Metadata &metadata) const
+    void FSDriver::writeMetadata(std::shared_ptr<const Metadata> metadata) const
     {
         auto path = _prefix + "/metadata";
         std::ofstream stream(path);
         if (stream.fail()) FAIL("Open", path);
 
-        for (auto i = metadata.begin(); i != metadata.end(); ++i) {
+        for (auto i = metadata->begin(); i != metadata->end(); ++i) {
             stream << i->first << "\t" << i->second << "\n";
             if (stream.fail()) FAIL("Write", path);
         }

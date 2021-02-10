@@ -57,7 +57,7 @@ public:
         auto driver = Driver::makeDriver(settings->getURL());
 
         std::shared_ptr<Metadata> metadata = std::make_shared<Metadata>();
-        driver->readMetadata(*metadata);
+        driver->readMetadata(metadata);
 
         std::shared_ptr<XIndex> index = std::make_shared<XIndex>(_schema);
         index->load(driver, query);

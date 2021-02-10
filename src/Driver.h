@@ -155,11 +155,11 @@ public:
     virtual void writeArrow(const std::string&,
                             std::shared_ptr<const arrow::Buffer>) const = 0;
 
-    inline void readMetadata(Metadata &metadata) const {
+    inline void readMetadata(std::shared_ptr<Metadata> metadata) const {
         _readMetadataFile(metadata);
-        metadata.validate();
+        metadata->validate();
     }
-    virtual void writeMetadata(const Metadata&) const = 0;
+    virtual void writeMetadata(std::shared_ptr<const Metadata>) const = 0;
 
     // Count number of objects with specified prefix
     virtual size_t count(const std::string&) const = 0;
@@ -174,7 +174,7 @@ protected:
     const std::string _url;
     const Driver::Mode _mode;
 
-    virtual void _readMetadataFile(Metadata&) const = 0;
+    virtual void _readMetadataFile(std::shared_ptr<Metadata>) const = 0;
 
     inline void _setBuffer(const std::string &suffix,
                            std::shared_ptr<arrow::Buffer> &buffer,
