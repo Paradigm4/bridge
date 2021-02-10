@@ -93,11 +93,12 @@ public:
         }
     }
 
-    arrow::Status writeArrowBuffer(const std::vector<std::shared_ptr<ConstChunkIterator> >& chunkIters,
+    template <typename Iterator>
+    arrow::Status writeArrowBuffer(const std::vector<std::shared_ptr<Iterator> >& chunkIters,
                                    std::shared_ptr<arrow::Buffer>& arrowBuffer) {
         // Append to Arrow Builders
         for (size_t attrIdx = 0; attrIdx < _nAttrs; ++attrIdx) {
-            std::shared_ptr<ConstChunkIterator> chunkIter = chunkIters[attrIdx];
+            auto chunkIter = chunkIters[attrIdx];
 
             // Reset coordinate buffers
             if (attrIdx == 0) for (size_t i = 0; i < _nDims; ++i) _dimValues[i].clear();
@@ -283,10 +284,7 @@ public:
             for (size_t i = 0; i < _nDims; ++i) {
                 ARROW_RETURN_NOT_OK(
                     static_cast<arrow::Int64Builder*>(
-                        _arrowBuilders[i].get())->Append(
-                            (*posPtr)[i]
-                            // - _dims[i].getStartMin()) / _dims[i].getChunkInterval()
-                            ));
+                        _arrowBuilders[i].get())->Append((*posPtr)[i]));
             }
 
         return finalize(arrowBuffer);
@@ -388,8 +386,9 @@ public:
 private:
     template <typename SciDBType,
               typename ArrowBuilder,
-              typename ValueFunc> inline
-    arrow::Status writeCell(std::shared_ptr<ConstChunkIterator> chunkIter,
+              typename ValueFunc,
+              typename Iterator> inline
+    arrow::Status writeCell(std::shared_ptr<Iterator> chunkIter,
                             ValueFunc valueGetter,
                             const size_t attrIdx) {
 
@@ -612,21 +611,6 @@ public:
 
         const Dimensions &dims = inputSchema.getDimensions();
         if (haveChunk_) {
-            std::shared_ptr<XArray> existingArray;
-            std::shared_ptr<ConstArrayIterator> existingArrayItFirst;
-            if (_settings->isUpdate()) {
-                // Load Index
-                index->load(_driver, query);
-
-                // Init Existing Array
-                existingArray = std::make_shared<XArray>(
-                    query, inputSchema, _driver, metadata, index, 0);
-
-                existingArrayItFirst = existingArray->getConstIterator(
-                    _schema.getAttributes(true).firstDataAttribute());
-            }
-
-
             // Init Array & Chunk Iterators
             size_t const nAttrs = inputSchema.getAttributes(true).size();
             std::vector<std::shared_ptr<ConstArrayIterator> > inputArrayIters(nAttrs);
@@ -634,6 +618,31 @@ public:
             for (auto const &attr : inputSchema.getAttributes(true))
                 inputArrayIters[attr.getId()] = inputArray->getConstIterator(attr);
 
+            // Allocate Existing Array and Iterators
+            std::shared_ptr<XArray> existingArray;
+            std::vector<std::shared_ptr<ConstArrayIterator> > existingArrayIters(nAttrs);
+
+            // Allocate Merge Array and Iterators (Output)
+            std::shared_ptr<Array> mergeArray;
+            std::vector<std::shared_ptr<ArrayIterator> > mergeArrayIters(nAttrs);
+
+            // Init Existing and Merge Arrays and Iterators If Applicable
+            if (_settings->isUpdate()) {
+                // Load Index
+                index->load(_driver, query);
+
+                // Init Existing Array
+                existingArray = std::make_shared<XArray>(inputSchema, query, _driver, metadata, index, 0);
+
+                // Init Merge Array
+                mergeArray = std::make_shared<MemArray>(inputSchema, query);
+
+                // Init Existing and Merge Array Iterators
+                for (auto const &attr : inputSchema.getAttributes(true)) {
+                    existingArrayIters[attr.getId()] = existingArray->getConstIterator(attr);
+                    mergeArrayIters[attr.getId()] = mergeArray->getIterator(attr);
+                }
+            }
             // Init Writer
             // if (_settings->isArrowFormat())
             ArrowWriter dataWriter(inputSchema.getAttributes(true),
@@ -652,18 +661,105 @@ public:
                     // Set Object Name using Top-Left Coordinates
                     Coordinates const &pos = inputChunkIters[0]->getFirstPosition();
 
+                    // Declare Output;
+                    std::shared_ptr<arrow::Buffer> arrowBuffer;
+
+                    // -- -
+                    // Merge Chunks
+                    // -- -
                     if (_settings->isUpdate() &&
-                        existingArrayItFirst->setPosition(pos))
-                        // Merge Chunks
-                        ;
-                    else
+                        existingArrayIters[0]->setPosition(pos)) {
+
+                        LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
+                                      << "|execute merge:" << pos);
+
+                        // Prep Existing Array
+                        for(size_t i = 1; i < nAttrs; ++i) // First Iterator Set Above in "if"
+                            existingArrayIters[i]->setPosition(pos);
+
+                        std::vector<std::shared_ptr<ConstChunkIterator> > existingChunkIters(nAttrs);
+                        for(size_t i = 0; i < nAttrs; ++i)
+                            existingChunkIters[i] = existingArrayIters[i]->getChunk(
+                                ).getConstIterator(ConstChunkIterator::IGNORE_OVERLAPS);
+
+                        // Prep Merge Array (output)
+                        std::vector<std::shared_ptr<ChunkIterator> > mergeChunkIters(nAttrs);
+                        for (size_t i = 0; i < nAttrs; ++i)
+                            mergeChunkIters[i] = mergeArrayIters[i]->newChunk(pos).getIterator(
+                                query,
+                                i == 0 ?
+                                ChunkIterator::SEQUENTIAL_WRITE :
+                                ChunkIterator::SEQUENTIAL_WRITE | ChunkIterator::NO_EMPTY_CHECK);
+
+                        // Merge Loop
+                        Coordinates const* inputPos    = inputChunkIters[0]->end() ? nullptr : &inputChunkIters[0]->getPosition();
+                        Coordinates const* existingPos = existingChunkIters[0]->end() ? nullptr : &existingChunkIters[0]->getPosition();
+
+                        while (inputPos || existingPos) {
+                            bool nextInput    = false;
+                            bool nextExisting = false;
+
+                            // TO REMOVE - DEBUG
+                            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
+                                          << "|execute merge input:"
+                                          << (inputPos == nullptr ? Coordinates() : *inputPos)
+                                          << " existing:"
+                                          << (existingPos == nullptr ? Coordinates() : *existingPos));
+
+                            if (inputPos == nullptr)
+                                writeFrom(existingChunkIters, mergeChunkIters, nAttrs, existingPos, nextExisting);
+                            else if (existingPos == nullptr)
+                                writeFrom(inputChunkIters, mergeChunkIters, nAttrs, inputPos, nextInput);
+                            else {
+                                int64_t res = coordinatesCompare(*inputPos, *existingPos);
+
+                                // TO REMOVE - DEBUG
+                                LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
+                                              << "|execute merge res:"
+                                              << (res < 0 ? "input" : (res > 0 ? "existing" : "input (=)")));
+
+                                if (res < 0)
+                                    writeFrom(inputChunkIters, mergeChunkIters, nAttrs, inputPos, nextInput);
+                                else if ( res > 0 )
+                                    writeFrom(existingChunkIters, mergeChunkIters, nAttrs, existingPos, nextExisting);
+                                else {
+                                    writeFrom(inputChunkIters, mergeChunkIters, nAttrs, inputPos, nextInput);
+                                    nextExisting = true;
+                                }
+                            }
+
+                            if(inputPos && nextInput) {
+                                for(size_t i = 0; i < nAttrs; ++i)
+                                    ++(*inputChunkIters[i]);
+                                inputPos = inputChunkIters[0]->end() ? nullptr : &inputChunkIters[0]->getPosition();
+                            }
+                            if(existingPos && nextExisting) {
+                                for(size_t i = 0; i < nAttrs; ++i)
+                                    ++(*existingChunkIters[i]);
+                                existingPos = existingChunkIters[0]->end() ? nullptr : &existingChunkIters[0]->getPosition();
+                            }
+                        }
+
+                        for (size_t i = 0; i < nAttrs; ++i) {
+                            mergeChunkIters[i]->flush();
+                            // mergeChunkIters[i]->restart();
+                        }
+
+                        // Serialize Chunk
+                        THROW_NOT_OK(
+                            dataWriter.writeArrowBuffer(mergeChunkIters, arrowBuffer));
+                    }
+                    // -- -
+                    // Add Input Chunk
+                    // -- -
+                    else {
                         // Add Chunk Coordinates to Index
                         index->insert(pos);
 
-                    // Serialize Chunk
-                    std::shared_ptr<arrow::Buffer> arrowBuffer;
-                    THROW_NOT_OK(
-                        dataWriter.writeArrowBuffer(inputChunkIters, arrowBuffer));
+                        // Serialize Chunk
+                        THROW_NOT_OK(
+                            dataWriter.writeArrowBuffer(inputChunkIters, arrowBuffer));
+                    }
 
                     // Write Chunk
                     _driver->writeArrow(
@@ -734,6 +830,18 @@ public:
 private:
     std::shared_ptr<XSaveSettings> _settings;
     std::shared_ptr<Driver> _driver;
+
+    void writeFrom(std::vector<std::shared_ptr<ConstChunkIterator> > &sourceIters,
+                   std::vector<std::shared_ptr<ChunkIterator> > &outputIters,
+                   const size_t nAttrs,
+                   const Coordinates *pos,
+                   bool &flag) {
+        for(size_t i = 0; i < nAttrs; ++i) {
+            outputIters[0]->setPosition(*pos);
+            outputIters[0]->writeItem(sourceIters[0]->getItem());
+        }
+        flag = true;
+    }
 };
 
 REGISTER_PHYSICAL_OPERATOR_FACTORY(PhysicalXSave, "xsave", "PhysicalXSave");
