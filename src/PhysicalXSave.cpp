@@ -93,9 +93,8 @@ public:
         }
     }
 
-    template <typename Iterator>
-    arrow::Status writeArrowBuffer(const std::vector<std::shared_ptr<Iterator> >& chunkIters,
-                                   std::shared_ptr<arrow::Buffer>& arrowBuffer) {
+    arrow::Status writeArrowBuffer(const std::vector<std::shared_ptr<ConstChunkIterator> > &chunkIters,
+                                   std::shared_ptr<arrow::Buffer> &arrowBuffer) {
         // Append to Arrow Builders
         for (size_t attrIdx = 0; attrIdx < _nAttrs; ++attrIdx) {
             auto chunkIter = chunkIters[attrIdx];
@@ -194,62 +193,62 @@ public:
                 break;
             }
             case TE_BOOL: {
-                ARROW_RETURN_NOT_OK((writeCell<bool,arrow::BooleanBuilder>(
+                ARROW_RETURN_NOT_OK((writeChunk<bool,arrow::BooleanBuilder>(
                                          chunkIter, &Value::getBool, attrIdx)));
                 break;
             }
             case TE_DATETIME: {
-                ARROW_RETURN_NOT_OK((writeCell<int64_t,arrow::Date64Builder>(
+                ARROW_RETURN_NOT_OK((writeChunk<int64_t,arrow::Date64Builder>(
                                          chunkIter, &Value::getDateTime, attrIdx)));
                 break;
             }
             case TE_DOUBLE: {
-                ARROW_RETURN_NOT_OK((writeCell<double,arrow::DoubleBuilder>(
+                ARROW_RETURN_NOT_OK((writeChunk<double,arrow::DoubleBuilder>(
                                          chunkIter, &Value::getDouble, attrIdx)));
                 break;
             }
             case TE_FLOAT: {
-                ARROW_RETURN_NOT_OK((writeCell<float,arrow::FloatBuilder>(
+                ARROW_RETURN_NOT_OK((writeChunk<float,arrow::FloatBuilder>(
                                          chunkIter, &Value::getFloat, attrIdx)));
                 break;
             }
             case TE_INT8: {
-                ARROW_RETURN_NOT_OK((writeCell<int8_t,arrow::Int8Builder>(
+                ARROW_RETURN_NOT_OK((writeChunk<int8_t,arrow::Int8Builder>(
                                          chunkIter, &Value::getInt8, attrIdx)));
                 break;
             }
             case TE_INT16: {
-                ARROW_RETURN_NOT_OK((writeCell<int16_t,arrow::Int16Builder>(
+                ARROW_RETURN_NOT_OK((writeChunk<int16_t,arrow::Int16Builder>(
                                          chunkIter, &Value::getInt16, attrIdx)));
                 break;
             }
             case TE_INT32: {
-                ARROW_RETURN_NOT_OK((writeCell<int32_t,arrow::Int32Builder>(
+                ARROW_RETURN_NOT_OK((writeChunk<int32_t,arrow::Int32Builder>(
                                          chunkIter, &Value::getInt32, attrIdx)));
                 break;
             }
             case TE_INT64: {
-                ARROW_RETURN_NOT_OK((writeCell<int64_t,arrow::Int64Builder>(
+                ARROW_RETURN_NOT_OK((writeChunk<int64_t,arrow::Int64Builder>(
                                          chunkIter, &Value::getInt64, attrIdx)));
                 break;
             }
             case TE_UINT8: {
-                ARROW_RETURN_NOT_OK((writeCell<uint8_t,arrow::UInt8Builder>(
+                ARROW_RETURN_NOT_OK((writeChunk<uint8_t,arrow::UInt8Builder>(
                                          chunkIter, &Value::getUint8, attrIdx)));
                 break;
             }
             case TE_UINT16: {
-                ARROW_RETURN_NOT_OK((writeCell<uint16_t,arrow::UInt16Builder>(
+                ARROW_RETURN_NOT_OK((writeChunk<uint16_t,arrow::UInt16Builder>(
                                          chunkIter, &Value::getUint16, attrIdx)));
                 break;
             }
             case TE_UINT32: {
-                ARROW_RETURN_NOT_OK((writeCell<uint32_t,arrow::UInt32Builder>(
+                ARROW_RETURN_NOT_OK((writeChunk<uint32_t,arrow::UInt32Builder>(
                                          chunkIter, &Value::getUint32, attrIdx)));
                 break;
             }
             case TE_UINT64: {
-                ARROW_RETURN_NOT_OK((writeCell<uint64_t,arrow::UInt64Builder>(
+                ARROW_RETURN_NOT_OK((writeChunk<uint64_t,arrow::UInt64Builder>(
                                          chunkIter, &Value::getUint64, attrIdx)));
                 break;
             }
@@ -274,6 +273,129 @@ public:
         return finalize(arrowBuffer);
     }
 
+    arrow::Status writePartArrowBuffer(const std::vector<std::shared_ptr<ConstChunkIterator> > &chunkIters,
+                                       const Coordinates *pos,
+                                       std::shared_ptr<arrow::Buffer> &arrowBuffer) {
+        // Append to Arrow Builders
+        for (size_t attrIdx = 0; attrIdx < _nAttrs; ++attrIdx) {
+            const Value& value = chunkIters[attrIdx]->getItem();
+
+            switch (_attrTypes[attrIdx]) {
+            case TE_BINARY: {
+                if(value.isNull()) {
+                    ARROW_RETURN_NOT_OK(
+                        static_cast<arrow::BinaryBuilder*>(
+                            _arrowBuilders[attrIdx].get())->AppendNull());
+                }
+                else {
+                    ARROW_RETURN_NOT_OK(
+                        static_cast<arrow::BinaryBuilder*>(
+                            _arrowBuilders[attrIdx].get())->Append(
+                                reinterpret_cast<const char*>(
+                                    value.data()),
+                                value.size()));
+                }
+                break;
+            }
+            case TE_STRING: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::StringBuilder>(
+                                         value, &Value::getString, attrIdx)));
+                break;
+            }
+            case TE_CHAR: {
+                if(value.isNull()) {
+                    ARROW_RETURN_NOT_OK(
+                        static_cast<arrow::StringBuilder*>(
+                            _arrowBuilders[attrIdx].get())->AppendNull());
+                }
+                else {
+                    ARROW_RETURN_NOT_OK(
+                        static_cast<arrow::StringBuilder*>(
+                            _arrowBuilders[attrIdx].get())->Append(
+                                std::string(1, value.getChar())));
+                }
+                break;
+            }
+            case TE_BOOL: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::BooleanBuilder>(
+                                         value, &Value::getBool, attrIdx)));
+                break;
+            }
+            case TE_DATETIME: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::Date64Builder>(
+                                         value, &Value::getDateTime, attrIdx)));
+                break;
+            }
+            case TE_DOUBLE: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::DoubleBuilder>(
+                                         value, &Value::getDouble, attrIdx)));
+                break;
+            }
+            case TE_FLOAT: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::FloatBuilder>(
+                                         value, &Value::getFloat, attrIdx)));
+                break;
+            }
+            case TE_INT8: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::Int8Builder>(
+                                         value, &Value::getInt8, attrIdx)));
+                break;
+            }
+            case TE_INT16: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::Int16Builder>(
+                                         value, &Value::getInt16, attrIdx)));
+                break;
+            }
+            case TE_INT32: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::Int32Builder>(
+                                         value, &Value::getInt32, attrIdx)));
+                break;
+            }
+            case TE_INT64: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::Int64Builder>(
+                                         value, &Value::getInt64, attrIdx)));
+                break;
+            }
+            case TE_UINT8: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::UInt8Builder>(
+                                         value, &Value::getUint8, attrIdx)));
+                break;
+            }
+            case TE_UINT16: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::UInt16Builder>(
+                                         value, &Value::getUint16, attrIdx)));
+                break;
+            }
+            case TE_UINT32: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::UInt32Builder>(
+                                         value, &Value::getUint32, attrIdx)));
+                break;
+            }
+            case TE_UINT64: {
+                ARROW_RETURN_NOT_OK((writeValue<arrow::UInt64Builder>(
+                                         value, &Value::getUint64, attrIdx)));
+                break;
+            }
+            default: {
+                std::ostringstream error;
+                error << "Type "
+                      << _attrTypes[attrIdx]
+                      << " not supported in arrow format";
+                throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                       SCIDB_LE_ILLEGAL_OPERATION) << error.str();
+            }
+            }
+        }
+
+        // Store coordinates in Arrow arrays
+        for (size_t i = 0; i < _nDims; ++i)
+            ARROW_RETURN_NOT_OK(static_cast<arrow::Int64Builder*>(
+                                    _arrowBuilders[_nAttrs + i].get()
+                                    )->Append((*pos)[i]));
+
+        return arrow::Status::OK();
+    }
+
     arrow::Status writeArrowBuffer(const XIndexCont::const_iterator begin,
                                    const XIndexCont::const_iterator end,
                                    const size_t size,
@@ -288,6 +410,63 @@ public:
             }
 
         return finalize(arrowBuffer);
+    }
+
+    arrow::Status finalize(std::shared_ptr<arrow::Buffer>& arrowBuffer) {
+        // Finalize Arrow Builders and write Arrow Arrays (resets builders)
+        for (size_t i = 0; i < _nAttrs + _nDims; ++i)
+            ARROW_RETURN_NOT_OK(
+                _arrowBuilders[i]->Finish(&_arrowArrays[i])); // Resets Builder!
+
+        // Create Arrow Record Batch
+        std::shared_ptr<arrow::RecordBatch> arrowBatch;
+        arrowBatch = arrow::RecordBatch::Make(
+            _arrowSchema, _arrowArrays[0]->length(), _arrowArrays);
+        ARROW_RETURN_NOT_OK(arrowBatch->Validate());
+
+        // Stream Arrow Record Batch to Arrow Buffer using Arrow
+        // Record Batch Writer and Arrow Buffer Output Stream
+        std::shared_ptr<arrow::io::BufferOutputStream> arrowBufferStream;
+        ARROW_ASSIGN_OR_RAISE(
+            arrowBufferStream,
+            // TODO Better initial estimate for Create
+            arrow::io::BufferOutputStream::Create(4096, _arrowPool));
+
+        // Setup Arrow Compression, If Enabled
+        std::shared_ptr<arrow::ipc::RecordBatchWriter> arrowWriter;
+        std::shared_ptr<arrow::io::CompressedOutputStream> arrowCompressedStream;
+        if (_compression == Metadata::Compression::GZIP) {
+            std::unique_ptr<arrow::util::Codec> codec = *arrow::util::Codec::Create(
+                arrow::Compression::type::GZIP);
+            ARROW_ASSIGN_OR_RAISE(
+                arrowCompressedStream,
+                arrow::io::CompressedOutputStream::Make(codec.get(), arrowBufferStream));
+            ARROW_RETURN_NOT_OK(
+                arrow::ipc::RecordBatchStreamWriter::Open(
+                    &*arrowCompressedStream, _arrowSchema, &arrowWriter));
+        }
+        else {
+            ARROW_RETURN_NOT_OK(
+                arrow::ipc::RecordBatchStreamWriter::Open(
+                    &*arrowBufferStream, _arrowSchema, &arrowWriter));
+        }
+        // TODO Arrow >= 0.17.0
+        // ARROW_ASSIGN_OR_RAISE(
+        //     arrowWriter,
+        //     arrow::ipc::NewStreamWriter(&*arrowStream, _arrowSchema));
+
+        ARROW_RETURN_NOT_OK(arrowWriter->WriteRecordBatch(*arrowBatch));
+        ARROW_RETURN_NOT_OK(arrowWriter->Close());
+
+        // Close Arrow Compression Stream, If Enabled
+        if (_compression == Metadata::Compression::GZIP) {
+            ARROW_RETURN_NOT_OK(arrowCompressedStream->Close());
+        }
+
+        ARROW_ASSIGN_OR_RAISE(arrowBuffer, arrowBufferStream->Finish());
+        LOG4CXX_DEBUG(logger, "XSAVE|arrowBuffer::size: " << arrowBuffer->size());
+
+        return arrow::Status::OK();
     }
 
     static std::shared_ptr<arrow::Schema> scidb2ArrowSchema(
@@ -384,13 +563,24 @@ public:
     }
 
 private:
+    template <typename ArrowBuilder,
+              typename ValueFunc> inline
+    arrow::Status writeValue(const Value& value, ValueFunc valueGetter, const size_t attrIdx) {
+        if(value.isNull())
+            return static_cast<ArrowBuilder*>(
+                _arrowBuilders[attrIdx].get())->AppendNull();
+        else
+            return static_cast<ArrowBuilder*>(
+                _arrowBuilders[attrIdx].get())->Append(
+                    (value.*valueGetter)());
+    }
+
     template <typename SciDBType,
               typename ArrowBuilder,
-              typename ValueFunc,
-              typename Iterator> inline
-    arrow::Status writeCell(std::shared_ptr<Iterator> chunkIter,
-                            ValueFunc valueGetter,
-                            const size_t attrIdx) {
+              typename ValueFunc> inline
+    arrow::Status writeChunk(std::shared_ptr<ConstChunkIterator> chunkIter,
+                             ValueFunc valueGetter,
+                             const size_t attrIdx) {
 
         std::vector<SciDBType> values;
         std::vector<bool> is_valid;
@@ -418,63 +608,6 @@ private:
 
         return static_cast<ArrowBuilder*>(
             _arrowBuilders[attrIdx].get())->AppendValues(values, is_valid);
-    }
-
-    arrow::Status finalize(std::shared_ptr<arrow::Buffer>& arrowBuffer) {
-        // Finalize Arrow Builders and write Arrow Arrays (resets builders)
-        for (size_t i = 0; i < _nAttrs + _nDims; ++i)
-            ARROW_RETURN_NOT_OK(
-                _arrowBuilders[i]->Finish(&_arrowArrays[i])); // Resets builder
-
-        // Create Arrow Record Batch
-        std::shared_ptr<arrow::RecordBatch> arrowBatch;
-        arrowBatch = arrow::RecordBatch::Make(
-            _arrowSchema, _arrowArrays[0]->length(), _arrowArrays);
-        ARROW_RETURN_NOT_OK(arrowBatch->Validate());
-
-        // Stream Arrow Record Batch to Arrow Buffer using Arrow
-        // Record Batch Writer and Arrow Buffer Output Stream
-        std::shared_ptr<arrow::io::BufferOutputStream> arrowBufferStream;
-        ARROW_ASSIGN_OR_RAISE(
-            arrowBufferStream,
-            // TODO Better initial estimate for Create
-            arrow::io::BufferOutputStream::Create(4096, _arrowPool));
-
-        // Setup Arrow Compression, If Enabled
-        std::shared_ptr<arrow::ipc::RecordBatchWriter> arrowWriter;
-        std::shared_ptr<arrow::io::CompressedOutputStream> arrowCompressedStream;
-        if (_compression == Metadata::Compression::GZIP) {
-            std::unique_ptr<arrow::util::Codec> codec = *arrow::util::Codec::Create(
-                arrow::Compression::type::GZIP);
-            ARROW_ASSIGN_OR_RAISE(
-                arrowCompressedStream,
-                arrow::io::CompressedOutputStream::Make(codec.get(), arrowBufferStream));
-            ARROW_RETURN_NOT_OK(
-                arrow::ipc::RecordBatchStreamWriter::Open(
-                    &*arrowCompressedStream, _arrowSchema, &arrowWriter));
-        }
-        else {
-            ARROW_RETURN_NOT_OK(
-                arrow::ipc::RecordBatchStreamWriter::Open(
-                    &*arrowBufferStream, _arrowSchema, &arrowWriter));
-        }
-        // Arrow >= 0.17.0
-        // ARROW_ASSIGN_OR_RAISE(
-        //     arrowWriter,
-        //     arrow::ipc::NewStreamWriter(&*arrowStream, _arrowSchema));
-
-        ARROW_RETURN_NOT_OK(arrowWriter->WriteRecordBatch(*arrowBatch));
-        ARROW_RETURN_NOT_OK(arrowWriter->Close());
-
-        // Close Arrow Compression Stream, If Enabled
-        if (_compression == Metadata::Compression::GZIP) {
-            ARROW_RETURN_NOT_OK(arrowCompressedStream->Close());
-        }
-
-        ARROW_ASSIGN_OR_RAISE(arrowBuffer, arrowBufferStream->Finish());
-        LOG4CXX_DEBUG(logger, "XSAVE|arrowBuffer::size: " << arrowBuffer->size());
-
-        return arrow::Status::OK();
     }
 };
 
@@ -622,10 +755,6 @@ public:
             std::shared_ptr<XArray> existingArray;
             std::vector<std::shared_ptr<ConstArrayIterator> > existingArrayIters(nAttrs);
 
-            // Allocate Merge Array and Iterators (Output)
-            std::shared_ptr<Array> mergeArray;
-            std::vector<std::shared_ptr<ArrayIterator> > mergeArrayIters(nAttrs);
-
             // Init Existing and Merge Arrays and Iterators If Applicable
             if (_settings->isUpdate()) {
                 // Load Index
@@ -633,15 +762,8 @@ public:
 
                 // Init Existing Array
                 existingArray = std::make_shared<XArray>(inputSchema, query, _driver, metadata, index, 0);
-
-                // Init Merge Array
-                mergeArray = std::make_shared<MemArray>(inputSchema, query);
-
-                // Init Existing and Merge Array Iterators
-                for (auto const &attr : inputSchema.getAttributes(true)) {
+                for (auto const &attr : inputSchema.getAttributes(true))
                     existingArrayIters[attr.getId()] = existingArray->getConstIterator(attr);
-                    mergeArrayIters[attr.getId()] = mergeArray->getIterator(attr);
-                }
             }
             // Init Writer
             // if (_settings->isArrowFormat())
@@ -670,9 +792,6 @@ public:
                     if (_settings->isUpdate() &&
                         existingArrayIters[0]->setPosition(pos)) {
 
-                        LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
-                                      << "|execute merge:" << pos);
-
                         // Prep Existing Array
                         for(size_t i = 1; i < nAttrs; ++i) // First Iterator Set Above in "if"
                             existingArrayIters[i]->setPosition(pos);
@@ -682,52 +801,50 @@ public:
                             existingChunkIters[i] = existingArrayIters[i]->getChunk(
                                 ).getConstIterator(ConstChunkIterator::IGNORE_OVERLAPS);
 
-                        // Prep Merge Array (output)
-                        std::vector<std::shared_ptr<ChunkIterator> > mergeChunkIters(nAttrs);
-                        for (size_t i = 0; i < nAttrs; ++i)
-                            mergeChunkIters[i] = mergeArrayIters[i]->newChunk(pos).getIterator(
-                                query,
-                                i == 0 ?
-                                ChunkIterator::SEQUENTIAL_WRITE :
-                                ChunkIterator::SEQUENTIAL_WRITE | ChunkIterator::NO_EMPTY_CHECK);
-
                         // Merge Loop
                         Coordinates const* inputPos    = inputChunkIters[0]->end() ? nullptr : &inputChunkIters[0]->getPosition();
                         Coordinates const* existingPos = existingChunkIters[0]->end() ? nullptr : &existingChunkIters[0]->getPosition();
-
                         while (inputPos || existingPos) {
                             bool nextInput    = false;
                             bool nextExisting = false;
 
-                            // TO REMOVE - DEBUG
-                            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
-                                          << "|execute merge input:"
-                                          << (inputPos == nullptr ? Coordinates() : *inputPos)
-                                          << " existing:"
-                                          << (existingPos == nullptr ? Coordinates() : *existingPos));
-
-                            if (inputPos == nullptr)
-                                writeFrom(existingChunkIters, mergeChunkIters, nAttrs, existingPos, nextExisting);
-                            else if (existingPos == nullptr)
-                                writeFrom(inputChunkIters, mergeChunkIters, nAttrs, inputPos, nextInput);
+                            if (inputPos == nullptr) { // Ended Input, Write Existing
+                                THROW_NOT_OK(
+                                    dataWriter.writePartArrowBuffer(
+                                        existingChunkIters, existingPos, arrowBuffer));
+                                nextExisting = true;
+                            }
+                            else if (existingPos == nullptr) { // Ended Existing, Write Input
+                                THROW_NOT_OK(
+                                    dataWriter.writePartArrowBuffer(
+                                        inputChunkIters, inputPos, arrowBuffer));
+                                nextInput = true;
+                            }
                             else {
                                 int64_t res = coordinatesCompare(*inputPos, *existingPos);
 
-                                // TO REMOVE - DEBUG
-                                LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
-                                              << "|execute merge res:"
-                                              << (res < 0 ? "input" : (res > 0 ? "existing" : "input (=)")));
-
-                                if (res < 0)
-                                    writeFrom(inputChunkIters, mergeChunkIters, nAttrs, inputPos, nextInput);
-                                else if ( res > 0 )
-                                    writeFrom(existingChunkIters, mergeChunkIters, nAttrs, existingPos, nextExisting);
-                                else {
-                                    writeFrom(inputChunkIters, mergeChunkIters, nAttrs, inputPos, nextInput);
+                                if (res < 0) { // Input Has Lower Coordinate, Write Input
+                                    THROW_NOT_OK(
+                                        dataWriter.writePartArrowBuffer(
+                                            inputChunkIters, inputPos, arrowBuffer));
+                                    nextInput = true;
+                                }
+                                else if ( res > 0 ) { // Existing Has Lower Coordinate, Write Existing
+                                    THROW_NOT_OK(
+                                        dataWriter.writePartArrowBuffer(
+                                            existingChunkIters, existingPos, arrowBuffer));
+                                    nextExisting = true;
+                                }
+                                else { // Coordinates are Equal, Write Input, Advance Both
+                                    THROW_NOT_OK(
+                                        dataWriter.writePartArrowBuffer(
+                                            inputChunkIters, inputPos, arrowBuffer));
+                                    nextInput = true;
                                     nextExisting = true;
                                 }
                             }
 
+                            // Advance Iterators
                             if(inputPos && nextInput) {
                                 for(size_t i = 0; i < nAttrs; ++i)
                                     ++(*inputChunkIters[i]);
@@ -740,14 +857,8 @@ public:
                             }
                         }
 
-                        for (size_t i = 0; i < nAttrs; ++i) {
-                            mergeChunkIters[i]->flush();
-                            // mergeChunkIters[i]->restart();
-                        }
-
-                        // Serialize Chunk
-                        THROW_NOT_OK(
-                            dataWriter.writeArrowBuffer(mergeChunkIters, arrowBuffer));
+                        // Finalize Chunk
+                        THROW_NOT_OK(dataWriter.finalize(arrowBuffer));
                     }
                     // -- -
                     // Add Input Chunk
