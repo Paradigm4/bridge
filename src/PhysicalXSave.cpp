@@ -65,7 +65,7 @@ private:
 public:
     ArrowWriter(const Attributes &attributes,
                 const Dimensions &dimensions,
-                Metadata::Compression compression):
+                const Metadata::Compression compression):
         _nAttrs(attributes.size()),
         _nDims(dimensions.size()),
         _compression(compression),
@@ -623,23 +623,20 @@ public:
 
     void preSingleExecute(std::shared_ptr<Query> query)
     {
+        // Initialize Settings
         _settings = std::make_shared<XSaveSettings>(_parameters, _kwParameters, false, query);
-        _driver = Driver::makeDriver(
-            _settings->getURL(),
-            _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
 
         // Coordinator Creates/Checks Directories
-        _driver->init();
+        getDriver()->init();
     }
 
     std::shared_ptr<Array> execute(std::vector<std::shared_ptr<Array> >& inputArrays,
                                    std::shared_ptr<Query> query)
     {
-        // Create Settings if not already set
+        // Initialize Settings If Not Already Set By preSingleExecute
         if (_settings == NULL)
             _settings = std::make_shared<XSaveSettings>(_parameters, _kwParameters, false, query);
 
-        const Metadata::Compression compression = _settings->getCompression();
         std::shared_ptr<Array> result(new MemArray(_schema, query));
 
         std::shared_ptr<Array>& inputArray = inputArrays[0];
@@ -654,31 +651,20 @@ public:
 
         // Chunk Coordinate Index
         std::shared_ptr<XIndex> index = std::make_shared<XIndex>(inputSchema);
-        std::shared_ptr<Metadata> metadata = std::make_shared<Metadata>();
-
-        // Exit Early
-        if (!haveChunk_ && !query->isCoordinator()) {
-            // Send EMPTY Index to Coordinator
-            BufSend(query->getCoordinatorID(), index->serialize(), query);
-            return result;
-        }
-
-        // Create Driver if not already set
-        if (_driver == NULL)
-            _driver = Driver::makeDriver(
-                _settings->getURL(),
-                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
+        std::shared_ptr<Metadata> metadataPtr = std::make_shared<Metadata>();
+        Metadata &metadata = *metadataPtr; // Easier to Use with "[]"
 
         // If Update, Read metadata and check that it matches
         if (_settings->isUpdate()) {
             // Get Metadata
-            _driver->readMetadata(metadata);
+            getDriver()->readMetadata(metadataPtr);
 
-            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID() << "|found schema: " << (*metadata)["schema"]);
-            ArrayDesc existingSchema = metadata->getArrayDesc(query);
+            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID() << "|found schema: " << metadata["schema"]);
             std::ostringstream error;
 
             // Check Schema
+            // TODO startMin/endMax/chunkInterval/chunkOverlap
+            auto existingSchema = metadata.getSchema(query);
             if (!inputSchema.sameSchema(
                     existingSchema,
                     ArrayDesc::SchemaFieldSelector().wildcardInterval(true))) {
@@ -692,9 +678,9 @@ public:
             }
 
             // Check Version
-            if (STR(BRIDGE_VERSION) != (*metadata)["version"]) {
+            if (STR(BRIDGE_VERSION) != metadata["version"]) {
                 error << "Existing array Bridge version "
-                      << (*metadata)["version"]
+                      << metadata["version"]
                       << " and current version "
                       << BRIDGE_VERSION
                       << " do not match";
@@ -703,9 +689,9 @@ public:
             }
 
             // Check Attributes
-            if ("ALL" != (*metadata)["attribute"]) {
+            if ("ALL" != metadata["attribute"]) {
                 error << "Existing array attributes "
-                      << (*metadata)["attributes"]
+                      << metadata["attributes"]
                       << " and current attributes "
                       << "ALL"
                       << " do not match";
@@ -714,9 +700,9 @@ public:
             }
 
             // Check Format
-            if ("arrow" != (*metadata)["format"]) {
+            if ("arrow" != metadata["format"]) {
                 error << "Existing array format "
-                      << (*metadata)["format"]
+                      << metadata["format"]
                       << " and current format "
                       << "arrow"
                       << " do not match";
@@ -724,22 +710,32 @@ public:
                                        SCIDB_LE_ILLEGAL_OPERATION) << error.str();
             }
 
-            // Compression Not Allowed for Updates
+            // Compression and Index Split Parameters Not Allowed for
+            // Updates
+
+            // Set index_split from Existing Metadata
+            _settings->setIndexSplit(std::stoi(metadata["index_split"]));
+
+            // Set compressio from Existing Metadata
+            _settings->setCompression(metadata.getCompression());
+
+            // Load Index
+            index->load(getDriver(), query);
         }
         else
+            // New Array
             // Coordinator Creates Metadata
             if (query->isCoordinator()) {
                 // Prep Metadata
-                std::ostringstream out;
-                printSchema(out, inputSchema);
-                (*metadata)["schema"] = out.str();
-                (*metadata)["version"] = STR(BRIDGE_VERSION);
-                (*metadata)["attribute"] = "ALL";
-                (*metadata)["format"] = "arrow";
-                (*metadata)["compression"] = Metadata::compression2String(compression);
+                metadata["version"] = STR(BRIDGE_VERSION);
+                metadata["attribute"] = "ALL";
+                metadata["format"] = "arrow";
+                metadata["index_split"] = std::to_string(_settings->getIndexSplit());
+                metadata.setSchema(inputSchema);
+                metadata.setCompression(_settings->getCompression());
 
                 // Write Metadata
-                _driver->writeMetadata(metadata);
+                getDriver()->writeMetadata(metadataPtr);
             }
 
         const Dimensions &dims = inputSchema.getDimensions();
@@ -757,11 +753,9 @@ public:
 
             // Init Existing and Merge Arrays and Iterators If Applicable
             if (_settings->isUpdate()) {
-                // Load Index
-                index->load(_driver, query);
-
                 // Init Existing Array
-                existingArray = std::make_shared<XArray>(inputSchema, query, _driver, metadata, index, 0);
+                existingArray = std::make_shared<XArray>(
+                    inputSchema, query, getDriver(), index, _settings->getCompression(), 0);
                 for (auto const &attr : inputSchema.getAttributes(true))
                     existingArrayIters[attr.getId()] = existingArray->getConstIterator(attr);
             }
@@ -804,7 +798,7 @@ public:
                         // Merge Loop
                         Coordinates const* inputPos    = inputChunkIters[0]->end() ? nullptr : &inputChunkIters[0]->getPosition();
                         Coordinates const* existingPos = existingChunkIters[0]->end() ? nullptr : &existingChunkIters[0]->getPosition();
-                        while (inputPos || existingPos) {
+                        while (inputPos != nullptr || existingPos != nullptr) {
                             bool nextInput    = false;
                             bool nextExisting = false;
 
@@ -845,12 +839,12 @@ public:
                             }
 
                             // Advance Iterators
-                            if(inputPos && nextInput) {
+                            if(inputPos != nullptr && nextInput) {
                                 for(size_t i = 0; i < nAttrs; ++i)
                                     ++(*inputChunkIters[i]);
                                 inputPos = inputChunkIters[0]->end() ? nullptr : &inputChunkIters[0]->getPosition();
                             }
-                            if(existingPos && nextExisting) {
+                            if(existingPos != nullptr && nextExisting) {
                                 for(size_t i = 0; i < nAttrs; ++i)
                                     ++(*existingChunkIters[i]);
                                 existingPos = existingChunkIters[0]->end() ? nullptr : &existingChunkIters[0]->getPosition();
@@ -873,7 +867,7 @@ public:
                     }
 
                     // Write Chunk
-                    _driver->writeArrow(
+                    getDriver()->writeArrow(
                         "chunks/" +
                         Metadata::coord2ObjectName(pos, dims), arrowBuffer);
                 }
@@ -920,7 +914,7 @@ public:
                 // Write Index
                 std::ostringstream out;
                 out << "index/" << split;
-                _driver->writeArrow(out.str(), arrowBuffer);
+                getDriver()->writeArrow(out.str(), arrowBuffer);
 
                 // Advance to Next Index Split
                 splitPtr += std::min<size_t>(
@@ -928,9 +922,6 @@ public:
                     std::distance(splitPtr, index->end()));
                 split++;
             }
-
-            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
-                          << "|execute index:" << index);
         }
         else
             BufSend(query->getCoordinatorID(), index->serialize(), query);
@@ -941,6 +932,15 @@ public:
 private:
     std::shared_ptr<XSaveSettings> _settings;
     std::shared_ptr<Driver> _driver;
+
+    inline std::shared_ptr<Driver> getDriver() {
+        // Create Driver if not already set
+        if (_driver == NULL)
+            _driver = Driver::makeDriver(
+                _settings->getURL(),
+                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
+        return _driver;
+    }
 
     void writeFrom(std::vector<std::shared_ptr<ConstChunkIterator> > &sourceIters,
                    std::vector<std::shared_ptr<ChunkIterator> > &outputIters,

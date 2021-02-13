@@ -192,8 +192,8 @@ public:
     XArray(const ArrayDesc&,
            std::shared_ptr<Query>,
            std::shared_ptr<const Driver>,
-           std::shared_ptr<const Metadata>,
            std::shared_ptr<const XIndex>,
+           const Metadata::Compression compression,
            const size_t cacheSize);
 
     virtual ArrayDesc const& getArrayDesc() const;

@@ -32,7 +32,8 @@ base_prefix = 'bridge_tests'
 base_metadata = {'version':     '1',
                  'format':      'arrow',
                  'attribute':   'ALL',
-                 'compression': None}
+                 'compression': None,
+                 'index_split': '100000'}
 s3_bucket = 'p4tests'
 fs_base = '/tmp/{}'.format(base_prefix)
 

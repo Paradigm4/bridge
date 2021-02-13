@@ -61,7 +61,7 @@ public:
         driver->readMetadata(metadata);
         LOG4CXX_DEBUG(logger, "XINPUT|" << query->getInstanceID() << "|schema: " << (*metadata)["schema"]);
 
-        ArrayDesc schema = metadata->getArrayDesc(query);
+        ArrayDesc schema = metadata->getSchema(query);
         schema.setDistribution(createDistribution(defaultDistType()));
         return schema;
     }

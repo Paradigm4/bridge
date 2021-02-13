@@ -70,7 +70,7 @@ namespace scidb {
 // --
 class ArrowReader {
 public:
-    ArrowReader(Metadata::Compression,
+    ArrowReader(const Metadata::Compression,
                 std::shared_ptr<const Driver>);
 
     size_t readObject(const std::string &name,

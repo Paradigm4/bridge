@@ -54,8 +54,7 @@ private:
     Metadata::Compression  _compression;
     size_t                 _indexSplit;
 
-    void failIfUpdate(std::string param)
-    {
+    void failIfUpdate(std::string param) {
         if (_isUpdate)
         {
             std::stringstream out;
@@ -65,13 +64,11 @@ private:
         }
     }
 
-    void setParamUpdate(std::vector<bool> isUpdate)
-    {
+    void setParamUpdate(std::vector<bool> isUpdate) {
         _isUpdate = isUpdate[0];
     }
 
-    void setParamFormat(std::vector<std::string> format)
-    {
+    void setParamFormat(std::vector<std::string> format) {
         failIfUpdate("format");
 
         if (format[0] == "arrow")
@@ -81,8 +78,7 @@ private:
                 << "format must be 'arrow'";
     }
 
-    void setParamCompression(std::vector<std::string> compression)
-    {
+    void setParamCompression(std::vector<std::string> compression) {
         failIfUpdate("compression");
 
         if (compression[0] == "none")
@@ -94,8 +90,7 @@ private:
                 << "unsupported compression";
     }
 
-    void setParamIndexSplit(std::vector<int64_t> indexSplit)
-    {
+    void setParamIndexSplit(std::vector<int64_t> indexSplit) {
         failIfUpdate("index_split");
 
         _indexSplit = indexSplit[0];
@@ -106,14 +101,12 @@ private:
         }
     }
 
-    Parameter getKeywordParam(KeywordParameters const& kwp, const std::string& kw) const
-    {
+    Parameter getKeywordParam(KeywordParameters const& kwp, const std::string& kw) const {
         auto const& kwPair = kwp.find(kw);
         return kwPair == kwp.end() ? Parameter() : kwPair->second;
     }
 
-    bool getParamContentBool(Parameter& param)
-    {
+    bool getParamContentBool(Parameter& param) {
         bool paramContent;
 
         if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
@@ -130,8 +123,7 @@ private:
         return paramContent;
     }
 
-    int64_t getParamContentInt64(Parameter& param)
-    {
+    int64_t getParamContentInt64(Parameter& param) {
         int64_t paramContent;
 
         if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
@@ -148,8 +140,7 @@ private:
         return paramContent;
     }
 
-    std::string getParamContentString(Parameter& param)
-    {
+    std::string getParamContentString(Parameter& param) {
         std::string paramContent;
 
         if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
@@ -167,8 +158,7 @@ private:
 
     bool setKeywordParamBool(KeywordParameters const& kwParams,
                              const char* const kw,
-                             void (XSaveSettings::* innersetter)(std::vector<bool>) )
-    {
+                             void (XSaveSettings::* innersetter)(std::vector<bool>)) {
         std::vector<bool> paramContent;
         size_t numParams;
         bool retSet = false;
@@ -196,8 +186,7 @@ private:
 
     bool setKeywordParamInt64(KeywordParameters const& kwParams,
                               const char* const kw,
-                              void (XSaveSettings::* innersetter)(std::vector<int64_t>) )
-    {
+                              void (XSaveSettings::* innersetter)(std::vector<int64_t>)) {
         std::vector<int64_t> paramContent;
         size_t numParams;
         bool retSet = false;
@@ -225,8 +214,7 @@ private:
 
     bool setKeywordParamString(KeywordParameters const& kwParams,
                                const char* const kw,
-                               void (XSaveSettings::* innersetter)(std::vector<std::string>) )
-    {
+                               void (XSaveSettings::* innersetter)(std::vector<std::string>)) {
         std::vector<std::string> paramContent;
         bool retSet = false;
 
@@ -258,8 +246,7 @@ public:
         _isUpdate(false),
         _format(Metadata::Format::ARROW),
         _compression(Metadata::Compression::NONE),
-        _indexSplit(INDEX_SPLIT_DEFAULT)
-    {
+        _indexSplit(INDEX_SPLIT_DEFAULT) {
         if (operatorParameters.size() != 1)
             throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << "illegal number of parameters passed to xsave";
         std::shared_ptr<OperatorParam>const& param = operatorParameters[0];
@@ -274,29 +261,34 @@ public:
         setKeywordParamInt64( kwParams, KW_INDEX_SPLIT,   &XSaveSettings::setParamIndexSplit);
     }
 
-    const std::string& getURL() const
-    {
+    const std::string& getURL() const {
         return _url;
     }
 
-    bool isUpdate() const
-    {
+    bool isUpdate() const {
         return _isUpdate;
     }
 
-    bool isArrowFormat() const
-    {
+    bool isArrowFormat() const {
         return _format == Metadata::Format::ARROW;
     }
 
-    Metadata::Compression getCompression() const
-    {
+    Metadata::Compression getCompression() const {
         return _compression;
     }
 
-    size_t getIndexSplit() const
-    {
+    // Used by Updates
+    void setCompression(Metadata::Compression compression) {
+        _compression = compression;
+    }
+
+    size_t getIndexSplit() const {
         return _indexSplit;
+    }
+
+    // Used by Updates
+    void setIndexSplit(int indexSplit) {
+        _indexSplit = indexSplit;
     }
 };
 

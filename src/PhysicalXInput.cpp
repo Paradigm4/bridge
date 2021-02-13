@@ -63,7 +63,7 @@ public:
         index->load(driver, query);
 
         std::shared_ptr<XArray> array = std::make_shared<XArray>(
-            _schema, query, driver, metadata, index, settings->getCacheSize());
+            _schema, query, driver, index, metadata->getCompression(), settings->getCacheSize());
 
         return array;
     }

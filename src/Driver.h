@@ -88,33 +88,33 @@ public:
         _hasSchema(false)
     {}
 
-    inline std::string& operator[](const std::string &key)
-    {
+    inline std::string& operator[](const std::string &key) {
         return _metadata[key];
     }
 
     inline std::map<std::string, std::string>::const_iterator find(
-        const std::string &key) const
-    {
+        const std::string &key) const {
         return _metadata.find(key);
     }
 
-    inline std::map<std::string, std::string>::const_iterator begin() const
-    {
+    inline std::map<std::string, std::string>::const_iterator begin() const {
         return _metadata.begin();
     }
 
-    inline std::map<std::string, std::string>::const_iterator end() const
-    {
+    inline std::map<std::string, std::string>::const_iterator end() const {
         return _metadata.end();
     }
 
+    Metadata::Compression getCompression() const;
+
+    void setCompression(Metadata::Compression compression);
+
+    const ArrayDesc& getSchema(std::shared_ptr<Query> query);
+
+    void setSchema(const ArrayDesc &schema);
+
     void validate() const;
 
-    const ArrayDesc& getArrayDesc(std::shared_ptr<Query> query);
-
-    static std::string compression2String(const Metadata::Compression compression);
-    static Metadata::Compression string2Compression(const std::string &compressionStr);
     static std::string coord2ObjectName(const Coordinates &pos,
                                         const Dimensions &dims);
 

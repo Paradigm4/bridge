@@ -55,7 +55,7 @@ static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.xindex"));
 // Arrow Reader
 //
 ArrowReader::ArrowReader(
-    Metadata::Compression compression,
+    const Metadata::Compression compression,
     std::shared_ptr<const Driver> driver):
     _compression(compression),
     _driver(driver)
@@ -148,7 +148,7 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
 
     // -- - Get Count of Chunk Index Files - --
     size_t nIndex = driver->count("index/");
-    LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex nIndex:" << nIndex);
+    LOG4CXX_DEBUG(logger, "XINDEX|" << instID << "|load nIndex:" << nIndex);
 
     // -- - Read Part of Chunk Index Files - --
     // Divide index files among instnaces
@@ -224,7 +224,7 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
 
     sort();
 
-    LOG4CXX_DEBUG(logger, "XARRAY|" << instID << "|readIndex size:" << size());
+    LOG4CXX_DEBUG(logger, "XINDEX|" << instID << "|load size:" << size());
 }
 
 void XIndex::deserialize_insert(std::shared_ptr<SharedBuffer> buf) {

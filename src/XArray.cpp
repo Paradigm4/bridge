@@ -387,7 +387,7 @@ namespace scidb {
     }
 
     //
-    // X Chunk
+    // XChunk
     //
     XChunk::XChunk(XArray& array, AttributeID attrID):
         _array(array),
@@ -469,7 +469,7 @@ namespace scidb {
     }
 
     //
-    // X Array Iterator
+    // XArray Iterator
     //
     XArrayIterator::XArrayIterator(XArray& array, AttributeID attrID):
         ConstArrayIterator(array),
@@ -577,8 +577,8 @@ namespace scidb {
     XArray::XArray(const ArrayDesc& desc,
                    std::shared_ptr<Query> query,
                    std::shared_ptr<const Driver> driver,
-                   std::shared_ptr<const Metadata> metadata,
                    std::shared_ptr<const XIndex> index,
+                   const Metadata::Compression compression,
                    const size_t cacheSize):
         _desc(desc),
         _query(query),
@@ -587,13 +587,6 @@ namespace scidb {
     {
         auto nInst = _query->getInstancesCount();
         SCIDB_ASSERT(nInst > 0 && _query->getInstanceID() < nInst);
-
-        auto compressionPair = metadata->find("compression");
-        if (compressionPair == metadata->end())
-            throw SYSTEM_EXCEPTION(scidb::SCIDB_SE_METADATA,
-                                   scidb::SCIDB_LE_UNKNOWN_ERROR)
-                << "Compression missing from metadata";
-        auto compression = Metadata::string2Compression(compressionPair->second);
 
         _arrowReader = std::make_shared<ArrowReader>(compression,
                                                        _driver);
