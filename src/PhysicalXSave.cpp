@@ -663,16 +663,19 @@ public:
             std::ostringstream error;
 
             // Check Schema
-            // TODO startMin/endMax/chunkInterval/chunkOverlap
             auto existingSchema = metadata.getSchema(query);
             if (!inputSchema.sameSchema(
                     existingSchema,
-                    ArrayDesc::SchemaFieldSelector().wildcardInterval(true))) {
-                error << "Existing schema "
-                      << existingSchema
-                      << " and provided schema "
-                      << inputSchema
-                      << " do not match";
+                    ArrayDesc::SchemaFieldSelector(
+                        ).startMin(true
+                            ).endMax(true
+                                ).chunkInterval(true
+                                    ).chunkOverlap(true))) {
+                error << "Existing schema ";
+                printSchema(error, existingSchema);
+                error << " and provided schema ";
+                printSchema(error, inputSchema);
+                error << " do not match";
                 throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
                                        SCIDB_LE_ILLEGAL_OPERATION) << error.str();
             }

@@ -67,6 +67,7 @@ const ArrayDesc& Metadata::getSchema(std::shared_ptr<Query> query) {
 
     // Extract Schema and Set Distribution
     _schema = innerQuery->logicalPlan->inferTypes(innerQuery);
+    _schema.setName("");
     _hasSchema = true;
 
     return _schema;
