@@ -588,10 +588,11 @@ namespace scidb {
         auto nInst = _query->getInstancesCount();
         SCIDB_ASSERT(nInst > 0 && _query->getInstanceID() < nInst);
 
+        // Prepare Reader
         _arrowReader = std::make_shared<ArrowReader>(compression,
                                                        _driver);
 
-        // If cache size is 0, the cache will be disabled
+        // If Cache Size Is 0, The Cache Will Be disabled
         if (cacheSize > 0)
             _cache = std::make_unique<XCache>(_arrowReader,
                                                _driver->getURL(),

@@ -358,3 +358,151 @@ def test_bad_url(scidb_con, url):
 
     with pytest.raises(requests.exceptions.HTTPError):
         scidb_con.iquery(que)
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_update_error(scidb_con, url):
+    url = '{}/update_error'.format(url)
+    schema = '<v:int64> [i=0:9:0:5; j=10:19:0:5]'
+
+    scidb_con.iquery("""
+xsave(
+  build({}, i),
+  '{}')""".format(schema, url))
+
+    # No "update:true"
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build({}, i),
+  '{}')""".format(schema, url))
+
+    # "update:false"
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build({}, i),
+  '{}', update:false)""".format(schema, url))
+
+    # "update:'foo'"
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build({}, i),
+  '{}', update:'foo')""".format(schema, url))
+
+    # Mismatched lower dimension
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build(<v:int64> [i=-1:9:0:5; j=10:19:0:5], i),
+  '{}', update:true)""".format(url))
+
+    # Mismatched higher dimension
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build(<v:int64> [i=0:9:0:5; j=10:20:0:5], i),
+  '{}', update:true)""".format(url))
+
+    # Mismatched chunk size
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build(<v:int64> [i=0:9:0:10; j=10:20:0:5], i),
+  '{}', update:true)""".format(url))
+
+    # Mismatched chunk overlap
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build(<v:int64> [i=0:9:0:5; j=10:20:5:5], i),
+  '{}', update:true)""".format(url))
+
+    # Set compression
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build(<v:int64> [i=0:9:0:5; j=10:20:0:5], i),
+  '{}', update:true, compresison:'gzip')""".format(url))
+
+    # Set index_split
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build(<v:int64> [i=0:9:0:5; j=10:20:0:5], i),
+  '{}', update:true, index_split:10000)""".format(url))
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_update_all(scidb_con, url):
+    url = '{}/update_all'.format(url)
+    schema = '<v:int64> [i=0:9:0:5; j=10:19:0:5]'
+
+    scidb_con.iquery("""
+xsave(
+  build({}, i),
+  '{}')""".format(schema, url))
+
+    scidb_con.iquery("""
+xsave(
+  build({}, i + 1),
+  '{}', update:true)""".format(schema, url))
+
+    array = scidbbridge.Array(url)
+
+    assert array.__str__() == url
+    assert array.metadata == {**base_metadata,
+                              **{'schema': '{}'.format(schema)}}
+    pandas.testing.assert_frame_equal(
+        array.list_chunks(),
+        pandas.DataFrame(data=((i, j)
+                               for i in range(0, 9, 5)
+                               for j in range(10, 20, 5)),
+                         columns=('i', 'j')))
+    pandas.testing.assert_frame_equal(
+        array.get_chunk(0, 10).to_pandas(),
+        pandas.DataFrame(data=((i + 1, i, j)
+                               for i in range(5)
+                               for j in range(10, 15)),
+                         columns=('v', 'i', 'j')))
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_update_filter(scidb_con, url):
+    url = '{}/update_filter'.format(url)
+    schema = '<v:int64> [i=0:9:0:5; j=10:19:0:5]'
+
+    scidb_con.iquery("""
+xsave(
+  filter(
+    build({}, i),
+    (i < 5 or j >= 15)and i % 3 = 0),
+  '{}')""".format(schema, url))
+
+    scidb_con.iquery("""
+xsave(
+  filter(
+    build({}, i),
+    i % 2 = 0),
+  '{}', update:true)""".format(schema, url))
+
+    array = scidbbridge.Array(url)
+
+    assert array.__str__() == url
+    assert array.metadata == {**base_metadata,
+                              **{'schema': '{}'.format(schema)}}
+    pandas.testing.assert_frame_equal(
+        array.list_chunks(),
+        pandas.DataFrame(data=((i, j)
+                               for i in range(0, 9, 5)
+                               for j in range(10, 20, 5)),
+                         columns=('i', 'j')))
+    pandas.testing.assert_frame_equal(
+        array.get_chunk(0, 10).to_pandas(),
+        pandas.DataFrame(data=((i, i, j)
+                               for i in range(5)
+                               for j in range(10, 15)
+                               if ((i < 5 or j >= 15) and i % 3 == 0 or
+                                   i % 2 == 0)),
+                         columns=('v', 'i', 'j')))

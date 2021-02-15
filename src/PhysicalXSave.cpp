@@ -638,14 +638,14 @@ public:
             _settings = std::make_shared<XSaveSettings>(_parameters, _kwParameters, false, query);
 
         std::shared_ptr<Array> result(new MemArray(_schema, query));
-
+        auto instID = query->getInstanceID();
         std::shared_ptr<Array>& inputArray = inputArrays[0];
         ArrayDesc inputSchema(inputArray->getArrayDesc());
         inputSchema.setName("");
         bool haveChunk_ = !inputArray->getConstIterator(
             _schema.getAttributes(true).firstDataAttribute())->end();
         LOG4CXX_DEBUG(logger,
-                      "XSAVE|" << query->getInstanceID()
+                      "XSAVE|" << instID
                       << "|execute isCoord " << query->isCoordinator()
                       << " haveChunk " << haveChunk_);
 
@@ -659,7 +659,7 @@ public:
             // Get Metadata
             getDriver()->readMetadata(metadataPtr);
 
-            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID() << "|found schema: " << metadata["schema"]);
+            LOG4CXX_DEBUG(logger, "XSAVE|" << instID << "|found schema: " << metadata["schema"]);
             std::ostringstream error;
 
             // Check Schema
@@ -760,7 +760,8 @@ public:
                 existingArray = std::make_shared<XArray>(
                     inputSchema, query, getDriver(), index, _settings->getCompression(), 0);
                 for (auto const &attr : inputSchema.getAttributes(true))
-                    existingArrayIters[attr.getId()] = existingArray->getConstIterator(attr);
+                    existingArrayIters[attr.getId()] =
+                        existingArray->getConstIterator(attr);
             }
             // Init Writer
             // if (_settings->isArrowFormat())
@@ -883,10 +884,9 @@ public:
         // Centralize Index
         if (query->isCoordinator()) {
             size_t const nInst = query->getInstancesCount();
-            InstanceID localID = query->getInstanceID();
 
             for(InstanceID remoteID = 0; remoteID < nInst; ++remoteID)
-                if(remoteID != localID)
+                if(remoteID != instID)
                     // Receive and De-Serialize Index
                     index->deserialize_insert(BufReceive(remoteID, query));
 
@@ -898,7 +898,7 @@ public:
             size_t szSplit = static_cast<int>(_settings->getIndexSplit() / nDims);
             size_t split = 0;
 
-            LOG4CXX_DEBUG(logger, "XSAVE|" << query->getInstanceID()
+            LOG4CXX_DEBUG(logger, "XSAVE|" << instID
                           << "|execute szSplit:" << szSplit);
 
             ArrowWriter indexWriter(Attributes(),

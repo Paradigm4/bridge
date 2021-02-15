@@ -170,6 +170,7 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
         out << "index/" << iIndex;
         std::string objectName(out.str());
         arrowReader.readObject(objectName, true, arrowBatch);
+        // LOG4CXX_DEBUG(logger, "XINDEX|" << instID << "|load read:" << out.str());
 
         if (arrowBatch->num_columns() != static_cast<int>(nDims)) {
             out.str("");
@@ -181,7 +182,8 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
         }
         std::vector<const int64_t*> columns(nDims);
         for (size_t i = 0; i < nDims; i++)
-            columns[i] = std::static_pointer_cast<arrow::Int64Array>(arrowBatch->column(i))->raw_values();
+            columns[i] = std::static_pointer_cast<arrow::Int64Array>(
+                arrowBatch->column(i))->raw_values();
         size_t columnLen = arrowBatch->column(0)->length();
 
         for (size_t j = 0; j < columnLen; j++) {
@@ -189,6 +191,7 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
                 pos[i] = columns[i][j];
 
             InstanceID primaryID = _desc.getPrimaryInstanceId(pos, nInst);
+            // LOG4CXX_DEBUG(logger, "XINDEX|" << instID << "|load pos:" << pos << " primary:" << primaryID);
             if (primaryID == instID)
                 insert(pos);
             else
@@ -213,6 +216,7 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
 
             // Send Shared Buffer
             BufSend(remoteID, buf, query);
+            // LOG4CXX_DEBUG(logger, "XINDEX|" << instID << "|load send to:" << remoteID);
         }
 
     // Read Index Splits from Each Instance
@@ -220,6 +224,7 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
         if (remoteID != instID) {
             auto buf = BufReceive(remoteID, query);
             deserialize_insert(buf);
+            // LOG4CXX_DEBUG(logger, "XINDEX|" << instID << "|load receive from:" << remoteID);
         }
 
     sort();
@@ -276,7 +281,7 @@ const XIndexCont::const_iterator XIndex::end() const {
 const XIndexCont::const_iterator XIndex::find(const Coordinates& pos) const {
     // return std::find(begin(), end(), pos);
     auto res = std::lower_bound(begin(), end(), pos);
-    if (*res != pos)
+    if (res == end() || *res != pos)
         return end();
     return res;
 }
