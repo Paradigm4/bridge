@@ -25,6 +25,8 @@
 
 #include "XSaveSettings.h"
 
+#include <rbac/Rights.h>
+
 namespace scidb {
 
 class LogicalXSave : public  LogicalOperator
@@ -50,6 +52,7 @@ public:
                       RE(PP(PLACEHOLDER_CONSTANT, TID_STRING))
                   })
             },
+            { KW_NS,            RE(PP(PLACEHOLDER_NS_NAME))              },
             { KW_UPDATE,        RE(PP(PLACEHOLDER_CONSTANT, TID_BOOL))   },
             { KW_FORMAT,        RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
             { KW_COMPRESSION,   RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
@@ -58,10 +61,35 @@ public:
         return &argSpec;
     }
 
+    void inferAccess(const std::shared_ptr<Query>& query) override
+    {
+        LogicalOperator::inferAccess(query);
+
+        XSaveSettings _settings = XSaveSettings(
+            _parameters, _kwParameters, true, query);
+
+        std::string namespaceName; // set below
+        if (_settings.isUpdate()) {
+            std::shared_ptr<Driver> _driver = Driver::makeDriver(
+                _settings.getURL(),
+                _settings.isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
+
+            std::shared_ptr<Metadata> metadata = std::make_shared<Metadata>();
+            _driver->readMetadata(metadata);
+            namespaceName = (*metadata)["namespace"];
+        }
+        else
+            namespaceName = _settings.getNamespace().getName();
+
+        LOG4CXX_DEBUG(logger,
+                      "XSAVE|" << query->getInstanceID()
+                      << "|inferAccess ns:" << namespaceName);
+        query->getRights()->upsert(rbac::ET_NAMESPACE, namespaceName, rbac::P_NS_UPDATE);
+    }
+
     ArrayDesc inferSchema(std::vector<ArrayDesc> schemas,
                           std::shared_ptr<Query> query)
     {
-        XSaveSettings settings(_parameters, _kwParameters, true, query);
         std::vector<DimensionDesc> dimensions(3);
         size_t const nInstances = query->getInstancesCount();
         dimensions[0] = DimensionDesc("chunk_no",    0, 0, CoordinateBounds::getMax(), CoordinateBounds::getMax(), 1, 0);

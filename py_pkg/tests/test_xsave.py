@@ -424,7 +424,7 @@ xsave(
         scidb_con.iquery("""
 xsave(
   build(<v:int64> [i=0:9:0:5; j=10:20:0:5], i),
-  '{}', update:true, compresison:'gzip')""".format(url))
+  '{}', update:true, compression:'gzip')""".format(url))
 
     # Set index_split
     with pytest.raises(requests.exceptions.HTTPError):
@@ -432,6 +432,13 @@ xsave(
 xsave(
   build(<v:int64> [i=0:9:0:5; j=10:20:0:5], i),
   '{}', update:true, index_split:10000)""".format(url))
+
+    # Set namespace
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build(<v:int64> [i=0:9:0:5; j=10:20:0:5], i),
+  '{}', update:true, namespace:public)""".format(url))
 
 
 @pytest.mark.parametrize('url', test_urls)
@@ -506,3 +513,145 @@ xsave(
                                if ((i < 5 or j >= 15) and i % 3 == 0 or
                                    i % 2 == 0)),
                          columns=('v', 'i', 'j')))
+
+
+@pytest.mark.parametrize(('url', 'ty', 'value'),
+                         ((url, ty, value)
+                          for url in test_urls
+                          for (ty, value) in itertools.chain(
+                                  (('{}int{}'.format(u, s), 'i')
+                                   for u in ('', 'u')
+                                   for s in (8, 16, 32, 64)),
+
+                                  (('bool', 'i % 2'),
+                                   ('float', 'i + .1'),
+                                   ('double', 'i + .01'),
+                                   ('char', 'char(i)'),
+                                   ('string', "'foo' + string(i)"),
+                                   ('datetime', 'datetime(i)')))))
+def test_types(scidb_con, url, ty, value):
+    prefix = 'types_{}'.format(ty)
+    url = '{}/{}'.format(url, prefix)
+    schema = '<v:{}> [i=0:19:0:5; j=10:19:0:5]'.format(ty)
+
+    scidb_con.iquery("""
+xsave(
+  build({}, iif(i % 3 = 0, null, {})),
+  '{}')""".format(schema,
+                  value,
+                  url))
+
+    array = scidbbridge.Array(url)
+    assert array.__str__() == url
+    assert array.metadata == {**base_metadata,
+                              **{'schema': '{}'.format(schema)}}
+
+
+@pytest.mark.parametrize(('url', 'ty', 'value'),
+                         ((url, ty, value)
+                          for url in test_urls
+                          for (ty, value) in itertools.chain(
+                                  (('{}int{}'.format(u, s), 'i')
+                                   for u in ('', 'u')
+                                   for s in (8, 16, 32, 64)),
+
+                                  (('bool', 'i % 2'),
+                                   ('float', 'i + .1'),
+                                   ('double', 'i + .01'),
+                                   ('char', 'char(i)'),
+                                   ('string', "'foo' + string(i)"),
+                                   ('datetime', 'datetime(i)')))))
+def test_update_types(scidb_con, url, ty, value):
+    prefix = 'update_types_{}'.format(ty)
+    url = '{}/{}'.format(url, prefix)
+    schema = '<v:{}> [i=0:19:0:5; j=10:19:0:5]'.format(ty)
+
+    scidb_con.iquery("""
+xsave(
+  filter(
+    build({}, iif(i % 3 = 0, null, {})),
+    i < 10 and i >= 10),
+  '{}')""".format(schema,
+                  value,
+                  url))
+
+    array = scidbbridge.Array(url)
+    assert array.__str__() == url
+    assert array.metadata == {**base_metadata,
+                              **{'schema': '{}'.format(schema)}}
+
+    scidb_con.iquery("""
+xsave(
+  filter(
+    build({}, iif(i % 2 = 0, null, {})),
+    i >= 5 and i < 15),
+  '{}', update:true)""".format(schema,
+                               value,
+                               url))
+
+    array = scidbbridge.Array(url)
+    assert array.__str__() == url
+    assert array.metadata == {**base_metadata,
+                              **{'schema': '{}'.format(schema)}}
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_permissions(scidb_con, url):
+    # Setup
+    scidb_con.create_namespace('foo')
+    scidb_con.create_user('bar',
+                          'hRkyTHJrJieIcxHstPowNp9zIIi9jAwQBgCbsNS+Rorj' +
+                          'fy/IDlVbgWeQ1SaRAkdIMEkYLW/sCusmxQT7nLwDNA==')
+
+    con_args = {'scidb_url': scidb_url,
+                'scidb_auth': ('bar', 'taz'),
+                'verify': False}
+    scidb_con2 = scidbpy.connect(**con_args)
+
+    url = '{}/permissions'.format(url)
+    schema = '<v:int64> [i=0:9:0:5; j=10:19:0:5]'
+
+    # Namespace missing
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build({}, i),
+  '{}_taz',
+  namespace:taz)""".format(schema, url))
+
+    # Public namespace
+    scidb_con2.iquery("""
+xsave(
+  build({}, i),
+  '{}_public')""".format(schema, url))
+    scidb_con2.iquery("xinput('{}_public')".format(url))
+
+    # w/o update permission
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con2.iquery("""
+xsave(
+  build({}, i),
+  '{}_foo',
+  namespace:foo)""".format(schema, url))
+
+    # w/ update permission
+    scidb_con.set_role_permissions('bar', 'namespace', 'foo', 'u')
+    scidb_con2 = scidbpy.connect(**con_args)
+    scidb_con2.iquery("""
+xsave(
+  build({}, i),
+  '{}_foo',
+  namespace:foo)""".format(schema, url))
+
+    # w/o read permission
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con2.iquery("xinput('{}_foo')".format(url))
+
+    # w/ read permission
+    scidb_con.set_role_permissions('bar', 'namespace', 'foo', 'ru')
+    scidb_con2 = scidbpy.connect(**con_args)
+    scidb_con2.iquery("xinput('{}_foo')".format(url))
+
+    # Cleanup
+    scidb_con.drop_user('bar')
+    scidb_con.drop_namespace('foo')

@@ -123,7 +123,14 @@ void Metadata::setCompression(Metadata::Compression compression) {
 }
 
 void Metadata::validate() const {
-    for (std::string key : {"schema", "version", "attribute", "format", "compression", "index_split"})
+    for (std::string key : {
+            "attribute",
+            "compression",
+            "format",
+            "index_split",
+            "namespace",
+            "schema",
+            "version"})
         if (_metadata.find(key) == _metadata.end()) {
             std::ostringstream error;
             error << "Key '" << key << "' missing from metadata";

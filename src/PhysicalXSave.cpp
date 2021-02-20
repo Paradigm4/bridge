@@ -730,10 +730,11 @@ public:
             // Coordinator Creates Metadata
             if (query->isCoordinator()) {
                 // Prep Metadata
-                metadata["version"] = STR(BRIDGE_VERSION);
                 metadata["attribute"] = "ALL";
                 metadata["format"] = "arrow";
                 metadata["index_split"] = std::to_string(_settings->getIndexSplit());
+                metadata["namespace"] = _settings->getNamespace().getName();
+                metadata["version"] = STR(BRIDGE_VERSION);
                 metadata.setSchema(inputSchema);
                 metadata.setCompression(_settings->getCompression());
 

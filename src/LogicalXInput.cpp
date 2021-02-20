@@ -25,6 +25,8 @@
 
 #include "XInputSettings.h"
 
+#include <rbac/Rights.h>
+
 namespace scidb {
 
 class LogicalXInput : public  LogicalOperator
@@ -48,23 +50,59 @@ public:
         return &argSpec;
     }
 
+    void inferAccess(const std::shared_ptr<Query>& query) override
+    {
+        LogicalOperator::inferAccess(query);
+
+        if (_settings == NULL)
+            _settings = std::make_shared<XInputSettings>(
+                _parameters, _kwParameters, true, query);
+
+        if (_driver == NULL)
+            _driver = Driver::makeDriver(_settings->getURL());
+
+        // Read Metadata
+        if (_metadata == NULL) {
+            _metadata = std::make_shared<Metadata>();
+            _driver->readMetadata(_metadata);
+        }
+
+        auto namespaceName = (*_metadata)["namespace"];
+        LOG4CXX_DEBUG(logger,
+                      "XINPUT|" << query->getInstanceID()
+                      << "|inferAccess ns:" << namespaceName);
+        query->getRights()->upsert(rbac::ET_NAMESPACE, namespaceName, rbac::P_NS_READ);
+    }
+
     ArrayDesc inferSchema(std::vector<ArrayDesc> schemas, std::shared_ptr<Query> query)
     {
-        XInputSettings settings(_parameters, _kwParameters, true, query);
+        if (_settings == NULL)
+            _settings = std::make_shared<XInputSettings>(
+                _parameters, _kwParameters, true, query);
 
-        // Initialize Driver
-        auto driver = Driver::makeDriver(settings.getURL());
-        driver->init();
+        // Init Driver
+        if (_driver == NULL)
+            _driver = Driver::makeDriver(_settings->getURL());
+        _driver->init();
 
-        // Get Metadata
-        std::shared_ptr<Metadata> metadata = std::make_shared<Metadata>();
-        driver->readMetadata(metadata);
-        LOG4CXX_DEBUG(logger, "XINPUT|" << query->getInstanceID() << "|schema: " << (*metadata)["schema"]);
+        // Read Metadata
+        if (_metadata == NULL) {
+            _metadata = std::make_shared<Metadata>();
+            _driver->readMetadata(_metadata);
+        }
 
-        ArrayDesc schema = metadata->getSchema(query);
+        LOG4CXX_DEBUG(logger,
+                      "XINPUT|" << query->getInstanceID()
+                      << "|schema: " << (*_metadata)["schema"]);
+        ArrayDesc schema = _metadata->getSchema(query);
         schema.setDistribution(createDistribution(defaultDistType()));
         return schema;
     }
+
+private:
+    std::shared_ptr<XInputSettings> _settings;
+    std::shared_ptr<Driver> _driver;
+    std::shared_ptr<Metadata> _metadata;
 };
 
 REGISTER_LOGICAL_OPERATOR_FACTORY(LogicalXInput, "xinput");

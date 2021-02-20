@@ -23,17 +23,23 @@
 
 import boto3
 import os
+import requests
 import pytest
 import scidbpy
 import shutil
 
 
+scidb_url = 'https://localhost:8083'
+
 base_prefix = 'bridge_tests'
-base_metadata = {'version':     '1',
-                 'format':      'arrow',
-                 'attribute':   'ALL',
-                 'compression': None,
-                 'index_split': '100000'}
+base_metadata = {
+    'attribute':   'ALL',
+    'compression': None,
+    'format':      'arrow',
+    'index_split': '100000',
+    'namespace':   'public',
+    'version':     '1',
+}
 s3_bucket = 'p4tests'
 fs_base = '/tmp/{}'.format(base_prefix)
 
@@ -51,7 +57,18 @@ def scidb_con():
     if not os.path.exists(fs_base):
         os.makedirs(fs_base)
 
-    yield scidbpy.connect()
+    con = scidbpy.connect(scidb_url,
+                          scidb_auth=('root', 'Paradigm4'),
+                          verify=False)
+    yield con
+
+    # SciDB Cleanup
+    for query in ("drop_user('bar')",
+                  "drop_namespace('foo')"):
+        try:
+            con.iquery(query)
+        except requests.exceptions.HTTPError:
+            pass
 
     # FS Cleanup
     try:

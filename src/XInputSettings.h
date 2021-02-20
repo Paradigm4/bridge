@@ -174,7 +174,7 @@ public:
     XInputSettings(std::vector<std::shared_ptr<OperatorParam> > const& operatorParameters,
                    KeywordParameters const& kwParams,
                    bool logical,
-                   std::shared_ptr<Query>& query):
+                   const std::shared_ptr<Query>& query):
                 _format(ARROW),
                 _cacheSize(CACHE_SIZE_DEFAULT)
     {
