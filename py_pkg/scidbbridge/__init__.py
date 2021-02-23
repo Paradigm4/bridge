@@ -21,6 +21,7 @@
 #
 # END_COPYRIGHT
 
+import pyarrow
 import boto3
 import itertools
 import os
@@ -135,23 +136,42 @@ class Chunk(object):
             part = part // dim.chunk_length
             parts.append(part)
 
-        self.url_suffix = '_'.join(map(str, parts))
+        self.url = '{}/chunks/{}'.format(self.array.url,
+                                         '_'.join(map(str, parts)))
+        self._table = None
 
     def __iter__(self):
-        return (i for i in (self.array, self.url_suffix))
+        return (i for i in (self.array, self.url))
 
     def __eq__(self):
         return tuple(self) == tuple(other)
 
     def __repr__(self):
-        return ('{}(array={!r}, url_suffix={!r})').format(
+        return ('{}(array={!r}, url={!r})').format(
             type(self).__name__, *self)
 
     def __str__(self):
-        return '{}/{}'.format(self.array.url, self.url_suffix)
+        return self.url
+
+    @property
+    def table(self):
+        if self._table == None:
+            self._table = Driver.reader(
+                self.url,
+                compression=self.array.metadata['compression']).read_all()
+        return self._table
 
     def to_pandas(self):
-        return Driver.reader(
-            '{}/chunks/{}'.format(self.array.url,
-                                  self.url_suffix),
-            compression=self.array.metadata['compression']).read_pandas()
+        return pyarrow.Table.to_pandas(self.table)
+
+    def from_pandas(self, pd):
+        self._table = pyarrow.Table.from_pandas(pd)
+        self._table = self._table.replace_schema_metadata()
+
+    def save(self):
+        sink = Driver.writer(self.url,
+                             schema=self._table.schema,
+                             compression=self.array.metadata['compression'])
+        writer = next(sink)
+        writer.write_table(self._table)
+        sink.close()
