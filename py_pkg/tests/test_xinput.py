@@ -27,7 +27,6 @@ import pandas
 import pyarrow
 import pytest
 import requests
-import scidbbridge
 
 from common import *
 

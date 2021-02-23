@@ -68,6 +68,25 @@ class Driver:
             raise Exception('URL {} not supported'.format(url))
 
     @staticmethod
+    def read_metadata(url):
+        parts = urllib.parse.urlparse(url)
+
+        # S3
+        if parts.scheme == 's3':
+            bucket = parts.netloc
+            key = parts.path[1:] + '/metadata'
+            obj = Driver.s3_client().get_object(Bucket=bucket, Key=key)
+            return obj['Body'].read().decode('utf-8')
+
+        # File System
+        elif parts.scheme == 'file':
+            path = os.path.join(parts.netloc, parts.path, 'metadata')
+            return open(path).read()
+
+        else:
+            raise Exception('URL {} not supported'.format(url))
+
+    @staticmethod
     def reader(url, compression=None):
         parts = urllib.parse.urlparse(url)
 
