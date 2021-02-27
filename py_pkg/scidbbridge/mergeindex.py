@@ -40,7 +40,7 @@ url = sys.argv[1]
 batches = []
 for crt_url in Driver.list('/'.join((url, 'index'))):
     print(crt_url)
-    reader = Driver.reader(crt_url, 'gzip')
+    reader = Driver.create_reader(crt_url, 'gzip')
     batches = batches + reader.read_all().to_batches()
 
 table = pyarrow.Table.from_batches(batches)
@@ -53,7 +53,8 @@ df.sort_values(by=list(df.columns),
 
 batch = pyarrow.RecordBatch.from_pandas(df)
 batch = batch.replace_schema_metadata()
-sink = Driver.writer('{}/index.arrow.gz'.format(url), batch.schema, 'gzip')
+sink = Driver.create_writer(
+    '{}/index.arrow.gz'.format(url), batch.schema, 'gzip')
 writer = next(sink)
 writer.write_batch(batch)
 sink.close()

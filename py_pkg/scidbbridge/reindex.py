@@ -40,14 +40,14 @@ INDEX_SPLIT_SIZE = int(sys.argv[2])
 
 Driver.delete('{}/index/'.format(url))
 
-reader = Driver.reader('{}/index.arrow.gz'.format(url), 'gzip')
+reader = Driver.create_reader('{}/index.arrow.gz'.format(url), 'gzip')
 table = reader.read_all()
 
 i = 0
 for offset in range(0, table.num_rows, INDEX_SPLIT_SIZE // table.num_columns):
-    sink = Driver.writer('/'.join((url, 'index/{}'.format(i))),
-                         table.schema,
-                         'gzip')
+    sink = Driver.create_writer('/'.join((url, 'index/{}'.format(i))),
+                                table.schema,
+                                'gzip')
     writer = next(sink)
     writer.write_table(table.slice(offset, INDEX_SPLIT_SIZE))
     sink.close()

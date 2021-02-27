@@ -32,7 +32,7 @@ import scidbbridge
 
 
 NAME = 'scidb-bridge'
-DESCRIPTION = 'Python Library to access externally stored SciDB data'
+DESCRIPTION = 'Python library to access externally stored SciDB data'
 LONG_DESCRIPTION = open('README.rst').read()
 AUTHOR = 'Rares Vernica'
 AUTHOR_EMAIL = 'rvernica@gmail.com'

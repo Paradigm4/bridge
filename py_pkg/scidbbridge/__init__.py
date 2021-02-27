@@ -84,7 +84,7 @@ class Array(object):
         batches = []
         indices_url = '{}/index'.format(self.url)
         for index_url in Driver.list(indices_url):
-            reader = Driver.reader(index_url, 'gzip')
+            reader = Driver.create_reader(index_url, 'gzip')
             for batch in reader:
                 batches.append(batch)
 
@@ -155,8 +155,8 @@ class Chunk(object):
 
     @property
     def table(self):
-        if self._table == None:
-            self._table = Driver.reader(
+        if self._table is None:
+            self._table = Driver.create_reader(
                 self.url,
                 compression=self.array.metadata['compression']).read_all()
         return self._table
@@ -169,9 +169,10 @@ class Chunk(object):
         self._table = self._table.replace_schema_metadata()
 
     def save(self):
-        sink = Driver.writer(self.url,
-                             schema=self._table.schema,
-                             compression=self.array.metadata['compression'])
+        sink = Driver.create_writer(
+            self.url,
+            schema=self._table.schema,
+            compression=self.array.metadata['compression'])
         writer = next(sink)
         writer.write_table(self._table)
         sink.close()

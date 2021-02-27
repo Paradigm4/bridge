@@ -87,7 +87,7 @@ class Driver:
             raise Exception('URL {} not supported'.format(url))
 
     @staticmethod
-    def reader(url, compression=None):
+    def create_reader(url, compression=None):
         parts = urllib.parse.urlparse(url)
 
         # S3
@@ -110,7 +110,7 @@ class Driver:
             raise Exception('URL {} not supported'.format(url))
 
     @staticmethod
-    def writer(url, schema, compression=None):
+    def create_writer(url, schema, compression=None):
         parts = urllib.parse.urlparse(url)
 
         # S3
