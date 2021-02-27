@@ -165,6 +165,15 @@ class Chunk(object):
         return pyarrow.Table.to_pandas(self.table)
 
     def from_pandas(self, pd):
+        dims = [d.name for d in self.array.schema.dims]
+
+        # Sort by dimensions
+        pd = pd.sort_values(by=dims, ignore_index=True)
+
+        # Check for duplicates
+        if pd.duplicated(subset=dims).any():
+            raise Exception("Duplicate coordinate pairs found.")
+
         self._table = pyarrow.Table.from_pandas(pd)
         self._table = self._table.replace_schema_metadata()
 
