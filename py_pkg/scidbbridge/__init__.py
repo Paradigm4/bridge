@@ -43,6 +43,7 @@ class Array(object):
 
         self._metadata = None
         self._schema = None
+        self._index = None
 
     def __iter__(self):
         return (i for i in (self.url, ))
@@ -70,6 +71,30 @@ class Array(object):
                 self.metadata['schema'])
         return self._schema
 
+    @property
+    def index(self):
+        if self._index is None:
+            # Read index as Arrow Table
+            tables = []
+            index_dir_url = '{}/index'.format(self.url)
+            for index_url in Driver.list(index_dir_url):
+                reader = Driver.create_reader(index_url, 'gzip')
+                tables.append(reader.read_all())
+            table = pyarrow.concat_tables(tables)
+
+            self._index_schema = table.schema
+
+            # Convert Arrow Table index to Pandas DataFrame
+            self._index = table.to_pandas(split_blocks=True,
+                                          self_destruct=True)
+            self._index.sort_values(by=list(self._index.columns),
+                                    inplace=True)
+            # Pandas < 1.0.0
+            self._index.reset_index(inplace=True, drop=True)
+            # Pandas >= 1.0.0
+            # sort_values(ignore_index=True)
+        return self._index
+
     @staticmethod
     def metadata_from_string(input):
         res = dict(ln.split('\t') for ln in input.strip().split('\n'))
@@ -81,21 +106,56 @@ class Array(object):
         return res
 
     def list_chunks(self):
-        batches = []
-        indices_url = '{}/index'.format(self.url)
-        for index_url in Driver.list(indices_url):
-            reader = Driver.create_reader(index_url, 'gzip')
-            for batch in reader:
-                batches.append(batch)
+        return self.index
 
-        table = pyarrow.Table.from_batches(batches)
-        index = table.to_pandas(split_blocks=True, self_destruct=True)
-        index.sort_values(by=list(index.columns),
-                          inplace=True,
-                          # ignore_index=True  # Pandas >= 1.0.0
-                          )
-        index.reset_index(inplace=True, drop=True)  # Pandas < 1.0.0
-        return index
+    def add_to_index(self, extra_index):
+        # Check for a DataFrame
+        if not isinstance(extra_index, pandas.DataFrame):
+            raise Exception("Value provided as argument " +
+                            "is not a Pandas DataFrame")
+
+        # Check for the same columns
+        if not self.index.columns.equals(extra_index.columns):
+            raise Exception("Existing index and extra index " +
+                            "do not have the same columns")
+
+        # Check for coordinates outside chunk boundaries
+        for dim in self.schema.dims:
+            vals = extra_index[dim.name]
+            if any(vals < dim.low_value):
+                raise Exception("Index values smaller than " +
+                                "lower bound on dimension " + dim.name)
+            if any(vals > dim.high_value):
+                raise Exception("Index values bigger than " +
+                                "upper bound on dimension " + dim.name)
+            if any((vals - dim.low_value) % dim.chunk_length != 0):
+                raise Exception("Index values misaligned " +
+                                "with chunk size on dimension " + dim.name)
+
+        # Check for duplicates
+        new_index = self.index.append(extra_index)
+        if new_index.duplicated().any():
+            raise Exception("Duplicate entries found " +
+                            "in the resulting index.")
+
+        self._index = new_index.sort_values(by=list(new_index.columns),
+                                            ignore_index=True)
+
+    def save_index(self):
+        index_split_size = int(self.metadata['index_split'])
+        i = 0
+        for offset in range(0,
+                            len(self.index),
+                            index_split_size // len(self.index.columns)):
+            sink = Driver.create_writer('{}/index/{}'.format(self.url, i),
+                                        self._index_schema,
+                                        'gzip')
+            writer = next(sink)
+            writer.write_table(
+                pyarrow.Table.from_pandas(
+                    self.index.iloc[offset:offset + index_split_size]))
+            sink.close()
+            i += 1
 
     def get_chunk(self, *argv):
         return Chunk(self, *argv)
@@ -106,6 +166,7 @@ class Chunk(object):
 
     def __init__(self, array, *argv):
         self.array = array
+        self.coords = argv
 
         if (len(argv) == 1 and
                 type(argv[0]) is pandas.core.series.Series):
@@ -120,19 +181,19 @@ class Chunk(object):
                      len(argv), len(self.array.schema.dims)))
 
         parts = ['c']
-        for (val, dim) in zip(argv, dims):
-            if val < dim.low_value or val > dim.high_value:
+        for (coord, dim) in zip(self.coords, dims):
+            if coord < dim.low_value or coord > dim.high_value:
                 raise Exception(
                     ('Coordinate value, {}, is outside of dimension range, '
                      '[{}:{}]').format(
-                         val, dim.low_value, dim.high_value))
+                         coord, dim.low_value, dim.high_value))
 
-            part = val - dim.low_value
+            part = coord - dim.low_value
             if part % dim.chunk_length != 0:
                 raise Exception(
                     ('Coordinate value, {}, is not a multiple of ' +
                      'chunk size, {}').format(
-                         val, dim.chunk_length))
+                         coord, dim.chunk_length))
             part = part // dim.chunk_length
             parts.append(part)
 
@@ -173,6 +234,13 @@ class Chunk(object):
         # Check for duplicates
         if pd.duplicated(subset=dims).any():
             raise Exception("Duplicate coordinate pairs found.")
+
+        # Check for coordinates outside chunk boundaries
+        for (coord, dim) in zip(self.coords, self.array.schema.dims):
+            vals = pd[dim.name]
+            if (vals.iloc[0] < coord or
+                    vals.iloc[-1] >= coord + dim.chunk_length):
+                raise Exception("Coordinates outside chunk boundaries")
 
         self._table = pyarrow.Table.from_pandas(pd)
         self._table = self._table.replace_schema_metadata()
