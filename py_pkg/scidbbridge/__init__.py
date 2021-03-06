@@ -43,7 +43,6 @@ class Array(object):
 
         self._metadata = None
         self._schema = None
-        self._index = None
 
     def __iter__(self):
         return (i for i in (self.url, ))
@@ -71,57 +70,56 @@ class Array(object):
                 self.metadata['schema'])
         return self._schema
 
-    @property
-    def index(self):
-        if self._index is None:
-            # Read index as Arrow Table
-            tables = []
-            index_dir_url = '{}/index'.format(self.url)
-            for index_url in Driver.list(index_dir_url):
-                reader = Driver.create_reader(index_url, 'gzip')
-                tables.append(reader.read_all())
-            table = pyarrow.concat_tables(tables)
+    def read_index(self):
+        # Read index as Arrow Table
+        tables = []
+        for index_url in Driver.list('{}/index'.format(self.url)):
+            reader = Driver.create_reader(index_url, 'gzip')
+            tables.append(reader.read_all())
+        table = pyarrow.concat_tables(tables)
 
-            self._index_schema = table.schema
+        # Convert Arrow Table index to Pandas DataFrame
+        index = table.to_pandas(split_blocks=True, self_destruct=True)
+        # https://arrow.apache.org/docs/python/pandas.html#reducing-
+        # memory-use-i
+        del table
+        index.sort_values(by=list(index.columns),
+                          inplace=True,
+                          ignore_index=True)
 
-            # Convert Arrow Table index to Pandas DataFrame
-            self._index = table.to_pandas(split_blocks=True,
-                                          self_destruct=True)
-            self._index.sort_values(by=list(self._index.columns),
-                                    inplace=True)
-            # Pandas < 1.0.0
-            self._index.reset_index(inplace=True, drop=True)
-            # Pandas >= 1.0.0
-            # sort_values(ignore_index=True)
-        return self._index
+        return index
 
-    @staticmethod
-    def metadata_from_string(input):
-        res = dict(ln.split('\t') for ln in input.strip().split('\n'))
-        try:
-            if res['compression'] == 'none':
-                res['compression'] = None
-        except KeyError:
-            pass
-        return res
+    def build_index(self):
+        dims = self.schema.dims
+        index = pandas.DataFrame.from_records(
+            map(lambda x: Array.url_to_coords(x, dims),
+                Driver.list('{}/chunks'.format(self.url))),
+            columns=[d.name for d in dims])
+        index.sort_values(by=list(index.columns),
+                          inplace=True,
+                          ignore_index=True)
+        return index
 
-    def list_chunks(self):
-        return self.index
-
-    def add_to_index(self, extra_index):
+    def write_index(self, index, split_size=None):
         # Check for a DataFrame
-        if not isinstance(extra_index, pandas.DataFrame):
+        if not isinstance(index, pandas.DataFrame):
             raise Exception("Value provided as argument " +
                             "is not a Pandas DataFrame")
 
-        # Check for the same columns
-        if not self.index.columns.equals(extra_index.columns):
-            raise Exception("Existing index and extra index " +
-                            "do not have the same columns")
+        # Check index columns matches array dimentions
+        dim_names = [d.name for d in self.schema.dims]
+        if len(index.columns) != len(dim_names):
+            raise Exception("Index columns count " + len(index.columns) +
+                            " does not match array dimensions count " +
+                            len(dim_names))
+
+        if not (index.columns == dim_names).all():
+            raise Exception("Index columns " + index.columns +
+                            " does not match array dimensions " + dim_names)
 
         # Check for coordinates outside chunk boundaries
         for dim in self.schema.dims:
-            vals = extra_index[dim.name]
+            vals = index[dim.name]
             if any(vals < dim.low_value):
                 raise Exception("Index values smaller than " +
                                 "lower bound on dimension " + dim.name)
@@ -133,32 +131,75 @@ class Array(object):
                                 "with chunk size on dimension " + dim.name)
 
         # Check for duplicates
-        new_index = self.index.append(extra_index)
-        if new_index.duplicated().any():
-            raise Exception("Duplicate entries found " +
-                            "in the resulting index.")
+        if index.duplicated().any():
+            raise Exception("Duplicate entries found in the index.")
 
-        self._index = new_index.sort_values(by=list(new_index.columns),
-                                            ignore_index=True)
+        index.sort_values(by=list(index.columns),
+                          inplace=True,
+                          ignore_index=True)
 
-    def save_index(self):
-        index_split_size = int(self.metadata['index_split'])
+        if split_size is None:
+            split_size = int(self.metadata['index_split'])
+
+        index_schema = pyarrow.schema(
+            [(d.name, pyarrow.int64()) for d in self.schema.dims])
+        chunk_size = split_size // len(index.columns)
+
+        # Remove existing index
+        Driver.delete('{}/index'.format(self.url))
+
+        # Write new index
         i = 0
-        for offset in range(0,
-                            len(self.index),
-                            index_split_size // len(self.index.columns)):
+        for offset in range(0, len(index), chunk_size):
             sink = Driver.create_writer('{}/index/{}'.format(self.url, i),
-                                        self._index_schema,
+                                        index_schema,
                                         'gzip')
             writer = next(sink)
             writer.write_table(
                 pyarrow.Table.from_pandas(
-                    self.index.iloc[offset:offset + index_split_size]))
+                    index.iloc[offset:offset + chunk_size]))
             sink.close()
             i += 1
 
     def get_chunk(self, *argv):
         return Chunk(self, *argv)
+
+    @staticmethod
+    def metadata_from_string(input):
+        res = dict(ln.split('\t') for ln in input.strip().split('\n'))
+        try:
+            if res['compression'] == 'none':
+                res['compression'] = None
+        except KeyError:
+            pass
+        return res
+
+    @staticmethod
+    def coords_to_url_suffix(coords, dims):
+        parts = ['c']
+        for (coord, dim) in zip(coords, dims):
+            if coord < dim.low_value or coord > dim.high_value:
+                raise Exception(
+                    ('Coordinate value, {}, is outside of dimension range, '
+                     '[{}:{}]').format(
+                         coord, dim.low_value, dim.high_value))
+
+            part = coord - dim.low_value
+            if part % dim.chunk_length != 0:
+                raise Exception(
+                    ('Coordinate value, {}, is not a multiple of ' +
+                     'chunk size, {}').format(
+                         coord, dim.chunk_length))
+            part = part // dim.chunk_length
+            parts.append(part)
+        return '_'.join(map(str, parts))
+
+    @staticmethod
+    def url_to_coords(url, dims):
+        part = url[url.rindex('/') + 1:]
+        return tuple(
+            map(lambda x: int(x[0]) * x[1].chunk_length + x[1].low_value,
+                zip(part.split('_')[1:], dims)))
 
 
 class Chunk(object):
@@ -180,25 +221,8 @@ class Chunk(object):
                  'each dimension.').format(
                      len(argv), len(self.array.schema.dims)))
 
-        parts = ['c']
-        for (coord, dim) in zip(self.coords, dims):
-            if coord < dim.low_value or coord > dim.high_value:
-                raise Exception(
-                    ('Coordinate value, {}, is outside of dimension range, '
-                     '[{}:{}]').format(
-                         coord, dim.low_value, dim.high_value))
-
-            part = coord - dim.low_value
-            if part % dim.chunk_length != 0:
-                raise Exception(
-                    ('Coordinate value, {}, is not a multiple of ' +
-                     'chunk size, {}').format(
-                         coord, dim.chunk_length))
-            part = part // dim.chunk_length
-            parts.append(part)
-
-        self.url = '{}/chunks/{}'.format(self.array.url,
-                                         '_'.join(map(str, parts)))
+        part = Array.coords_to_url_suffix(self.coords, dims)
+        self.url = '{}/chunks/{}'.format(self.array.url, part)
         self._table = None
 
     def __iter__(self):

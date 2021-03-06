@@ -48,7 +48,7 @@ xsave(
                               **{'schema': '{}'.format(
                                   schema.replace(']', ':0:1000000]'))}}
     pandas.testing.assert_frame_equal(
-        array.list_chunks(),
+        array.read_index(),
         pandas.DataFrame(data={'i': range(1)}))
     pandas.testing.assert_frame_equal(
         array.get_chunk(0).to_pandas(),
@@ -71,7 +71,7 @@ xsave(
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
-        array.list_chunks(),
+        array.read_index(),
         pandas.DataFrame(data={'i': range(0, 20, 5)}))
     pandas.testing.assert_frame_equal(
         array.get_chunk(0).to_pandas(),
@@ -97,7 +97,7 @@ xsave(
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
-        array.list_chunks(),
+        array.read_index(),
         pandas.DataFrame(data=((i, j)
                                for i in range(0, 9, 5)
                                for j in range(10, 20, 5)),
@@ -129,7 +129,7 @@ xsave(
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
-        array.list_chunks(),
+        array.read_index(),
         pandas.DataFrame(data=((i, j)
                                for i in range(0, 9, 5)
                                for j in range(10, 20, 5)),
@@ -160,7 +160,7 @@ xsave(
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
-        array.list_chunks(),
+        array.read_index(),
         pandas.DataFrame(data=((i, 15) for i in range(0, 9, 5)),
                          columns=('i', 'j')))
     pandas.testing.assert_frame_equal(
@@ -195,7 +195,7 @@ xsave(
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
-        array.list_chunks(),
+        array.read_index(),
         pandas.DataFrame(data=((i, j)
                                for i in (5, 15)
                                for j in (10, 30)),
@@ -225,7 +225,7 @@ xsave(
     array = scidbbridge.Array(url)
 
     pandas.testing.assert_frame_equal(
-        array.list_chunks(),
+        array.read_index(),
         pandas.DataFrame(data=((i, j)
                                for i in range(0, 100, 5)
                                for j in range(0, 100, 5)),
@@ -263,7 +263,7 @@ xsave(
     array = scidbbridge.Array(url)
 
     pandas.testing.assert_frame_equal(
-        array.list_chunks(),
+        array.read_index(),
         pandas.DataFrame(data=((i, j)
                                for i in range(0, 100, 5)
                                for j in range(0, 100, 5)),
@@ -462,7 +462,7 @@ xsave(
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
-        array.list_chunks(),
+        array.read_index(),
         pandas.DataFrame(data=((i, j)
                                for i in range(0, 9, 5)
                                for j in range(10, 20, 5)),
@@ -500,7 +500,7 @@ xsave(
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema)}}
     pandas.testing.assert_frame_equal(
-        array.list_chunks(),
+        array.read_index(),
         pandas.DataFrame(data=((i, j)
                                for i in range(0, 9, 5)
                                for j in range(10, 20, 5)),

@@ -39,7 +39,7 @@ xsave(
   '{}')""".format(schema, url))
 
     array = scidbbridge.Array(url)
-    chunks = array.list_chunks()
+    chunks = array.read_index()
 
     pandas.testing.assert_frame_equal(
         chunks,
@@ -72,7 +72,7 @@ xsave(
   '{}')""".format(schema, url))
 
     array = scidbbridge.Array(url)
-    chunks = array.list_chunks()
+    chunks = array.read_index()
 
     pandas.testing.assert_frame_equal(
         chunks,
@@ -103,7 +103,7 @@ xsave(
   '{}')""".format(schema, url))
 
     array = scidbbridge.Array(url)
-    chunks = array.list_chunks()
+    chunks = array.read_index()
 
     pandas.testing.assert_frame_equal(
         chunks,
@@ -140,7 +140,7 @@ xsave(
   '{}')""".format(schema, url))
 
     array = scidbbridge.Array(url)
-    chunks = array.list_chunks()
+    chunks = array.read_index()
 
     pandas.testing.assert_frame_equal(
         chunks,
@@ -199,7 +199,7 @@ xsave(
 
     # Fetch Chunks List Using Python API
     array = scidbbridge.Array(url)
-    chunks = array.list_chunks()
+    chunks = array.read_index()
 
     pandas.testing.assert_frame_equal(
         chunks,
@@ -307,7 +307,7 @@ xsave(
 
     # Fetch Chunks List Using Python API
     array = scidbbridge.Array(url)
-    chunks = array.list_chunks()
+    chunks = array.read_index()
 
     chunks_list = [(i, j)
                    for i in range(0, 20, 5)
@@ -322,9 +322,9 @@ xsave(
                                         'i': (20, ),
                                         'j': (10, )}))
     chunk.save()
-    array.add_to_index(pandas.DataFrame({'i': (20, ),
-                                         'j': (10, )}))
-    array.save_index()
+    chunks = chunks.append(pandas.DataFrame({'i': (20, ), 'j': (10, )}))
+    array.write_index(chunks)
+    chunks = array.read_index()
 
     # Fetch Array Using xinput
     array_pd = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
@@ -348,7 +348,7 @@ xsave(
     chunk.save()
 
     # Fetch Chunks List Using Python API
-    chunks = array.list_chunks()
+    chunks = array.read_index()
 
     chunks_list.append((20, 10))
     pandas.testing.assert_frame_equal(
@@ -366,8 +366,7 @@ xsave(
         array_pd,
         pandas.DataFrame({'i': i_lst, 'j': j_lst, 'v': v_lst}))
 
-
-    # Get Tow New Chunk, Add Data to Chunks, Add Chunks to Index
+    # Get Two New Chunk, Add Data to Chunks, Add Chunks to Index
     chunk = array.get_chunk(40, 20)
     chunk.from_pandas(pandas.DataFrame({'v': (10, 10),
                                         'i': (42, 43),
@@ -380,12 +379,11 @@ xsave(
                                         'j': (25, 25)}))
     chunk.save()
 
-    array.add_to_index(pandas.DataFrame({'i': (40, 45),
-                                         'j': (20, 20)}))
-    array.save_index()
+    chunks = array.build_index()
+    array.write_index(chunks)
 
     # Fetch Chunks List Using Python API
-    chunks = array.list_chunks()
+    chunks = array.read_index()
 
     chunks_list = chunks_list + [(40, 20), (45, 20)]
     pandas.testing.assert_frame_equal(
@@ -413,18 +411,68 @@ xsave(
 
     # Add Chunks to Index Errors
     with pytest.raises(Exception):
-        ar.add_to_index([1, 2])
+        ar.write_index([1, 2])
     with pytest.raises(Exception):
-        ar.add_to_index(pandas.DataFrame({'i':(25, )}))
+        ar.write_index(pandas.DataFrame({'i':(25, )}))
     with pytest.raises(Exception):
-        ar.add_to_index(pandas.DataFrame({'i':(25, ), 'k':(20, )}))
+        ar.write_index(pandas.DataFrame({'i':(25, ), 'k':(20, )}))
     with pytest.raises(Exception):
-        ar.add_to_index(pandas.DataFrame({'i':(25, ), 'j':(25, )}))
+        ar.write_index(pandas.DataFrame({'i':(25, ), 'j':(25, )}))
     with pytest.raises(Exception):
-        ar.add_to_index(pandas.DataFrame({'i':(50, ), 'j':(20, )}))
+        ar.write_index(pandas.DataFrame({'i':(50, ), 'j':(20, )}))
     with pytest.raises(Exception):
-        ar.add_to_index(pandas.DataFrame({'i':(25, ), 'j':(30, )}))
+        ar.write_index(pandas.DataFrame({'i':(25, ), 'j':(30, )}))
     with pytest.raises(Exception):
-        ar.add_to_index(pandas.DataFrame({'i':(40, ), 'j':(20, )}))
+        ar.write_index(pandas.DataFrame({'i':(40, ), 'j':(20, )}))
     with pytest.raises(Exception):
-        ar.add_to_index(pandas.DataFrame({'i':(25, 40), 'j':(20, 20)}))
+        ar.write_index(pandas.DataFrame({'i':(25, 40), 'j':(20, 20)}))
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_update_big_index(scidb_con, url):
+    url = '{}/update_big_index'.format(url)
+    schema = '<v:int64> [i=0:19:0:1; j=0:9:0:1]'
+
+    # Create Array Using xsave
+    scidb_con.iquery("""
+xsave(
+    build({}, i * j),
+  '{}', index_split:100)""".format(schema, url))
+
+    # Fetch Chunks List Using Python API
+    array = scidbbridge.Array(url)
+    chunks = array.read_index()
+
+    chunks_gold = pandas.DataFrame(
+        data=[(i, j) for i in range(20) for j in range(10)],
+        columns=('i', 'j'))
+    pandas.testing.assert_frame_equal(chunks, chunks_gold)
+    assert len(list(scidbbridge.driver.Driver.list(url + '/index'))) == 4
+
+    # Re-index with Larger Split Size
+    index = array.read_index()
+    array.write_index(index, split_size=200)
+
+    # Fetch Chunks List Using Python API
+    chunks = array.read_index()
+    pandas.testing.assert_frame_equal(chunks, chunks_gold)
+    assert len(list(scidbbridge.driver.Driver.list(url + '/index'))) == 2
+
+    # Re-index with Extra Large Split Size
+    index = array.read_index()
+    array.write_index(index, split_size=10000)
+
+    # Fetch Chunks List Using Python API
+    chunks = array.read_index()
+    pandas.testing.assert_frame_equal(chunks, chunks_gold)
+    assert len(list(scidbbridge.driver.Driver.list(url + '/index'))) == 1
+
+    # Re-build Index
+    index_rebuild = array.build_index()
+    pandas.testing.assert_frame_equal(index, index_rebuild)
+
+    # Save Re-built Index
+    array.write_index(index_rebuild, split_size=100)
+    chunks = array.read_index()
+    pandas.testing.assert_frame_equal(chunks, chunks_gold)
+    assert len(list(scidbbridge.driver.Driver.list(url + '/index'))) == 4
