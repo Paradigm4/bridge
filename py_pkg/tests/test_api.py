@@ -47,16 +47,21 @@ xsave(
 
     for i in range(0, 20, 5):
         array.get_chunk(i)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as ex:
         array.get_chunk()
-    with pytest.raises(Exception):
+    assert "does not match the number of dimensions" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(-1)
-    with pytest.raises(Exception):
+    assert "is outside of dimension range" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(20)
-    with pytest.raises(Exception):
+    assert "is outside of dimension range" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(17)
-    with pytest.raises(Exception):
+    assert "is not a multiple of chunk size" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(0, 5)
+    assert "does not match the number of dimensions" in str(ex.value)
 
 
 @pytest.mark.parametrize('url', test_urls)
@@ -80,16 +85,21 @@ xsave(
 
     for i in range(-3, 31, 7):
         array.get_chunk(i)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as ex:
         array.get_chunk()
-    with pytest.raises(Exception):
+    assert "does not match the number of dimensions" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(-5)
-    with pytest.raises(Exception):
+    assert "is outside of dimension range" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(35)
-    with pytest.raises(Exception):
+    assert "is outside of dimension range" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(17)
-    with pytest.raises(Exception):
+    assert "is not a multiple of chunk size" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(0, 5)
+    assert "does not match the number of dimensions" in str(ex.value)
 
 
 @pytest.mark.parametrize('url', test_urls)
@@ -115,16 +125,21 @@ xsave(
     for i in range(0, 20, 5):
         for j in range(0, 20, 10):
             array.get_chunk(i, j)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as ex:
         array.get_chunk()
-    with pytest.raises(Exception):
+    assert "does not match the number of dimensions" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(0)
-    with pytest.raises(Exception):
+    assert "does not match the number of dimensions" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(-1, 0)
-    with pytest.raises(Exception):
+    assert "is outside of dimension range" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(5, 17)
-    with pytest.raises(Exception):
+    assert "is not a multiple of chunk size" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(5, 10, 0)
+    assert "does not match the number of dimensions" in str(ex.value)
 
 
 @pytest.mark.parametrize('url', test_urls)
@@ -153,16 +168,21 @@ xsave(
     for i in range(-3, 31, 7):
         for j in range(11, 24, 3):
             array.get_chunk(i, j)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as ex:
         array.get_chunk(-3)
-    with pytest.raises(Exception):
+    assert "does not match the number of dimensions" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(-5, 11)
-    with pytest.raises(Exception):
+    assert "is outside of dimension range" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(11, 26)
-    with pytest.raises(Exception):
+    assert "is outside of dimension range" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(-3, 12)
-    with pytest.raises(Exception):
+    assert "is not a multiple of chunk size" in str(ex.value)
+    with pytest.raises(Exception) as ex:
         array.get_chunk(-3, 11, 0)
+    assert "does not match the number of dimensions" in str(ex.value)
 
 
 @pytest.mark.parametrize('url', test_urls)
@@ -230,19 +250,23 @@ xsave(
 
     # Insert duplicates
     pd_dup = pd.append({'v': 100, 'i': 4, 'j': 3}, ignore_index=True)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as ex:
         chunk.from_pandas(pd_dup)
+    assert "Duplicate coordinates" in str(ex.value)
     pd_dup = pd.append({'v': 100, 'i': 0, 'j': 2}, ignore_index=True)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as ex:
         chunk.from_pandas(pd_dup)
+    assert "Duplicate coordinates" in str(ex.value)
 
     # Insert coordinates outside chunk boundaries
     pd_out = pd.append({'v': 100, 'i': 0, 'j': -1}, ignore_index=True)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as ex:
         chunk.from_pandas(pd_out)
+    assert "Coordinates outside chunk boundaries" in str(ex.value)
     pd_out = pd.append({'v': 100, 'i': 5, 'j': 0}, ignore_index=True)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as ex:
         chunk.from_pandas(pd_out)
+    assert "Coordinates outside chunk boundaries" in str(ex.value)
 
     # Fetch Array Using xinput
     array_pd = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
@@ -402,30 +426,41 @@ xsave(
         pandas.DataFrame({'i': i_lst, 'j': j_lst, 'v': v_lst}))
 
     # Get Chunk Errors
-    with pytest.raises(Exception):
-        ar.get_chunk(-5, 10)
-    with pytest.raises(Exception):
-        ar.get_chunk(0, 5)
-    with pytest.raises(Exception):
-        ar.get_chunk(25, 10)
+    with pytest.raises(Exception) as ex:
+        array.get_chunk(-5, 10)
+    assert "outside of dimension range" in str(ex.value)
+    with pytest.raises(Exception) as ex:
+        array.get_chunk(0, 5)
+    assert "not a multiple of chunk size" in str(ex.value)
+    with pytest.raises(Exception) as ex:
+        array.get_chunk(25, 10, 0)
+    assert "does not match the number of dimensions" in str(ex.value)
 
     # Add Chunks to Index Errors
-    with pytest.raises(Exception):
-        ar.write_index([1, 2])
-    with pytest.raises(Exception):
-        ar.write_index(pandas.DataFrame({'i':(25, )}))
-    with pytest.raises(Exception):
-        ar.write_index(pandas.DataFrame({'i':(25, ), 'k':(20, )}))
-    with pytest.raises(Exception):
-        ar.write_index(pandas.DataFrame({'i':(25, ), 'j':(25, )}))
-    with pytest.raises(Exception):
-        ar.write_index(pandas.DataFrame({'i':(50, ), 'j':(20, )}))
-    with pytest.raises(Exception):
-        ar.write_index(pandas.DataFrame({'i':(25, ), 'j':(30, )}))
-    with pytest.raises(Exception):
-        ar.write_index(pandas.DataFrame({'i':(40, ), 'j':(20, )}))
-    with pytest.raises(Exception):
-        ar.write_index(pandas.DataFrame({'i':(25, 40), 'j':(20, 20)}))
+    with pytest.raises(Exception) as ex:
+        array.write_index([1, 2])
+    assert "argument is not a Pandas DataFrame" in str(ex.value)
+    with pytest.raises(Exception) as ex:
+        array.write_index(pandas.DataFrame({'i':(25, )}))
+    assert "does not match array dimensions count" in str(ex.value)
+    with pytest.raises(Exception) as ex:
+        array.write_index(pandas.DataFrame({'i':(25, ), 'k':(20, )}))
+    assert "does not match array dimensions" in str(ex.value)
+    with pytest.raises(Exception) as ex:
+        array.write_index(pandas.DataFrame({'i':(25, ), 'j':(25, )}))
+    assert "Index values misaligned with chunk size" in str(ex.value)
+    with pytest.raises(Exception) as ex:
+        array.write_index(pandas.DataFrame({'i':(50, ), 'j':(20, )}))
+    assert "Index values bigger than upper bound" in str(ex.value)
+    with pytest.raises(Exception) as ex:
+        array.write_index(pandas.DataFrame({'i':(25, ), 'j':(30, )}))
+    assert "Index values bigger than upper bound" in str(ex.value)
+    with pytest.raises(Exception) as ex:
+        array.write_index(pandas.DataFrame({'i':(40, ), 'j':(20, ), 'l':(0, )}))
+    assert "does not match array dimensions count" in str(ex.value)
+    with pytest.raises(Exception) as ex:
+        array.write_index(pandas.DataFrame({'i':(25, 25), 'j':(20, 20)}))
+    assert "Duplicate entries" in str(ex.value)
 
 
 @pytest.mark.parametrize('url', test_urls)

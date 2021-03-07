@@ -109,13 +109,15 @@ class Array(object):
         # Check index columns matches array dimentions
         dim_names = [d.name for d in self.schema.dims]
         if len(index.columns) != len(dim_names):
-            raise Exception("Index columns count " + len(index.columns) +
-                            " does not match array dimensions count " +
-                            len(dim_names))
+            raise Exception(
+                ("Index columns count {} does not match " +
+                 "array dimensions count {}").format(len(index.columns),
+                                                     len(dim_names)))
 
         if not (index.columns == dim_names).all():
-            raise Exception("Index columns " + index.columns +
-                            " does not match array dimensions " + dim_names)
+            raise Exception(
+                ("Index columns {} does not match " +
+                 "array dimensions {}").format(index.columns, dim_names))
 
         # Check for coordinates outside chunk boundaries
         for dim in self.schema.dims:
@@ -132,7 +134,7 @@ class Array(object):
 
         # Check for duplicates
         if index.duplicated().any():
-            raise Exception("Duplicate entries found in the index.")
+            raise Exception("Duplicate entries")
 
         index.sort_values(by=list(index.columns),
                           inplace=True,
@@ -216,10 +218,10 @@ class Chunk(object):
         dims = self.array.schema.dims
         if len(argv) != len(dims):
             raise Exception(
-                ('Number of arguments, {}, does no match the number of ' +
+                ('Number of arguments, {}, does not match the number of ' +
                  'dimensions, {}. Please specify one start coordiante for ' +
-                 'each dimension.').format(
-                     len(argv), len(self.array.schema.dims)))
+                 'each dimension.').format(len(argv),
+                                           len(self.array.schema.dims)))
 
         part = Array.coords_to_url_suffix(self.coords, dims)
         self.url = '{}/chunks/{}'.format(self.array.url, part)
@@ -257,7 +259,7 @@ class Chunk(object):
 
         # Check for duplicates
         if pd.duplicated(subset=dims).any():
-            raise Exception("Duplicate coordinate pairs found.")
+            raise Exception("Duplicate coordinates")
 
         # Check for coordinates outside chunk boundaries
         for (coord, dim) in zip(self.coords, self.array.schema.dims):
