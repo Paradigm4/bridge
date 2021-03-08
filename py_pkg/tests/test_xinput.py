@@ -47,7 +47,7 @@ xsave(
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
-    assert array.equals(
+    pandas.testing.assert_frame_equal(array,
         pandas.DataFrame({'i': range(20), 'v': numpy.arange(0.0, 20.0)}))
 
 
@@ -73,7 +73,7 @@ xsave(
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
-    assert array.equals(
+    pandas.testing.assert_frame_equal(array,
         pandas.DataFrame({'i': range(20),
                           'v': numpy.arange(0.0, 20.0),
                           'w': (numpy.arange(0.0, 20.0) *
@@ -110,7 +110,7 @@ xsave(
             j_lst.append(j)
             v_lst.append(float(i))
 
-    assert array.equals(
+    pandas.testing.assert_frame_equal(array,
         pandas.DataFrame({'i': i_lst,
                           'j': j_lst,
                           'v': v_lst}))
@@ -188,7 +188,7 @@ def test_type(scidb_con, url, type_name, is_null, type_numpy, chunk_size):
     else:
         v = type_numpy(range(max_val))
 
-    assert array.equals(pandas.DataFrame({'i': range(max_val), 'v': v}))
+    pandas.testing.assert_frame_equal(array, pandas.DataFrame({'i': range(max_val), 'v': v}))
 
 
 # Test for Empty Cells
@@ -224,7 +224,7 @@ xsave(
                 j_lst.append(j)
                 v_lst.append(float(i))
 
-    assert array.equals(
+    pandas.testing.assert_frame_equal(array,
         pandas.DataFrame({'i': i_lst,
                           'j': j_lst,
                           'v': v_lst}))
@@ -266,7 +266,7 @@ filter(
                 j_lst.append(j)
                 v_lst.append(float(i))
 
-    assert array.equals(
+    pandas.testing.assert_frame_equal(array,
         pandas.DataFrame({'i': i_lst,
                           'j': j_lst,
                           'v': v_lst}))
@@ -296,7 +296,7 @@ xsave(
         else:
             v_lst.append(numpy.nan)
 
-    assert array.equals(
+    pandas.testing.assert_frame_equal(array,
         pandas.DataFrame({'i': i_lst,
                           'v': v_lst}))
 
@@ -317,7 +317,7 @@ xsave(
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
-    assert array.equals(
+    pandas.testing.assert_frame_equal(array,
         pandas.DataFrame({'i': range(size),
                           'v': numpy.arange(0.0, float(size))}))
 
@@ -355,7 +355,7 @@ xsave(
         array = scidb_con.iquery(que, fetch=True)
         array = array.sort_values(by=['i']).reset_index(drop=True)
 
-        assert array.equals(
+        pandas.testing.assert_frame_equal(array,
             pandas.DataFrame(data=((i, i, i * i)
                                    for i in range(1000)
                                    if (i % 100 < 80 or i >= 800)),
