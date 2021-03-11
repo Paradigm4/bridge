@@ -54,8 +54,9 @@ class Driver:
             pages = Driver.s3_client().get_paginator(
                 'list_objects_v2').paginate(Bucket=bucket, Prefix=key)
             for page in pages:
-                for obj in page['Contents']:
-                    yield 's3://{}/{}'.format(bucket, obj['Key'])
+                if 'Contents' in page.keys():
+                    for obj in page['Contents']:
+                        yield 's3://{}/{}'.format(bucket, obj['Key'])
 
         # File System
         elif parts.scheme == 'file':
@@ -146,7 +147,7 @@ class Driver:
             raise Exception('URL {} not supported'.format(url))
 
     @staticmethod
-    def delete(url):
+    def delete_all(url):
         parts = urllib.parse.urlparse(url)
 
         # S3
@@ -161,6 +162,25 @@ class Driver:
             path = os.path.join(parts.netloc, parts.path)
             for fn in os.listdir(path):
                 os.unlink(os.path.join(path, fn))
+
+        else:
+            raise Exception('URL {} not supported'.format(url))
+
+
+    @staticmethod
+    def delete(url):
+        parts = urllib.parse.urlparse(url)
+
+        # S3
+        if parts.scheme == 's3':
+            bucket = parts.netloc
+            key = parts.path[1:]
+            Driver.s3_client().delete_object(Bucket=bucket, Key=key)
+
+        # File System
+        elif parts.scheme == 'file':
+            path = os.path.join(parts.netloc, parts.path)
+            os.unlink(path)
 
         else:
             raise Exception('URL {} not supported'.format(url))

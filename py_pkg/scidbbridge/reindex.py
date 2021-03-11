@@ -38,7 +38,7 @@ url = sys.argv[1]
 INDEX_SPLIT_SIZE = int(sys.argv[2])
 
 
-Driver.delete('{}/index/'.format(url))
+Driver.delete_all('{}/index/'.format(url))
 
 reader = Driver.create_reader('{}/index.arrow.gz'.format(url), 'gzip')
 table = reader.read_all()

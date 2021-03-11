@@ -148,7 +148,7 @@ class Array(object):
         chunk_size = split_size // len(index.columns)
 
         # Remove existing index
-        Driver.delete('{}/index'.format(self.url))
+        Driver.delete_all('{}/index'.format(self.url))
 
         # Write new index
         i = 0
