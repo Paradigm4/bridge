@@ -138,6 +138,58 @@ void Metadata::validate() const {
                 << error.str();
         }
 
+    // Check attribute
+    auto value = _metadata.at("attribute");
+    if (value != "ALL") {
+        std::ostringstream error;
+        error << "Value '" << value
+              << "' for key 'attribute' not supported";
+        throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+            << error.str();
+    }
+
+    // Check format
+    value = _metadata.at("format");
+    if (value != "arrow") {
+        std::ostringstream error;
+        error << "Value '" << value
+              << "' for key 'format' not supported";
+        throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+            << error.str();
+    }
+
+    // Check version
+    value = _metadata.at("version");
+    if (value != STR(BRIDGE_VERSION)) {
+        std::ostringstream error;
+        error << "Value '" << value
+              << "' for key 'version' not supported";
+        throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+            << error.str();
+    }
+
+    // Check index_split
+    value = _metadata.at("index_split");
+    int value_num;
+    try {
+        value_num = std::stoi(value);
+    }
+    catch (const std::exception &ex) {
+        std::ostringstream error;
+        error << "Cannot parse value '" << value
+              << "' for key 'index_split'";
+        throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+            << error.str();
+    }
+    if (value_num < INDEX_SPLIT_MIN) {
+        std::ostringstream error;
+        error << "Value '" << value_num
+              << "' for key 'index_split' not supported";
+        throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+            << error.str();
+    }
+
+    // Check compression
     // Throws Exception If Not Supported
     getCompression();
 }
