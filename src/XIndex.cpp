@@ -29,6 +29,7 @@
 #include <array/MemoryBuffer.h>
 #include <network/Network.h>
 #include <query/Query.h>
+#include <query/TypeSystem.h>
 #include <system/UserException.h>
 
 // Arrow
@@ -55,8 +56,11 @@ static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.xindex"));
 // Arrow Reader
 //
 ArrowReader::ArrowReader(
+    const Attributes &attributes,
+    const Dimensions &dimensions,
     const Metadata::Compression compression,
     std::shared_ptr<const Driver> driver):
+    _schema(scidb2ArrowSchema(attributes, dimensions)),
     _compression(compression),
     _driver(driver)
 {
@@ -117,8 +121,115 @@ size_t ArrowReader::readObject(
                                SCIDB_LE_UNKNOWN_ERROR) << out.str();
     }
 
+    // Check Record Batch Schema
+    auto readerSchema = _arrowBatchReader->schema();
+    if (!_schema->Equals(readerSchema)) {
+        std::ostringstream out;
+        out << "Schema (" << readerSchema->ToString() << ") from "
+            << _driver->getURL() << "/" << name
+            << " does not match the expected schema ("
+            << _schema->ToString() << ")";
+        throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                               SCIDB_LE_UNKNOWN_ERROR) << out.str();
+    }
+
     return arrowSize;
 }
+
+std::shared_ptr<arrow::Schema> ArrowReader::scidb2ArrowSchema(
+    const Attributes &attributes,
+    const Dimensions &dimensions) {
+
+    size_t nAttrs = attributes.size();
+    size_t nDims = dimensions.size();
+
+    std::vector<std::shared_ptr<arrow::Field>> arrowFields(nAttrs + nDims);
+    size_t i = 0;
+    for (const auto& attr : attributes) {
+        auto type = attr.getType();
+        auto typeEnum = typeId2TypeEnum(type, true);
+        std::shared_ptr<arrow::DataType> arrowType;
+
+        switch (typeEnum) {
+        case TE_BINARY: {
+            arrowType = arrow::binary();
+            break;
+        }
+        case TE_BOOL: {
+            arrowType = arrow::boolean();
+            break;
+        }
+        case TE_CHAR: {
+            arrowType = arrow::utf8();
+            break;
+        }
+        case TE_DATETIME: {
+            arrowType = arrow::timestamp(arrow::TimeUnit::SECOND);
+            break;
+        }
+        case TE_DOUBLE: {
+            arrowType = arrow::float64();
+            break;
+        }
+        case TE_FLOAT: {
+            arrowType = arrow::float32();
+            break;
+        }
+        case TE_INT8: {
+            arrowType = arrow::int8();
+            break;
+        }
+        case TE_INT16: {
+            arrowType = arrow::int16();
+            break;
+        }
+        case TE_INT32: {
+            arrowType = arrow::int32();
+            break;
+        }
+        case TE_INT64: {
+            arrowType = arrow::int64();
+            break;
+        }
+        case TE_UINT8: {
+            arrowType = arrow::uint8();
+            break;
+        }
+        case TE_UINT16: {
+            arrowType = arrow::uint16();
+            break;
+        }
+        case TE_UINT32: {
+            arrowType = arrow::uint32();
+            break;
+        }
+        case TE_UINT64: {
+            arrowType = arrow::uint64();
+            break;
+        }
+        case TE_STRING: {
+            arrowType = arrow::utf8();
+            break;
+        }
+        default: {
+            std::ostringstream error;
+            error << "Type " << type << " not supported in arrow format";
+            throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+                                   SCIDB_LE_ILLEGAL_OPERATION) << error.str();
+        }
+        }
+
+        arrowFields[i] = arrow::field(attr.getName(), arrowType);
+        i++;
+    }
+    for (size_t i = 0; i < nDims; ++i)
+        arrowFields[nAttrs + i] = arrow::field(
+            dimensions[i].getBaseName(), arrow::int64());
+
+    return arrow::schema(arrowFields);
+}
+
+
 
 //
 // XIndex
@@ -160,7 +271,10 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
 
     // One coordBuf for each instance
     std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
-    ArrowReader arrowReader(Metadata::Compression::GZIP, driver);
+    ArrowReader arrowReader(Attributes(),
+                            _desc.getDimensions(),
+                            Metadata::Compression::GZIP,
+                            driver);
     std::shared_ptr<arrow::RecordBatch> arrowBatch;
 
     for (size_t iIndex = instID; iIndex < nIndex; iIndex += nInst) {

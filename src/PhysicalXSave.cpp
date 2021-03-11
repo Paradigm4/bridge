@@ -72,7 +72,7 @@ public:
         _attrTypes(_nAttrs),
         _dimValues(_nDims),
 
-        _arrowSchema(scidb2ArrowSchema(attributes, dimensions)),
+        _arrowSchema(ArrowReader::scidb2ArrowSchema(attributes, dimensions)),
         _arrowBuilders(_nAttrs + _nDims),
         _arrowArrays(_nAttrs + _nDims) {
 
@@ -467,99 +467,6 @@ public:
         LOG4CXX_DEBUG(logger, "XSAVE|arrowBuffer::size: " << arrowBuffer->size());
 
         return arrow::Status::OK();
-    }
-
-    static std::shared_ptr<arrow::Schema> scidb2ArrowSchema(
-        const Attributes &attributes,
-        const Dimensions &dimensions) {
-
-        size_t nAttrs = attributes.size();
-        size_t nDims = dimensions.size();
-
-        std::vector<std::shared_ptr<arrow::Field>> arrowFields(nAttrs + nDims);
-        size_t i = 0;
-        for (const auto& attr : attributes) {
-            auto type = attr.getType();
-            auto typeEnum = typeId2TypeEnum(type, true);
-            std::shared_ptr<arrow::DataType> arrowType;
-
-            switch (typeEnum) {
-            case TE_BINARY: {
-                arrowType = arrow::binary();
-                break;
-            }
-            case TE_BOOL: {
-                arrowType = arrow::boolean();
-                break;
-            }
-            case TE_CHAR: {
-                arrowType = arrow::utf8();
-                break;
-            }
-            case TE_DATETIME: {
-                arrowType = arrow::timestamp(arrow::TimeUnit::SECOND);
-                break;
-            }
-            case TE_DOUBLE: {
-                arrowType = arrow::float64();
-                break;
-            }
-            case TE_FLOAT: {
-                arrowType = arrow::float32();
-                break;
-            }
-            case TE_INT8: {
-                arrowType = arrow::int8();
-                break;
-            }
-            case TE_INT16: {
-                arrowType = arrow::int16();
-                break;
-            }
-            case TE_INT32: {
-                arrowType = arrow::int32();
-                break;
-            }
-            case TE_INT64: {
-                arrowType = arrow::int64();
-                break;
-            }
-            case TE_UINT8: {
-                arrowType = arrow::uint8();
-                break;
-            }
-            case TE_UINT16: {
-                arrowType = arrow::uint16();
-                break;
-            }
-            case TE_UINT32: {
-                arrowType = arrow::uint32();
-                break;
-            }
-            case TE_UINT64: {
-                arrowType = arrow::uint64();
-                break;
-            }
-            case TE_STRING: {
-                arrowType = arrow::utf8();
-                break;
-            }
-            default: {
-                std::ostringstream error;
-                error << "Type " << type << " not supported in arrow format";
-                throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                       SCIDB_LE_ILLEGAL_OPERATION) << error.str();
-            }
-            }
-
-            arrowFields[i] = arrow::field(attr.getName(), arrowType);
-            i++;
-        }
-        for (size_t i = 0; i < nDims; ++i)
-            arrowFields[nAttrs + i] = arrow::field(
-                dimensions[i].getBaseName(), arrow::int64());
-
-        return arrow::schema(arrowFields);
     }
 
 private:

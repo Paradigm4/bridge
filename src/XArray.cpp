@@ -589,8 +589,10 @@ namespace scidb {
         SCIDB_ASSERT(nInst > 0 && _query->getInstanceID() < nInst);
 
         // Prepare Reader
-        _arrowReader = std::make_shared<ArrowReader>(compression,
-                                                       _driver);
+        _arrowReader = std::make_shared<ArrowReader>(desc.getAttributes(true),
+                                                     desc.getDimensions(),
+                                                     compression,
+                                                     _driver);
 
         // If Cache Size Is 0, The Cache Will Be disabled
         if (cacheSize > 0)
