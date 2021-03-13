@@ -33,6 +33,24 @@ import urllib
 from common import *
 
 
+def save_metadata(url, metadata):
+    parts = urllib.parse.urlparse(url)
+    if parts.scheme == 's3':
+        scidbbridge.driver.Driver.s3_client().put_object(
+            Body=metadata, Bucket=parts.netloc, Key=parts.path[1:])
+    elif parts.scheme == 'file':
+        with open(os.path.join(parts.netloc, parts.path), 'w') as f:
+            f.write(metadata)
+
+def metadata_dict2text(metadata):
+    out = []
+    for (key, val) in metadata.items():
+        if key == 'compression' and val is None:
+            val = 'none'
+        out.append('{}\t{}'.format(key, val))
+    return '\n'.join(out) + '\n'
+
+
 @pytest.mark.parametrize(('url', 'chunk_size'),
                          itertools.product(test_urls, (5, 10, 20)))
 def test_one_dim_one_attr(scidb_con, url, chunk_size):
@@ -917,23 +935,6 @@ xsave(
                      'schema',
                      'version')
 
-    def save_metadata(metadata):
-        parts = urllib.parse.urlparse(metadata_url)
-        if parts.scheme == 's3':
-            scidbbridge.driver.Driver.s3_client().put_object(
-                Body=metadata, Bucket=parts.netloc, Key=parts.path[1:])
-        elif parts.scheme == 'file':
-            with open(os.path.join(parts.netloc, parts.path), 'w') as f:
-                f.write(metadata)
-
-    def metadata_dict2text(metadata):
-        out = []
-        for (key, val) in metadata.items():
-            if key == 'compression' and val is None:
-                val = 'none'
-            out.append('{}\t{}'.format(key, val))
-        return '\n'.join(out) + '\n'
-
 
     # Delete Metadata
     scidbbridge.driver.Driver.delete(metadata_url)
@@ -941,7 +942,7 @@ xsave(
         scidb_con.iquery("xinput('{}')".format(url), fetch=True)
 
     # Restore
-    save_metadata(metadata_gold)
+    save_metadata(metadata_url, metadata_gold)
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
@@ -951,24 +952,24 @@ xsave(
     for key in metadata_keys:
         metadata = metadata_gold_dict.copy()
         del metadata[key]
-        save_metadata(metadata_dict2text(metadata))
+        save_metadata(metadata_url, metadata_dict2text(metadata))
         with pytest.raises(requests.exceptions.HTTPError):
             scidb_con.iquery("xinput('{}')".format(url), fetch=True)
 
     metadata = metadata_gold_dict.copy()
     del metadata['version']
-    save_metadata(metadata_dict2text(metadata))
+    save_metadata(metadata_url, metadata_dict2text(metadata))
     with pytest.raises(requests.exceptions.HTTPError):
         scidb_con.iquery("xinput('{}')".format(url), fetch=True)
 
     metadata = metadata_gold_dict.copy()
     del metadata['compression']
-    save_metadata(metadata_dict2text(metadata))
+    save_metadata(metadata_url, metadata_dict2text(metadata))
     with pytest.raises(requests.exceptions.HTTPError):
         scidb_con.iquery("xinput('{}')".format(url), fetch=True)
 
     # Restore
-    save_metadata(metadata_gold)
+    save_metadata(metadata_url, metadata_gold)
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
@@ -977,13 +978,13 @@ xsave(
     # Add Metadata Field
     metadata = metadata_gold_dict.copy()
     metadata['foo'] = 'bar'
-    save_metadata(metadata_dict2text(metadata))
+    save_metadata(metadata_url, metadata_dict2text(metadata))
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
     # Restore
-    save_metadata(metadata_gold)
+    save_metadata(metadata_url, metadata_gold)
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
@@ -993,7 +994,7 @@ xsave(
     for key in metadata_keys:
         metadata = metadata_gold_dict.copy()
         metadata[key] = 'foo'
-        save_metadata(metadata_dict2text(metadata))
+        save_metadata(metadata_url, metadata_dict2text(metadata))
         if key != 'namespace':
             with pytest.raises(requests.exceptions.HTTPError):
                 scidb_con.iquery("xinput('{}')".format(url), fetch=True)
@@ -1003,19 +1004,125 @@ xsave(
             pandas.testing.assert_frame_equal(array, array_gold)
 
     # Restore
-    save_metadata(metadata_gold)
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Misstyped Type in Metadata Schema Value
+    metadata = metadata_gold_dict.copy()
+    metadata['schema'] = metadata['schema'].replace('int64', 'unt64')
+    save_metadata(metadata_url, metadata_dict2text(metadata))
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Wrong Type in Metadata Schema Value
+    metadata = metadata_gold_dict.copy()
+    metadata['schema'] = metadata['schema'].replace('string', 'int64')
+    save_metadata(metadata_url, metadata_dict2text(metadata))
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Wrong Syntax in Metadata Schema Value
+    metadata = metadata_gold_dict.copy()
+    metadata['schema'] = metadata['schema'].replace(']', '')
+    save_metadata(metadata_url, metadata_dict2text(metadata))
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
 
     # Write Text File as Metadata
-    save_metadata("foo")
+    save_metadata(metadata_url, "foo")
     with pytest.raises(requests.exceptions.HTTPError):
         scidb_con.iquery("xinput('{}')".format(url), fetch=True)
 
     # Restore
-    save_metadata(metadata_gold)
+    save_metadata(metadata_url, metadata_gold)
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_wrong_namespace(scidb_con, url):
+    # Setup
+    scidb_con.create_user('bar',
+                          'hRkyTHJrJieIcxHstPowNp9zIIi9jAwQBgCbsNS+Rorj' +
+                          'fy/IDlVbgWeQ1SaRAkdIMEkYLW/sCusmxQT7nLwDNA==')
+
+    con_args = {'scidb_url': scidb_url,
+                'scidb_auth': ('bar', 'taz'),
+                'verify': False}
+    scidb_con2 = scidbpy.connect(**con_args)
+
+    url = '{}/wrong_namespace'.format(url)
+    schema = '<v:int64, w:string> [i=0:19:0:5; j=0:9:0:5]'
+
+    # Store
+    scidb_con2.iquery("""
+xsave(
+  apply(
+    build({}, i * j),
+    w, string(v)),
+  '{}')""".format(schema.replace(', w:string', ''),
+                                      url))
+
+    # Input
+    array = scidb_con2.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+
+    array_gold = pandas.DataFrame(data=[(i, j, float(i * j), str(i * j))
+                                        for i in range(20)
+                                        for j in range(10)],
+                                  columns=('i', 'j', 'v', 'w'))
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+    metadata_url = url + '/metadata'
+    metadata_gold = scidbbridge.driver.Driver.read_metadata(url)
+    metadata_gold_dict = scidbbridge.Array.metadata_from_string(metadata_gold)
+    metadata_keys = ('attribute',
+                     'compression',
+                     'format',
+                     'index_split',
+                     'namespace',
+                     'schema',
+                     'version')
+
+
+    # Wrong Namespace in Metadata
+    metadata = metadata_gold_dict.copy()
+    metadata['namespace'] = 'foo'
+    save_metadata(metadata_url, metadata_dict2text(metadata))
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con2.iquery("xinput('{}')".format(url), fetch=True)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con2.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Cleanup
+    scidb_con.drop_user('bar')
