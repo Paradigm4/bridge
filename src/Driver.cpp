@@ -59,10 +59,21 @@ const ArrayDesc& Metadata::getSchema(std::shared_ptr<Query> query) {
             throw SYSTEM_EXCEPTION(scidb::SCIDB_SE_METADATA,
                                    scidb::SCIDB_LE_UNKNOWN_ERROR)
                 << "Schema missing from metadata";
-        out << "input(" << schemaPair->second << ", '/dev/null')";
+        auto schemaStr = schemaPair->second;
+        out << "input(" << schemaStr << ", '/dev/null')";
         innerQuery->queryString = out.str();
-        innerQuery->logicalPlan = std::make_shared<LogicalPlan>(
-            parseStatement(innerQuery, true));
+        try {
+            innerQuery->logicalPlan = std::make_shared<LogicalPlan>(
+                parseStatement(innerQuery, true));
+        }
+        catch (scidb::Exception &ex) {
+            std::ostringstream error;
+            error << "Cannot parse value '" << schemaStr
+                  << "' for key 'schema'";
+            throw SYSTEM_EXCEPTION(scidb::SCIDB_SE_PARSER,
+                                   scidb::SCIDB_LE_QUERY_PARSING_ERROR)
+                << error.str();
+        }
     }
 
     // Extract Schema and Set Distribution
