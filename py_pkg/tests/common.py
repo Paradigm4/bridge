@@ -23,10 +23,12 @@
 
 import boto3
 import os
-import requests
 import pytest
+import requests
+import scidbbridge
 import scidbpy
 import shutil
+import urllib
 
 
 scidb_url = 'https://localhost:8083'
@@ -82,3 +84,22 @@ def scidb_con():
         objects = [{'Key': e['Key']} for e in result['Contents']]
         s3_con.delete_objects(Bucket=s3_bucket,
                               Delete={'Objects': objects})
+
+
+def save_metadata(url, metadata):
+    parts = urllib.parse.urlparse(url)
+    if parts.scheme == 's3':
+        scidbbridge.driver.Driver.s3_client().put_object(
+            Body=metadata, Bucket=parts.netloc, Key=parts.path[1:])
+    elif parts.scheme == 'file':
+        with open(os.path.join(parts.netloc, parts.path), 'w') as f:
+            f.write(metadata)
+
+
+def metadata_dict2text(metadata):
+    out = []
+    for (key, val) in metadata.items():
+        if key == 'compression' and val is None:
+            val = 'none'
+        out.append('{}\t{}'.format(key, val))
+    return '\n'.join(out) + '\n'

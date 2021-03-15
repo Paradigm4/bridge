@@ -27,28 +27,9 @@ import pandas
 import pyarrow
 import pytest
 import requests
-import scidbbridge
 import urllib
 
 from common import *
-
-
-def save_metadata(url, metadata):
-    parts = urllib.parse.urlparse(url)
-    if parts.scheme == 's3':
-        scidbbridge.driver.Driver.s3_client().put_object(
-            Body=metadata, Bucket=parts.netloc, Key=parts.path[1:])
-    elif parts.scheme == 'file':
-        with open(os.path.join(parts.netloc, parts.path), 'w') as f:
-            f.write(metadata)
-
-def metadata_dict2text(metadata):
-    out = []
-    for (key, val) in metadata.items():
-        if key == 'compression' and val is None:
-            val = 'none'
-        out.append('{}\t{}'.format(key, val))
-    return '\n'.join(out) + '\n'
 
 
 @pytest.mark.parametrize(('url', 'chunk_size'),
@@ -955,18 +936,6 @@ xsave(
         save_metadata(metadata_url, metadata_dict2text(metadata))
         with pytest.raises(requests.exceptions.HTTPError):
             scidb_con.iquery("xinput('{}')".format(url), fetch=True)
-
-    metadata = metadata_gold_dict.copy()
-    del metadata['version']
-    save_metadata(metadata_url, metadata_dict2text(metadata))
-    with pytest.raises(requests.exceptions.HTTPError):
-        scidb_con.iquery("xinput('{}')".format(url), fetch=True)
-
-    metadata = metadata_gold_dict.copy()
-    del metadata['compression']
-    save_metadata(metadata_url, metadata_dict2text(metadata))
-    with pytest.raises(requests.exceptions.HTTPError):
-        scidb_con.iquery("xinput('{}')".format(url), fetch=True)
 
     # Restore
     save_metadata(metadata_url, metadata_gold)

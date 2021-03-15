@@ -24,9 +24,9 @@
 import itertools
 import os.path
 import pandas
+import pyarrow
 import pytest
 import requests
-import scidbbridge
 
 from common import *
 
@@ -655,3 +655,802 @@ xsave(
     # Cleanup
     scidb_con.drop_user('bar')
     scidb_con.drop_namespace('foo')
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_missing_index(scidb_con, url):
+    url = '{}/missing_index'.format(url)
+    schema = '<v:int64> [i=0:19:0:1]'
+
+    # Store
+    scidb_con.iquery("""
+xsave(
+  build({}, i),
+  '{}')""".format(schema, url))
+
+    query = """
+xsave(
+  filter(
+    build({}, i * 10),
+    i < 10),
+  '{}', update:true)""".format(schema, url)
+
+    # Update
+    scidb_con.iquery(query)
+
+    # Input
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i']).reset_index(drop=True)
+
+    array_gold = pandas.DataFrame(
+        {'i': range(20),
+         'v': (float(i * 10) if i < 10 else float(i)
+               for i in range(20))})
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+    # Delete Index
+    scidbbridge.driver.Driver.delete(url + '/index/0')
+
+    # Update
+    scidb_con.iquery(query)
+
+    # Input
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    with pytest.raises(AssertionError):
+        pandas.testing.assert_frame_equal(array, array_gold)
+    pandas.testing.assert_frame_equal(
+        array, pandas.DataFrame({'i': range(10),
+                                 'v': (float(i * 10) for i in range(10))}))
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_missing_index_big(scidb_con, url):
+    url = '{}/missing_index_big'.format(url)
+    schema = '<v:int64> [i=0:19:0:1; j=0:9:0:1]'
+
+    # Store
+    scidb_con.iquery("""
+xsave(
+  build({}, i * j),
+  '{}', index_split:100)""".format(schema, url))
+
+    query = """
+xsave(
+  filter(
+    build({}, i * 10),
+    i < 10 and j < 5),
+  '{}', update:true)""".format(schema, url)
+
+    # Update
+    scidb_con.iquery(query)
+
+    # Input
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+
+    array_gold = pandas.DataFrame(
+        data=[(i, j, float(i * 10) if i < 10 and j < 5 else float(i * j))
+              for i in range(20) for j in range(10)],
+        columns=('i', 'j', 'v'))
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+    # Delete From Index
+    scidbbridge.driver.Driver.delete(url + '/index/0')
+
+    # Update
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_missing_chunks(scidb_con, url):
+    url = '{}/missing_chunks'.format(url)
+    schema = '<v:int64> [i=0:19:0:1]'
+
+    # Store
+    scidb_con.iquery("""
+xsave(
+  build({}, i),
+  '{}')""".format(schema, url))
+
+    query = """
+xsave(
+  filter(
+    build({}, i * 10),
+    i >= 10 and i < 15),
+  '{}', update:true)""".format(schema, url)
+
+    # Update
+    scidb_con.iquery(query)
+
+    # Input
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i']).reset_index(drop=True)
+
+    array_gold = pandas.DataFrame(
+        {'i': range(20),
+         'v': (float(i) if i < 10 or i >= 15 else float(i * 10)
+               for i in range(20))})
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+    scidbbridge.driver.Driver.delete(url + '/chunks/c_10')
+
+    # Update
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_wrong_index(scidb_con, url):
+    url = '{}/wrong_index'.format(url)
+    schema = '<v:int64, w:string> [i=0:19:0:5; j=0:9:0:5]'
+    schema_build = schema.replace(', w:string', '')
+
+    # Store
+    scidb_con.iquery("""
+xsave(
+  apply(
+    build({}, i * j),
+    w, string(v)),
+  '{}')""".format(schema_build, url))
+
+    query = """
+xsave(
+  filter(
+    apply(
+      build({}, i * 10),
+      w, string(v)),
+    i < 10 and j < 5),
+  '{}', update:true)""".format(schema_build, url)
+
+    # Update
+    scidb_con.iquery(query)
+
+    # Input
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+
+    array_gold = pandas.DataFrame(
+        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j <5
+                        else (float(i * j), str(i * j)))
+              for i in range(20)
+              for j in range(10)],
+        columns=('i', 'j', 'v', 'w'))
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    ar = scidbbridge.Array(url)
+    index_gold = ar.read_index()
+    index_url = '{}/index/0'.format(url)
+
+
+    # Add Column to Index
+    index = index_gold.copy(True)
+    index['k'] = index['i']
+    index_table = pyarrow.Table.from_pandas(index)
+    sink = scidbbridge.driver.Driver.create_writer(
+        index_url, index_table.schema, 'gzip')
+    writer = next(sink)
+    writer.write_table(index_table)
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ar.write_index(index_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Remove Column from Index
+    index = index_gold.copy(True)
+    index = index.drop(['j'], axis=1)
+    index_table = pyarrow.Table.from_pandas(index)
+    sink = scidbbridge.driver.Driver.create_writer(
+        index_url, index_table.schema, 'gzip')
+    writer = next(sink)
+    writer.write_table(pyarrow.Table.from_pandas(index))
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ar.write_index(index_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Change Column to String in Index
+    index = index_gold.copy(True)
+    index['j'] = 'foo'
+    index_table = pyarrow.Table.from_pandas(index)
+    sink = scidbbridge.driver.Driver.create_writer(
+        index_url, index_table.schema, 'gzip')
+    writer = next(sink)
+    writer.write_table(index_table)
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ar.write_index(index_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Index Not Compressed
+    index = index_gold.copy(True)
+    index_table = pyarrow.Table.from_pandas(index)
+    sink = scidbbridge.driver.Driver.create_writer(
+        index_url, index_table.schema)
+    writer = next(sink)
+    writer.write_table(index_table)
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ar.write_index(index_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Write Text File as Index
+    parts = urllib.parse.urlparse(index_url)
+    if parts.scheme == 's3':
+        bucket = parts.netloc
+        key = parts.path[1:]
+        scidbbridge.driver.Driver.s3_client().put_object(
+            Body="foo", Bucket=bucket, Key=key)
+    elif parts.scheme == 'file':
+        path = os.path.join(parts.netloc, parts.path)
+        with open(path, 'w') as f:
+            f.write("foo")
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ar.write_index(index_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_wrong_chunk(scidb_con, url):
+    url = '{}/wrong_chunk'.format(url)
+    schema = '<v:int64, w:string> [i=0:19:0:5; j=0:9:0:5]'
+    schema_build = schema.replace(', w:string', '')
+
+    # Store
+    scidb_con.iquery("""
+xsave(
+  apply(
+    build({}, i * j),
+    w, string(v)),
+  '{}')""".format(schema_build, url))
+
+    query = """
+xsave(
+  filter(
+    apply(
+      build({}, i * 10),
+      w, string(v)),
+    i < 10 and j < 5),
+  '{}', update:true)""".format(schema_build, url)
+
+    # Update
+    scidb_con.iquery(query)
+
+    # Input
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+
+    array_gold = pandas.DataFrame(
+        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j <5
+                        else (float(i * j), str(i * j)))
+              for i in range(20)
+              for j in range(10)],
+        columns=('i', 'j', 'v', 'w'))
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+    ar = scidbbridge.Array(url)
+    ch = ar.get_chunk(0, 0)
+    chunk_gold = ch.to_pandas()
+    chunk_url = '{}/chunks/c_0_0'.format(url)
+
+
+    # Add Column to Chunk
+    chunk = chunk_gold.copy(True)
+    chunk['x'] = chunk['v']
+    chunk_table = pyarrow.Table.from_pandas(chunk)
+    sink = scidbbridge.driver.Driver.create_writer(
+        chunk_url, chunk_table.schema)
+    writer = next(sink)
+    writer.write_table(chunk_table)
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ch.from_pandas(chunk_gold)
+    ch.save()
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Remove Column from Chunk
+    chunk = chunk_gold.copy(True)
+    chunk = chunk.drop(['w'], axis=1)
+    chunk_table = pyarrow.Table.from_pandas(chunk)
+    sink = scidbbridge.driver.Driver.create_writer(
+        chunk_url, chunk_table.schema)
+    writer = next(sink)
+    writer.write_table(chunk_table)
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ch.from_pandas(chunk_gold)
+    ch.save()
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Change Column to String in Chunk
+    chunk = chunk_gold.copy(True)
+    chunk['v'] = 'foo'
+    chunk_table = pyarrow.Table.from_pandas(chunk)
+    sink = scidbbridge.driver.Driver.create_writer(
+        chunk_url, chunk_table.schema)
+    writer = next(sink)
+    writer.write_table(chunk_table)
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ch.from_pandas(chunk_gold)
+    ch.save()
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Chunk Compressed
+    chunk = chunk_gold.copy(True)
+    chunk_table = pyarrow.Table.from_pandas(chunk)
+    sink = scidbbridge.driver.Driver.create_writer(
+        chunk_url, chunk_table.schema, 'gzip')
+    writer = next(sink)
+    writer.write_table(chunk_table)
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ch.from_pandas(chunk_gold)
+    ch.save()
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Write Text File as Chunk
+    parts = urllib.parse.urlparse(chunk_url)
+    if parts.scheme == 's3':
+        bucket = parts.netloc
+        key = parts.path[1:]
+        scidbbridge.driver.Driver.s3_client().put_object(
+            Body="foo", Bucket=bucket, Key=key)
+    elif parts.scheme == 'file':
+        path = os.path.join(parts.netloc, parts.path)
+        with open(path, 'w') as f:
+            f.write("foo")
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ch.from_pandas(chunk_gold)
+    ch.save()
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_wrong_chunk_compressed(scidb_con, url):
+    url = '{}/wrong_chunk_compressed'.format(url)
+    schema = '<v:int64, w:string> [i=0:19:0:5; j=0:9:0:5]'
+    schema_build = schema.replace(', w:string', '')
+
+    # Store
+    scidb_con.iquery("""
+xsave(
+  apply(
+    build({}, i * j),
+    w, string(v)),
+  '{}', compression:'gzip')""".format(schema_build, url))
+
+    query = """
+xsave(
+  filter(
+    apply(
+      build({}, i * 10),
+      w, string(v)),
+    i < 10 and j < 5),
+  '{}', update:true)""".format(schema_build, url)
+
+    # Update
+    scidb_con.iquery(query)
+
+    # Input
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+
+    array_gold = pandas.DataFrame(
+        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j <5
+                        else (float(i * j), str(i * j)))
+              for i in range(20)
+              for j in range(10)],
+        columns=('i', 'j', 'v', 'w'))
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+    ar = scidbbridge.Array(url)
+    ch = ar.get_chunk(0, 0)
+    chunk_gold = ch.to_pandas()
+    chunk_url = '{}/chunks/c_0_0'.format(url)
+
+
+    # Add Column to Chunk
+    chunk = chunk_gold.copy(True)
+    chunk['x'] = chunk['v']
+    chunk_table = pyarrow.Table.from_pandas(chunk)
+    sink = scidbbridge.driver.Driver.create_writer(
+        chunk_url, chunk_table.schema, 'gzip')
+    writer = next(sink)
+    writer.write_table(chunk_table)
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ch.from_pandas(chunk_gold)
+    ch.save()
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Remove Column from Chunk
+    chunk = chunk_gold.copy(True)
+    chunk = chunk.drop(['w'], axis=1)
+    chunk_table = pyarrow.Table.from_pandas(chunk)
+    sink = scidbbridge.driver.Driver.create_writer(
+        chunk_url, chunk_table.schema, 'gzip')
+    writer = next(sink)
+    writer.write_table(chunk_table)
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ch.from_pandas(chunk_gold)
+    ch.save()
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Change Column to String in Chunk
+    chunk = chunk_gold.copy(True)
+    chunk['v'] = 'foo'
+    chunk_table = pyarrow.Table.from_pandas(chunk)
+    sink = scidbbridge.driver.Driver.create_writer(
+        chunk_url, chunk_table.schema, 'gzip')
+    writer = next(sink)
+    writer.write_table(chunk_table)
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ch.from_pandas(chunk_gold)
+    ch.save()
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Chunk Not Compressed
+    chunk = chunk_gold.copy(True)
+    chunk_table = pyarrow.Table.from_pandas(chunk)
+    sink = scidbbridge.driver.Driver.create_writer(
+        chunk_url, chunk_table.schema)
+    writer = next(sink)
+    writer.write_table(chunk_table)
+    sink.close()
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ch.from_pandas(chunk_gold)
+    ch.save()
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Write Text File as Chunk
+    parts = urllib.parse.urlparse(chunk_url)
+    if parts.scheme == 's3':
+        bucket = parts.netloc
+        key = parts.path[1:]
+        scidbbridge.driver.Driver.s3_client().put_object(
+            Body="foo", Bucket=bucket, Key=key)
+    elif parts.scheme == 'file':
+        path = os.path.join(parts.netloc, parts.path)
+        with open(path, 'w') as f:
+            f.write("foo")
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    ch.from_pandas(chunk_gold)
+    ch.save()
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_wrong_metadata(scidb_con, url):
+    url = '{}/wrong_metadata'.format(url)
+    schema = '<v:int64, w:string> [i=0:19:0:5; j=0:9:0:5]'
+    schema_build = schema.replace(', w:string', '')
+
+    # Store
+    scidb_con.iquery("""
+xsave(
+  apply(
+    build({}, i * j),
+    w, string(v)),
+  '{}')""".format(schema_build, url))
+
+    query = """
+xsave(
+  filter(
+    apply(
+      build({}, i * 10),
+      w, string(v)),
+    i < 10 and j < 5),
+  '{}', update:true)""".format(schema_build, url)
+
+    # Update
+    scidb_con.iquery(query)
+
+    # Input
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+
+    array_gold = pandas.DataFrame(
+        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j <5
+                        else (float(i * j), str(i * j)))
+              for i in range(20)
+              for j in range(10)],
+        columns=('i', 'j', 'v', 'w'))
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+    metadata_url = url + '/metadata'
+    metadata_gold = scidbbridge.driver.Driver.read_metadata(url)
+    metadata_gold_dict = scidbbridge.Array.metadata_from_string(metadata_gold)
+    metadata_keys = ('attribute',
+                     'compression',
+                     'format',
+                     'index_split',
+                     'namespace',
+                     'schema',
+                     'version')
+
+
+    # Delete Metadata
+    scidbbridge.driver.Driver.delete(metadata_url)
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Delete Metadata Field
+    for key in metadata_keys:
+        metadata = metadata_gold_dict.copy()
+        del metadata[key]
+        save_metadata(metadata_url, metadata_dict2text(metadata))
+        with pytest.raises(requests.exceptions.HTTPError):
+            scidb_con.iquery(query)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Add Metadata Field
+    metadata = metadata_gold_dict.copy()
+    metadata['foo'] = 'bar'
+    save_metadata(metadata_url, metadata_dict2text(metadata))
+    scidb_con.iquery(query)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Wrong Metadata Field Value
+    for key in metadata_keys:
+        metadata = metadata_gold_dict.copy()
+        metadata[key] = 'foo'
+        save_metadata(metadata_url, metadata_dict2text(metadata))
+        if key != 'namespace':
+            with pytest.raises(requests.exceptions.HTTPError):
+                scidb_con.iquery(query)
+        else:
+            scidb_con.iquery(query)
+            array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+            array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+            pandas.testing.assert_frame_equal(array, array_gold)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Misstyped Type in Metadata Schema Value
+    metadata = metadata_gold_dict.copy()
+    metadata['schema'] = metadata['schema'].replace('int64', 'unt64')
+    save_metadata(metadata_url, metadata_dict2text(metadata))
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Wrong Type in Metadata Schema Value
+    metadata = metadata_gold_dict.copy()
+    metadata['schema'] = metadata['schema'].replace('string', 'int64')
+    save_metadata(metadata_url, metadata_dict2text(metadata))
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Wrong Syntax in Metadata Schema Value
+    metadata = metadata_gold_dict.copy()
+    metadata['schema'] = metadata['schema'].replace(']', '')
+    save_metadata(metadata_url, metadata_dict2text(metadata))
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Write Text File as Metadata
+    save_metadata(metadata_url, "foo")
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery(query)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_wrong_namespace(scidb_con, url):
+    # Setup
+    scidb_con.create_user('bar',
+                          'hRkyTHJrJieIcxHstPowNp9zIIi9jAwQBgCbsNS+Rorj' +
+                          'fy/IDlVbgWeQ1SaRAkdIMEkYLW/sCusmxQT7nLwDNA==')
+
+    con_args = {'scidb_url': scidb_url,
+                'scidb_auth': ('bar', 'taz'),
+                'verify': False}
+    scidb_con2 = scidbpy.connect(**con_args)
+
+    url = '{}/wrong_namespace'.format(url)
+    schema = '<v:int64, w:string> [i=0:19:0:5; j=0:9:0:5]'
+    schema_build = schema.replace(', w:string', '')
+
+    # Store
+    scidb_con.iquery("""
+xsave(
+  apply(
+    build({}, i * j),
+    w, string(v)),
+  '{}')""".format(schema_build, url))
+
+    query = """
+xsave(
+  filter(
+    apply(
+      build({}, i * 10),
+      w, string(v)),
+    i < 10 and j < 5),
+  '{}', update:true)""".format(schema_build, url)
+
+    # Update
+    scidb_con2.iquery(query)
+
+    # Input
+    array = scidb_con2.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+
+    array_gold = pandas.DataFrame(
+        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j <5
+                        else (float(i * j), str(i * j)))
+              for i in range(20)
+              for j in range(10)],
+        columns=('i', 'j', 'v', 'w'))
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+    metadata_url = url + '/metadata'
+    metadata_gold = scidbbridge.driver.Driver.read_metadata(url)
+    metadata_gold_dict = scidbbridge.Array.metadata_from_string(metadata_gold)
+    metadata_keys = ('attribute',
+                     'compression',
+                     'format',
+                     'index_split',
+                     'namespace',
+                     'schema',
+                     'version')
+
+
+    # Wrong Namespace in Metadata
+    metadata = metadata_gold_dict.copy()
+    metadata['namespace'] = 'foo'
+    save_metadata(metadata_url, metadata_dict2text(metadata))
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con2.iquery(query)
+
+    # Restore
+    save_metadata(metadata_url, metadata_gold)
+    array = scidb_con2.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+
+    # Cleanup
+    scidb_con.drop_user('bar')
