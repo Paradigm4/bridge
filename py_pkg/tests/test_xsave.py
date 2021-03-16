@@ -696,6 +696,7 @@ xsave(
 
     # Input
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i']).reset_index(drop=True)
     with pytest.raises(AssertionError):
         pandas.testing.assert_frame_equal(array, array_gold)
     pandas.testing.assert_frame_equal(
