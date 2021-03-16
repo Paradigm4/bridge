@@ -65,7 +65,7 @@ class S3Driver: public Driver {
 public:
     S3Driver(const std::string &url, const Driver::Mode);
 
-    void init();
+    void init(const Query&);
 
     void writeArrow(const std::string&,
                     std::shared_ptr<const arrow::Buffer>) const;

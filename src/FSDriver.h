@@ -35,7 +35,7 @@ class FSDriver: public Driver {
 public:
     FSDriver(const std::string &url, const Driver::Mode);
 
-    void init();
+    void init(const Query&);
 
     void writeArrow(const std::string&,
                     std::shared_ptr<const arrow::Buffer>) const;

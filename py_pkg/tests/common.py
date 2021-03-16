@@ -31,9 +31,27 @@ import shutil
 import urllib
 
 
+# = == ===
+# Common Storage Prefix
+base_prefix = 'bridge_tests'
+
+# Amazon S3 Setup
+s3_bucket = 'p4tests'
+
+# File System Setup
+# IMPORTANT: set "io-paths-list=/tmp" in /opt/scidb/VER/etc/config.ini
+fs_base = '/tmp/{}'.format(base_prefix)
+
+# Storage Enabled in Tests
+test_urls = (
+    's3://{}/{}'.format(s3_bucket, base_prefix),
+    'file://{}'.format(fs_base),
+)
+# = == ===
+
+
 scidb_url = 'https://localhost:8083'
 
-base_prefix = 'bridge_tests'
 base_metadata = {
     'attribute':   'ALL',
     'compression': None,
@@ -42,13 +60,6 @@ base_metadata = {
     'namespace':   'public',
     'version':     '1',
 }
-s3_bucket = 'p4tests'
-fs_base = '/tmp/{}'.format(base_prefix)
-
-test_urls = (
-    's3://{}/{}'.format(s3_bucket, base_prefix),
-    'file://{}'.format(fs_base),
-)
 
 s3_con = boto3.client('s3')
 

@@ -115,7 +115,7 @@ namespace scidb {
         _client = std::make_unique<Aws::S3::S3Client>();
     }
 
-    void S3Driver::init()
+    void S3Driver::init(const Query &query)
     {
         Aws::String key((_prefix + "/metadata").c_str());
 

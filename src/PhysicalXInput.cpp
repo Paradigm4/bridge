@@ -38,15 +38,15 @@ namespace scidb {
 class PhysicalXInput : public PhysicalOperator
 {
 public:
-    PhysicalXInput(std::string const& logicalName,
-                   std::string const& physicalName,
-                   Parameters const& parameters,
-                   ArrayDesc const& schema):
+    PhysicalXInput(const std::string &logicalName,
+                   const std::string &physicalName,
+                   const Parameters &parameters,
+                   const ArrayDesc &schema):
         PhysicalOperator(logicalName, physicalName, parameters, schema)
     {}
 
     std::shared_ptr<Array> execute(
-        std::vector< std::shared_ptr<Array> >& inputArrays,
+        std::vector<std::shared_ptr<Array> > &inputArrays,
         std::shared_ptr<Query> query)
     {
         LOG4CXX_DEBUG(logger, "XINPUT|" << query->getInstanceID() << "|execute");

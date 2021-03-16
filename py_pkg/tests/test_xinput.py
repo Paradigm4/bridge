@@ -1095,3 +1095,57 @@ xsave(
 
     # Cleanup
     scidb_con.drop_user('bar')
+
+
+def test_io_paths_list(scidb_con):
+    # Setup
+    scidb_con.create_user('bar',
+                          'hRkyTHJrJieIcxHstPowNp9zIIi9jAwQBgCbsNS+Rorj' +
+                          'fy/IDlVbgWeQ1SaRAkdIMEkYLW/sCusmxQT7nLwDNA==')
+
+    con_args = {'scidb_url': scidb_url,
+                'scidb_auth': ('bar', 'taz'),
+                'verify': False}
+    scidb_con2 = scidbpy.connect(**con_args)
+
+    url_prefix = 'file://'
+    url_postfix = '/io_paths_list'
+    url1 = '{}{}{}'.format(url_prefix, fs_base, url_postfix)
+    url2 = '{}/var/lib'.format(url_prefix)
+    url3 = '{}/non/existing'.format(url_prefix)
+
+    schema = '<v:int64, w:string> [i=0:19:0:5; j=0:9:0:5]'
+    query = """
+xsave(
+  apply(
+    build({}, i * j),
+    w, string(v)),
+  '{{}}')""".format(schema.replace(', w:string', ''))
+
+    # Store
+    scidb_con2.iquery(query.format(url1))
+
+    # Input
+    array = scidb_con2.iquery("xinput('{}')".format(url1), fetch=True)
+    array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
+
+    array_gold = pandas.DataFrame(data=[(i, j, float(i * j), str(i * j))
+                                        for i in range(20)
+                                        for j in range(10)],
+                                  columns=('i', 'j', 'v', 'w'))
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+    # Not Allowed
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con2.iquery(query.format(url2))
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con2.iquery("xinput('{}')".format(url2), fetch=True)
+
+    # Does Not Exist
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con2.iquery(query.format(url3))
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con2.iquery("xinput('{}')".format(url3), fetch=True)
+
+    # Cleanup
+    scidb_con.drop_user('bar')

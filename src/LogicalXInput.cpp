@@ -83,7 +83,7 @@ public:
         // Init Driver
         if (_driver == NULL)
             _driver = Driver::makeDriver(_settings->getURL());
-        _driver->init();
+        _driver->init(*query);
 
         // Read Metadata
         if (_metadata == NULL) {

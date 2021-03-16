@@ -139,7 +139,7 @@ public:
 
     virtual ~Driver() = 0;
 
-    virtual void init() = 0;
+    virtual void init(const Query&) = 0;
 
     inline size_t readArrow(const std::string &suffix,
                             std::shared_ptr<arrow::Buffer> &buffer) const {

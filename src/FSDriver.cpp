@@ -29,6 +29,9 @@
 #include <fstream>
 #include <log4cxx/logger.h>
 
+#include <util/PathUtils.h>
+
+
 #define FAIL(op, path)                                                          \
     {                                                                           \
         std::ostringstream out;                                                 \
@@ -45,7 +48,8 @@ namespace scidb {
     //
     // FSDriver
     //
-    FSDriver::FSDriver(const std::string &url, const Driver::Mode mode):
+    FSDriver::FSDriver(const std::string &url,
+                       const Driver::Mode mode):
         Driver(url, mode)
     {
         // Check the URL is valid
@@ -60,17 +64,23 @@ namespace scidb {
         _prefix = _url.substr(prefix_len);
     }
 
-    void FSDriver::init()
+    void FSDriver::init(const Query &query)
     {
         // Chech path and/or create directories
         if (_mode == Driver::Mode::READ
             || _mode == Driver::Mode::UPDATE) {
+            // Sanitize and check path permissions
+            _prefix = path::expandForRead(_prefix, query);
+
             // Check that path exists and is a directory
             if (!boost::filesystem::exists(_prefix) ||
                 !boost::filesystem::is_directory(_prefix))
                 FAIL("Find directory", _prefix);
         }
         else if (_mode == Driver::Mode::WRITE) {
+            // Sanitize and check path permissions
+            _prefix = path::expandForSave(_prefix, query);
+
             // Check that path does NOT exist
             if (boost::filesystem::exists(_prefix))
                 FAIL("Path exists. Path", _prefix);

@@ -531,10 +531,17 @@ public:
     void preSingleExecute(std::shared_ptr<Query> query)
     {
         // Initialize Settings
-        _settings = std::make_shared<XSaveSettings>(_parameters, _kwParameters, false, query);
+        if (_settings == NULL)
+            _settings = std::make_shared<XSaveSettings>(_parameters, _kwParameters, false, query);
+
+        // Create Driver
+        if (_driver == NULL)
+            _driver = Driver::makeDriver(
+                _settings->getURL(),
+                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
 
         // Coordinator Creates/Checks Directories
-        getDriver()->init();
+        _driver->init(*query);
     }
 
     std::shared_ptr<Array> execute(std::vector<std::shared_ptr<Array> >& inputArrays,
@@ -543,6 +550,12 @@ public:
         // Initialize Settings If Not Already Set By preSingleExecute
         if (_settings == NULL)
             _settings = std::make_shared<XSaveSettings>(_parameters, _kwParameters, false, query);
+
+        // Create Driver If Not Already Set By preSingleExecute
+        if (_driver == NULL)
+            _driver = Driver::makeDriver(
+                _settings->getURL(),
+                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
 
         std::shared_ptr<Array> result(new MemArray(_schema, query));
         auto instID = query->getInstanceID();
@@ -564,7 +577,7 @@ public:
         // If Update, Read metadata and check that it matches
         if (_settings->isUpdate()) {
             // Get Metadata
-            getDriver()->readMetadata(metadataPtr);
+            _driver->readMetadata(metadataPtr);
 
             LOG4CXX_DEBUG(logger, "XSAVE|" << instID << "|found schema: " << metadata["schema"]);
             std::ostringstream error;
@@ -632,7 +645,7 @@ public:
             _settings->setCompression(metadata.getCompression());
 
             // Load Index
-            index->load(getDriver(), query);
+            index->load(_driver, query);
         }
         else
             // New Array
@@ -648,7 +661,7 @@ public:
                 metadata.setCompression(_settings->getCompression());
 
                 // Write Metadata
-                getDriver()->writeMetadata(metadataPtr);
+                _driver->writeMetadata(metadataPtr);
             }
 
         const Dimensions &dims = inputSchema.getDimensions();
@@ -668,7 +681,7 @@ public:
             if (_settings->isUpdate()) {
                 // Init Existing Array
                 existingArray = std::make_shared<XArray>(
-                    inputSchema, query, getDriver(), index, _settings->getCompression(), 0);
+                    inputSchema, query, _driver, index, _settings->getCompression(), 0);
                 for (auto const &attr : inputSchema.getAttributes(true))
                     existingArrayIters[attr.getId()] =
                         existingArray->getConstIterator(attr);
@@ -781,7 +794,7 @@ public:
                     }
 
                     // Write Chunk
-                    getDriver()->writeArrow(
+                    _driver->writeArrow(
                         "chunks/" +
                         Metadata::coord2ObjectName(pos, dims), arrowBuffer);
                 }
@@ -827,7 +840,7 @@ public:
                 // Write Index
                 std::ostringstream out;
                 out << "index/" << split;
-                getDriver()->writeArrow(out.str(), arrowBuffer);
+                _driver->writeArrow(out.str(), arrowBuffer);
 
                 // Advance to Next Index Split
                 splitPtr += std::min<size_t>(
@@ -845,15 +858,6 @@ public:
 private:
     std::shared_ptr<XSaveSettings> _settings;
     std::shared_ptr<Driver> _driver;
-
-    inline std::shared_ptr<Driver> getDriver() {
-        // Create Driver if not already set
-        if (_driver == NULL)
-            _driver = Driver::makeDriver(
-                _settings->getURL(),
-                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
-        return _driver;
-    }
 
     void writeFrom(std::vector<std::shared_ptr<ConstChunkIterator> > &sourceIters,
                    std::vector<std::shared_ptr<ChunkIterator> > &outputIters,
