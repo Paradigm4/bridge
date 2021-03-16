@@ -11,7 +11,11 @@ This document contains installation and usage instructions of the
 
 ## Installation
 
-### AWS C++ SDK
+### Extra SciDB Libs
+
+### Manual
+
+#### AWS C++ SDK
 
 1. Install the required packages:
    1. Ubuntu:
@@ -21,6 +25,9 @@ This document contains installation and usage instructions of the
    1. RHEL/CentOS:
       ```
       yum install libcurl-devel
+      yum install https://downloads.paradigm4.com/devtoolset-3/centos/7/sclo/x86_64/rh/devtoolset-3/scidb-devtoolset-3.noarch.rpm
+      yum install cmake3 devtoolset-3-runtime devtoolset-3-toolchain
+      scl enable devtoolset-3 bash
       ```
 1. Download and unzip the SDK:
    ```
@@ -32,12 +39,25 @@ This document contains installation and usage instructions of the
    > cd aws-sdk-cpp-1.8.3
    aws-sdk-cpp-1.8.3> mkdir build
    aws-sdk-cpp-1.8.3/build> cd build
-   aws-sdk-cpp-1.8.3/build> cmake ..            \
-       -DBUILD_ONLY=s3                          \
-       -DCMAKE_BUILD_TYPE=RelWithDebInfo        \
-       -DBUILD_SHARED_LIBS=ON                   \
-       -DCMAKE_INSTALL_PREFIX=/opt/aws
    ```
+   1. Ubuntu:
+       ```
+       aws-sdk-cpp-1.8.3/build> cmake ..            \
+           -DBUILD_ONLY=s3                          \
+           -DCMAKE_BUILD_TYPE=RelWithDebInfo        \
+           -DBUILD_SHARED_LIBS=ON                   \
+           -DCMAKE_INSTALL_PREFIX=/opt/aws
+       ```
+   1. RHEL/CentOS:
+       ```
+       aws-sdk-cpp-1.8.3/build> cmake3 ..                               \
+           -DBUILD_ONLY=s3                                              \
+           -DCMAKE_BUILD_TYPE=RelWithDebInfo                            \
+           -DBUILD_SHARED_LIBS=ON                                       \
+           -DCMAKE_INSTALL_PREFIX=/opt/aws                              \
+           -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc     \
+           -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++
+       ```
 1. Compile and install the SDK:
    ```
    aws-sdk-cpp-1.8.3/build> make
@@ -45,11 +65,64 @@ This document contains installation and usage instructions of the
    ```
    The SDK will be installed in `/opt/aws`
 
-### AWS Python Package
+#### AWS Python Package
 
 1. Install the `Boto3` Python package:
    ```
    pip install boto3
+   ```
+
+### Apache Arrow
+
+1. Apache Arrow library version `0.16.0` is required. The easiest way
+   to install it is by running:
+   ```
+   wget -O- https://paradigm4.github.io/extra-scidb-libs/install.sh \
+   | sudo sh -s -- --only-prereq
+   ```
+1. Install Apache Arrow development library:
+   1. Ubuntu
+      ```
+      apt-get install libarrow-dev=0.16.0-1
+      ```
+   1. RHEL/CentOS
+      ```
+      yum install arrow-devel-0.16.0
+      ```
+1. Apache Arrow Python package `PyArrow` version `0.16.0` is also
+   required. It can be installed by running:
+   ```
+   pip install pyarrow==0.16.0
+   ```
+
+### cURL (RHEL/CentOS ONLY)
+
+Compile cURL with OpenSSL (instead of NSS):
+```
+> curl https://curl.haxx.se/download/curl-7.72.0.tar.gz | tar xz
+> ./configure --prefix=/opt/curl
+> make
+> make install
+```
+More details: https://github.com/aws/aws-sdk-cpp/issues/1491
+
+
+### SciDB Plug-in
+
+1. Checkout and compile the plug-in:
+   ```
+   > git clone https://github.com/Paradigm4/bridge.git
+   bridge> make
+   ```
+1. Install in SciDB:
+   ```
+   bridge> cp libbridge.so /opt/scidb/19.11/lib/scidb/plugins
+   ```
+1. Restart SciDB and load the plug-in:
+   ```
+   scidbctl.py stop mydb
+   scidbctl.py start mydb
+   iquery --afl --query "load_library('bridge')"
    ```
 
 ### AWS Configuration
@@ -81,50 +154,7 @@ This document contains installation and usage instructions of the
 Note: The credentials used need to have read/write permission to the
 S3 bucket used.
 
-### Apache Arrow
-
-1. Apache Arrow library version `0.16.0` is required. The easiest way
-   to install it is by running:
-   ```
-   wget -O- https://paradigm4.github.io/extra-scidb-libs/install.sh \
-   | sudo sh -s -- --only-prereq
-   ```
-1. Install Apache Arrow development library:
-   1. Ubuntu
-      ```
-      apt-get install libarrow-dev=0.16.0-1
-      ```
-   1. RHEL/CentOS
-      ```
-      yum install arrow-devel-0.16.0
-      ```
-1. Apache Arrow Python package `PyArrow` version `0.16.0` is also
-   required. It can be installed by running:
-   ```
-   pip install pyarrow==0.16.0
-   ```
-
-### SciDB Plug-in
-
-1. Checkout and compile the plug-in:
-   ```
-   > git clone https://github.com/Paradigm4/bridge.git
-   bridge> make
-   ```
-1. Install in SciDB:
-   ```
-   bridge> cp libbridge.so /opt/scidb/19.11/lib/scidb/plugins
-   ```
-1. Restart SciDB and load the plug-in:
-   ```
-   scidbctl.py stop mydb
-   scidbctl.py start mydb
-   iquery --afl --query "load_library('bridge')"
-   ```
-
 ## Usage
-
-Note: only single chunks arrays are currently supported.
 
 1. Save SciDB array in S3:
    ```
@@ -146,13 +176,21 @@ Note: only single chunks arrays are currently supported.
    >>> ar = scidbbridge.Array('s3://p4tests/bridge/foo')
 
    >>> ar.metadata
-   {'version': '1',
-    'format': 'arrow',
-    'schema': 'build<v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]',
-    'attribute': 'ALL'}
+   {'attribute':   'ALL',
+    'compression': None,
+    'format':      'arrow',
+    'index_split': '100000',
+    'namespace':   'public',
+    'schema':      '<v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]',
+    'version':     '1'}
 
    >>> print(ar.schema)
-   build<v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]
+   <v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]
+
+   >>> ar.read_index()
+      i   j
+   0  5  10
+   1  5  15
 
    >>> ch = ar.get_chunk(5, 15)
    >>> ch.to_pandas()
@@ -161,24 +199,18 @@ Note: only single chunks arrays are currently supported.
    1   22  484.0  5  17
    2   24  576.0  5  19
    ...
-
-   >>> chunks = ar.list_chunks()
-   >>> chunks
-   ((5, 10), (5, 15))
-   >>> ar.get_chunk(*chunks[0]).to_pandas()
-        v      w  i   j
-   0   16  256.0  5  11
-   1   18  324.0  5  13
-   2   16  256.0  6  10
-   ...
    ```
+
+Note: If using the file system for storage, make sure the storage is
+shared across instances and that the path used by the non-admin SciDB
+users is in `io-paths-list` in SciDB `config.ini`.
 
 ### Troubleshoot
 
 It is common for S3 to return _Access Denied_ for non-obvious cases
 like, for example, if the bucket specified does not exist. `xsave`
 includes an extended error message for this type of errors which
-include a link to a troubleshootting guide. E.g.:
+include a link to a troubleshooting guide. E.g.:
 
 ```
 > iquery -aq "xsave(build(<v:int64>[i=0:9], i), bucket_name:'foo', object_path:'bar')"
