@@ -7,16 +7,21 @@ This document contains installation and usage instructions of the
 `bridge` SciDB plugin.
 
 1. [Installation](#installation)
+   1. [SciDB Plug-in](#scidb-plug-in)
+   1. [Python Package](#python-package)
+1. [AWS Configuration](#aws-configuration)
 1. [Usage](#usage)
 
 ## Installation
 
-### Extra SciDB Libs
+### SciDB Plug-in
+
+#### Using Extra SciDB Libs
 
 Install extra-scidb-libs following the instructions
 [here](https://paradigm4.github.io/extra-scidb-libs/).
 
-### Manual
+#### From Source
 
 #### AWS C++ SDK
 
@@ -68,14 +73,7 @@ Install extra-scidb-libs following the instructions
    ```
    The SDK will be installed in `/opt/aws`
 
-#### AWS Python Package
-
-1. Install the `Boto3` Python package:
-   ```
-   pip install boto3
-   ```
-
-### Apache Arrow
+#### Apache Arrow
 
 1. Apache Arrow library version `0.16.0` is required. The easiest way
    to install it is by running:
@@ -92,13 +90,8 @@ Install extra-scidb-libs following the instructions
       ```
       yum install arrow-devel-0.16.0
       ```
-1. Apache Arrow Python package `PyArrow` version `0.16.0` is also
-   required. It can be installed by running:
-   ```
-   pip install pyarrow==0.16.0
-   ```
 
-### cURL (RHEL/CentOS ONLY)
+#### cURL (RHEL/CentOS ONLY)
 
 Compile cURL with OpenSSL (instead of NSS):
 ```
@@ -110,7 +103,7 @@ Compile cURL with OpenSSL (instead of NSS):
 More details: https://github.com/aws/aws-sdk-cpp/issues/1491
 
 
-### SciDB Plug-in
+#### Compile and Load SciDB Plug-in
 
 1. Checkout and compile the plug-in:
    ```
@@ -127,6 +120,12 @@ More details: https://github.com/aws/aws-sdk-cpp/issues/1491
    scidbctl.py start mydb
    iquery --afl --query "load_library('bridge')"
    ```
+
+### Python Package
+
+```
+pip install scidb-bridge
+```
 
 ## AWS Configuration
 
