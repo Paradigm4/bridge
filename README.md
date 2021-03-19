@@ -13,6 +13,9 @@ This document contains installation and usage instructions of the
 
 ### Extra SciDB Libs
 
+Install extra-scidb-libs following the instructions
+[here](https://paradigm4.github.io/extra-scidb-libs/).
+
 ### Manual
 
 #### AWS C++ SDK
@@ -125,7 +128,7 @@ More details: https://github.com/aws/aws-sdk-cpp/issues/1491
    iquery --afl --query "load_library('bridge')"
    ```
 
-### AWS Configuration
+## AWS Configuration
 
 1. AWS uses two separate filed to configure the S3 client. The
    `credentials` file is required and stores the AWS credentials for
