@@ -787,6 +787,9 @@ public:
                     else {
                         // Add Chunk Coordinates to Index
                         index->insert(pos);
+                        // If Update Query, Keep the Index Sorted for Future Lookups
+                        if (_settings->isUpdate())
+                            index->sort();
 
                         // Serialize Chunk
                         THROW_NOT_OK(

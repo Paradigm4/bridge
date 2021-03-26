@@ -515,6 +515,42 @@ xsave(
                          columns=('v', 'i', 'j')))
 
 
+@pytest.mark.parametrize('url', test_urls)
+def test_update_filter_index(scidb_con, url):
+    url = '{}/update_filter_index'.format(url)
+    schema = '<v:int64> [i=0:2:0:1; j=0:2:0:1]'
+
+    scidb_con.iquery("""
+xsave(
+  filter(
+    build({}, i),
+    i > 1),
+  '{}')""".format(schema, url))
+
+    scidb_con.iquery("""
+xsave(
+  build({}, i),
+  '{}', update:true)""".format(schema, url))
+
+    array = scidbbridge.Array(url)
+
+    assert array.__str__() == url
+    assert array.metadata == {**base_metadata,
+                              **{'schema': '{}'.format(schema)}}
+    pandas.testing.assert_frame_equal(
+        array.read_index(),
+        pandas.DataFrame(data=((i, j)
+                               for i in range(3)
+                               for j in range(3)),
+                         columns=('i', 'j')))
+    pandas.testing.assert_frame_equal(
+        array.get_chunk(0, 0).to_pandas(),
+        pandas.DataFrame(data=((i, i, j)
+                               for i in range(1)
+                               for j in range(1)),
+                         columns=('v', 'i', 'j')))
+
+
 @pytest.mark.parametrize(('url', 'ty', 'value'),
                          ((url, ty, value)
                           for url in test_urls
