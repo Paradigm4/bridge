@@ -234,7 +234,7 @@ std::shared_ptr<arrow::Schema> ArrowReader::scidb2ArrowSchema(
 //
 // XIndex
 //
-XIndex::XIndex(const ArrayDesc& desc):
+XIndex::XIndex(const ArrayDesc &desc):
     _desc(desc),
     _dims(desc.getDimensions()),
     _nDims(_dims.size())
@@ -244,9 +244,13 @@ size_t XIndex::size() const {
     return _values.size();
 }
 
-void XIndex::insert(const Coordinates& pos) {
+void XIndex::insert(const Coordinates &pos) {
     _values.push_back(pos);
     // _values.insert(pos);
+}
+
+void XIndex::insert(const XIndex &other) {
+    std::copy(other.begin(), other.end(), std::back_inserter(_values));
 }
 
 void XIndex::sort() {
@@ -384,15 +388,15 @@ std::shared_ptr<SharedBuffer> XIndex::serialize() const {
     return buf;
 }
 
-const XIndexCont::const_iterator XIndex::begin() const {
+const XIndexStore::const_iterator XIndex::begin() const {
     return _values.begin();
 }
 
-const XIndexCont::const_iterator XIndex::end() const {
+const XIndexStore::const_iterator XIndex::end() const {
     return _values.end();
 }
 
-const XIndexCont::const_iterator XIndex::find(const Coordinates& pos) const {
+const XIndexStore::const_iterator XIndex::find(const Coordinates& pos) const {
     // return std::find(begin(), end(), pos);
     auto res = std::lower_bound(begin(), end(), pos);
     if (res == end() || *res != pos)

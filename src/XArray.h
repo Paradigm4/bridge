@@ -179,7 +179,7 @@ private:
     Coordinates _currPos;
     bool _hasCurrent;
     bool _chunkInitialized;
-    XIndexCont::const_iterator _currIndex;
+    XIndexStore::const_iterator _currIndex;
 };
 
 class XArray : public Array

@@ -396,8 +396,8 @@ public:
         return arrow::Status::OK();
     }
 
-    arrow::Status writeArrowBuffer(const XIndexCont::const_iterator begin,
-                                   const XIndexCont::const_iterator end,
+    arrow::Status writeArrowBuffer(const XIndexStore::const_iterator begin,
+                                   const XIndexStore::const_iterator end,
                                    const size_t size,
                                    std::shared_ptr<arrow::Buffer>& arrowBuffer) {
         // Append to Arrow Builders
@@ -675,13 +675,22 @@ public:
 
             // Allocate Existing Array and Iterators
             std::shared_ptr<XArray> existingArray;
-            std::vector<std::shared_ptr<ConstArrayIterator> > existingArrayIters(nAttrs);
+            std::vector<std::shared_ptr<ConstArrayIterator> > existingArrayIters(
+                nAttrs);
+
+            // Index For New Chunks On Update Queries
+            std::shared_ptr<XIndex> extraIndex = std::make_shared<XIndex>(
+                inputSchema);
 
             // Init Existing and Merge Arrays and Iterators If Applicable
             if (_settings->isUpdate()) {
                 // Init Existing Array
                 existingArray = std::make_shared<XArray>(
-                    inputSchema, query, _driver, index, _settings->getCompression(), 0);
+                    inputSchema,
+                    query,
+                    _driver,
+                    index,
+                    _settings->getCompression(), 0);
                 for (auto const &attr : inputSchema.getAttributes(true))
                     existingArrayIters[attr.getId()] =
                         existingArray->getConstIterator(attr);
@@ -699,7 +708,8 @@ public:
                     // Init Iterators for Current Chunk
                     for(size_t i = 0; i < nAttrs; ++i)
                         inputChunkIters[i] = inputArrayIters[i]->getChunk(
-                            ).getConstIterator(ConstChunkIterator::IGNORE_OVERLAPS);
+                            ).getConstIterator(
+                                ConstChunkIterator::IGNORE_OVERLAPS);
 
                     // Set Object Name using Top-Left Coordinates
                     Coordinates const &pos = inputChunkIters[0]->getFirstPosition();
@@ -785,15 +795,17 @@ public:
                     // Add Input Chunk
                     // -- -
                     else {
-                        // Add Chunk Coordinates to Index
-                        index->insert(pos);
-                        // If Update Query, Keep the Index Sorted for Future Lookups
                         if (_settings->isUpdate())
-                            index->sort();
+                            // Add Chunk Coordinates to Extra Index (Update Query)
+                            extraIndex->insert(pos);
+                        else
+                            // Add Chunk Coordinates to Current Index
+                            index->insert(pos);
 
                         // Serialize Chunk
                         THROW_NOT_OK(
-                            dataWriter.writeArrowBuffer(inputChunkIters, arrowBuffer));
+                            dataWriter.writeArrowBuffer(
+                                inputChunkIters, arrowBuffer));
                     }
 
                     // Write Chunk
@@ -805,6 +817,10 @@ public:
                 // Advance Array Iterators
                 for(size_t i =0; i < nAttrs; ++i) ++(*inputArrayIters[i]);
             }
+
+            if (extraIndex->size() > 0)
+                // Append New Chunks to Current Index
+                index->insert(*extraIndex);
         }
 
         // Centralize Index

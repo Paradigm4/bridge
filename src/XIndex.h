@@ -101,7 +101,7 @@ private:
 // --
 
 // Type of XIndex Container
-typedef std::vector<Coordinates> XIndexCont;
+typedef std::vector<Coordinates> XIndexStore;
 
 class XIndex {
 
@@ -110,7 +110,9 @@ class XIndex {
 
     size_t size() const;
     void insert(const Coordinates&);
+    void insert(const XIndex&);
     void sort();
+
 
     void load(std::shared_ptr<const Driver>, std::shared_ptr<Query>);
 
@@ -118,17 +120,17 @@ class XIndex {
     std::shared_ptr<SharedBuffer> serialize() const;
     void deserialize_insert(std::shared_ptr<SharedBuffer>);
 
-    const XIndexCont::const_iterator begin() const;
-    const XIndexCont::const_iterator end() const;
+    const XIndexStore::const_iterator begin() const;
+    const XIndexStore::const_iterator end() const;
 
-    const XIndexCont::const_iterator find(const Coordinates&) const;
+    const XIndexStore::const_iterator find(const Coordinates&) const;
 
   private:
     const ArrayDesc& _desc;
     const Dimensions& _dims;
     const size_t _nDims;
 
-    XIndexCont _values;
+    XIndexStore _values;
 };
 } // namespace scidb
 
