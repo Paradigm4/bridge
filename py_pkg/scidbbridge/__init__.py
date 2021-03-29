@@ -252,7 +252,27 @@ class Chunk(object):
         return pyarrow.Table.to_pandas(self.table)
 
     def from_pandas(self, pd):
+        # Check for a DataFrame
+        if not isinstance(pd, pandas.DataFrame):
+            raise Exception("Value provided as argument " +
+                            "is not a Pandas DataFrame")
+
+        # Check that columns matche array schema
         dims = [d.name for d in self.array.schema.dims]
+        columns = [a.name for a in self.array.schema.atts] + dims
+        if len(pd.columns) != len(columns):
+            raise Exception(
+                ("Argument columns count {} do not match " +
+                 "array attributes plus dimensions count {}").format(
+                     len(pd.columns), len(columns)))
+
+        if sorted(list(pd.columns)) != sorted(columns):
+            raise Exception(
+                ("Argument columns {} does not match " +
+                 "array schema {}").format(pd.columns, columns))
+
+        # Use schema order
+        pd = pd[columns]
 
         # Sort by dimensions
         pd = pd.sort_values(by=dims, ignore_index=True)

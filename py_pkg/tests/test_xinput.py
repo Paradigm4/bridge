@@ -1149,3 +1149,54 @@ xsave(
 
     # Cleanup
     scidb_con.drop_user('bar')
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_from_pandas(scidb_con, url):
+    url = '{}/from_pandas'.format(url)
+    schema = '<v:int64, w:int64> [i=0:19:0:10]'
+
+    # Store
+    scidb_con.iquery("""
+xsave(
+  apply(
+    build({}, -i),
+    w, -v * 10),
+  '{}')""".format(schema.replace(', w:int64', ''), url))
+
+    # Input
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i']).reset_index(drop=True)
+
+    array_gold = pandas.DataFrame({'i': range(20),
+                                   'v': map(lambda i: -float(i), range(20)),
+                                   'w': map(lambda i: float(i * 10), range(20))})
+    pandas.testing.assert_frame_equal(array, array_gold)
+
+    # Missing Columns
+    chunk = scidbbridge.Array(url).get_chunk(10)
+    with pytest.raises(Exception) as ex:
+        chunk.from_pandas(
+            pandas.DataFrame(((i, i * 10) for i in range(10, 20)),
+                             columns=list('iw')))
+    assert 'do not match array attributes plus dimensions count' in str(ex.value)
+
+    # Wrong Columns
+    chunk = scidbbridge.Array(url).get_chunk(10)
+    with pytest.raises(Exception) as ex:
+        chunk.from_pandas(
+            pandas.DataFrame(((i, i * 10, -i) for i in range(10, 20)),
+                             columns=list('iwx')))
+    assert 'does not match array schema' in str(ex.value)
+
+    # Swapped Columns
+    chunk = scidbbridge.Array(url).get_chunk(10)
+    chunk.from_pandas(
+        pandas.DataFrame(((i, i * 10, -i) for i in range(10, 20)),
+                         columns=list('iwv')))
+    chunk.save()
+
+    # Check Input
+    array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
+    array = array.sort_values(by=['i']).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(array, array_gold)
