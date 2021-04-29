@@ -180,7 +180,8 @@ class Array(object):
     def coords_to_url_suffix(coords, dims):
         parts = ['c']
         for (coord, dim) in zip(coords, dims):
-            if coord < dim.low_value or coord > dim.high_value:
+            if (coord < dim.low_value or
+                    dim.high_value != '*' and coord > dim.high_value):
                 raise Exception(
                     ('Coordinate value, {}, is outside of dimension range, '
                      '[{}:{}]').format(
@@ -257,7 +258,7 @@ class Chunk(object):
             raise Exception("Value provided as argument " +
                             "is not a Pandas DataFrame")
 
-        # Check that columns matche array schema
+        # Check that columns match array schema
         dims = [d.name for d in self.array.schema.dims]
         columns = [a.name for a in self.array.schema.atts] + dims
         if len(pd.columns) != len(columns):

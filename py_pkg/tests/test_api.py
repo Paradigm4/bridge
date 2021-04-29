@@ -511,3 +511,21 @@ xsave(
     chunks = array.read_index()
     pandas.testing.assert_frame_equal(chunks, chunks_gold)
     assert len(list(scidbbridge.driver.Driver.list(url + '/index'))) == 4
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_unbound_dimension(scidb_con, url):
+    url = '{}/unbound_dimension'.format(url)
+    schema = '<v:int64> [i=0:19:0:5]'
+
+    # Create Array Using xsave
+    scidb_con.iquery("""
+xsave(
+  redimension(
+    build({}, i),
+    {}),
+  '{}', index_split:100)""".format(schema, schema.replace('19', '*'), url))
+
+    # Fetch Chunk
+    array = scidbbridge.Array(url)
+    chunk = array.get_chunk(0)

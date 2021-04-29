@@ -166,7 +166,6 @@ class Driver:
         else:
             raise Exception('URL {} not supported'.format(url))
 
-
     @staticmethod
     def delete(url):
         parts = urllib.parse.urlparse(url)
