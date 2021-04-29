@@ -441,25 +441,26 @@ xsave(
         array.write_index([1, 2])
     assert "argument is not a Pandas DataFrame" in str(ex.value)
     with pytest.raises(Exception) as ex:
-        array.write_index(pandas.DataFrame({'i':(25, )}))
+        array.write_index(pandas.DataFrame({'i': (25, )}))
     assert "does not match array dimensions count" in str(ex.value)
     with pytest.raises(Exception) as ex:
-        array.write_index(pandas.DataFrame({'i':(25, ), 'k':(20, )}))
+        array.write_index(pandas.DataFrame({'i': (25, ), 'k': (20, )}))
     assert "does not match array dimensions" in str(ex.value)
     with pytest.raises(Exception) as ex:
-        array.write_index(pandas.DataFrame({'i':(25, ), 'j':(25, )}))
+        array.write_index(pandas.DataFrame({'i': (25, ), 'j': (25, )}))
     assert "Index values misaligned with chunk size" in str(ex.value)
     with pytest.raises(Exception) as ex:
-        array.write_index(pandas.DataFrame({'i':(50, ), 'j':(20, )}))
+        array.write_index(pandas.DataFrame({'i': (50, ), 'j': (20, )}))
     assert "Index values bigger than upper bound" in str(ex.value)
     with pytest.raises(Exception) as ex:
-        array.write_index(pandas.DataFrame({'i':(25, ), 'j':(30, )}))
+        array.write_index(pandas.DataFrame({'i': (25, ), 'j': (30, )}))
     assert "Index values bigger than upper bound" in str(ex.value)
     with pytest.raises(Exception) as ex:
-        array.write_index(pandas.DataFrame({'i':(40, ), 'j':(20, ), 'l':(0, )}))
+        array.write_index(pandas.DataFrame(
+            {'i': (40, ), 'j': (20, ), 'l': (0, )}))
     assert "does not match array dimensions count" in str(ex.value)
     with pytest.raises(Exception) as ex:
-        array.write_index(pandas.DataFrame({'i':(25, 25), 'j':(20, 20)}))
+        array.write_index(pandas.DataFrame({'i': (25, 25), 'j': (20, 20)}))
     assert "Duplicate entries" in str(ex.value)
 
 

@@ -848,19 +848,19 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
 
     array_gold = pandas.DataFrame(
-        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j <5
+        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j < 5
                         else (float(i * j), str(i * j)))
               for i in range(20)
               for j in range(10)],
         columns=('i', 'j', 'v', 'w'))
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     ar = scidbbridge.Array(url)
     index_gold = ar.read_index()
     index_url = '{}/index/0'.format(url)
 
-
+    # ---
     # Add Column to Index
     index = index_gold.copy(True)
     index['k'] = index['i']
@@ -879,7 +879,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Remove Column from Index
     index = index_gold.copy(True)
     index = index.drop(['j'], axis=1)
@@ -898,7 +898,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Change Column to String in Index
     index = index_gold.copy(True)
     index['j'] = 'foo'
@@ -917,7 +917,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Index Not Compressed
     index = index_gold.copy(True)
     index_table = pyarrow.Table.from_pandas(index)
@@ -935,7 +935,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Write Text File as Index
     parts = urllib.parse.urlparse(index_url)
     if parts.scheme == 's3':
@@ -988,7 +988,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
 
     array_gold = pandas.DataFrame(
-        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j <5
+        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j < 5
                         else (float(i * j), str(i * j)))
               for i in range(20)
               for j in range(10)],
@@ -1000,7 +1000,7 @@ xsave(
     chunk_gold = ch.to_pandas()
     chunk_url = '{}/chunks/c_0_0'.format(url)
 
-
+    # ---
     # Add Column to Chunk
     chunk = chunk_gold.copy(True)
     chunk['x'] = chunk['v']
@@ -1020,7 +1020,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Remove Column from Chunk
     chunk = chunk_gold.copy(True)
     chunk = chunk.drop(['w'], axis=1)
@@ -1040,7 +1040,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Change Column to String in Chunk
     chunk = chunk_gold.copy(True)
     chunk['v'] = 'foo'
@@ -1060,7 +1060,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Chunk Compressed
     chunk = chunk_gold.copy(True)
     chunk_table = pyarrow.Table.from_pandas(chunk)
@@ -1079,7 +1079,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Write Text File as Chunk
     parts = urllib.parse.urlparse(chunk_url)
     if parts.scheme == 's3':
@@ -1133,7 +1133,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
 
     array_gold = pandas.DataFrame(
-        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j <5
+        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j < 5
                         else (float(i * j), str(i * j)))
               for i in range(20)
               for j in range(10)],
@@ -1145,7 +1145,7 @@ xsave(
     chunk_gold = ch.to_pandas()
     chunk_url = '{}/chunks/c_0_0'.format(url)
 
-
+    # ---
     # Add Column to Chunk
     chunk = chunk_gold.copy(True)
     chunk['x'] = chunk['v']
@@ -1165,7 +1165,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Remove Column from Chunk
     chunk = chunk_gold.copy(True)
     chunk = chunk.drop(['w'], axis=1)
@@ -1185,7 +1185,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Change Column to String in Chunk
     chunk = chunk_gold.copy(True)
     chunk['v'] = 'foo'
@@ -1205,7 +1205,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Chunk Not Compressed
     chunk = chunk_gold.copy(True)
     chunk_table = pyarrow.Table.from_pandas(chunk)
@@ -1224,7 +1224,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Write Text File as Chunk
     parts = urllib.parse.urlparse(chunk_url)
     if parts.scheme == 's3':
@@ -1278,7 +1278,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
 
     array_gold = pandas.DataFrame(
-        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j <5
+        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j < 5
                         else (float(i * j), str(i * j)))
               for i in range(20)
               for j in range(10)],
@@ -1296,7 +1296,7 @@ xsave(
                      'schema',
                      'version')
 
-
+    # ---
     # Delete Metadata
     scidbbridge.driver.Driver.delete(metadata_url)
     with pytest.raises(requests.exceptions.HTTPError):
@@ -1308,7 +1308,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Delete Metadata Field
     for key in metadata_keys:
         metadata = metadata_gold_dict.copy()
@@ -1323,7 +1323,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Add Metadata Field
     metadata = metadata_gold_dict.copy()
     metadata['foo'] = 'bar'
@@ -1339,7 +1339,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Wrong Metadata Field Value
     for key in metadata_keys:
         metadata = metadata_gold_dict.copy()
@@ -1360,7 +1360,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Misstyped Type in Metadata Schema Value
     metadata = metadata_gold_dict.copy()
     metadata['schema'] = metadata['schema'].replace('int64', 'unt64')
@@ -1374,7 +1374,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Wrong Type in Metadata Schema Value
     metadata = metadata_gold_dict.copy()
     metadata['schema'] = metadata['schema'].replace('string', 'int64')
@@ -1388,7 +1388,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Wrong Syntax in Metadata Schema Value
     metadata = metadata_gold_dict.copy()
     metadata['schema'] = metadata['schema'].replace(']', '')
@@ -1402,7 +1402,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Write Text File as Metadata
     save_metadata(metadata_url, "foo")
     with pytest.raises(requests.exceptions.HTTPError):
@@ -1456,7 +1456,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
 
     array_gold = pandas.DataFrame(
-        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j <5
+        data=[(i, j) + ((float(i * 10), str(i * 10)) if i < 10 and j < 5
                         else (float(i * j), str(i * j)))
               for i in range(20)
               for j in range(10)],
@@ -1474,7 +1474,7 @@ xsave(
                      'schema',
                      'version')
 
-
+    # ---
     # Wrong Namespace in Metadata
     metadata = metadata_gold_dict.copy()
     metadata['namespace'] = 'foo'
@@ -1487,7 +1487,6 @@ xsave(
     array = scidb_con2.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
-
 
     # Cleanup
     scidb_con.drop_user('bar')

@@ -48,7 +48,8 @@ xsave(
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
-    pandas.testing.assert_frame_equal(array,
+    pandas.testing.assert_frame_equal(
+        array,
         pandas.DataFrame({'i': range(20), 'v': numpy.arange(0.0, 20.0)}))
 
 
@@ -74,7 +75,8 @@ xsave(
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
-    pandas.testing.assert_frame_equal(array,
+    pandas.testing.assert_frame_equal(
+        array,
         pandas.DataFrame({'i': range(20),
                           'v': numpy.arange(0.0, 20.0),
                           'w': (numpy.arange(0.0, 20.0) *
@@ -112,9 +114,9 @@ xsave(
             v_lst.append(float(i))
 
     pandas.testing.assert_frame_equal(array,
-        pandas.DataFrame({'i': i_lst,
-                          'j': j_lst,
-                          'v': v_lst}))
+                                      pandas.DataFrame({'i': i_lst,
+                                                        'j': j_lst,
+                                                        'v': v_lst}))
 
 
 @pytest.mark.parametrize(
@@ -189,7 +191,9 @@ def test_type(scidb_con, url, type_name, is_null, type_numpy, chunk_size):
     else:
         v = type_numpy(range(max_val))
 
-    pandas.testing.assert_frame_equal(array, pandas.DataFrame({'i': range(max_val), 'v': v}))
+    pandas.testing.assert_frame_equal(
+        array,
+        pandas.DataFrame({'i': range(max_val), 'v': v}))
 
 
 # Test for Empty Cells
@@ -226,9 +230,9 @@ xsave(
                 v_lst.append(float(i))
 
     pandas.testing.assert_frame_equal(array,
-        pandas.DataFrame({'i': i_lst,
-                          'j': j_lst,
-                          'v': v_lst}))
+                                      pandas.DataFrame({'i': i_lst,
+                                                        'j': j_lst,
+                                                        'v': v_lst}))
 
 
 @pytest.mark.parametrize('url, dim_start, dim_end, chunk_size',
@@ -268,9 +272,9 @@ filter(
                 v_lst.append(float(i))
 
     pandas.testing.assert_frame_equal(array,
-        pandas.DataFrame({'i': i_lst,
-                          'j': j_lst,
-                          'v': v_lst}))
+                                      pandas.DataFrame({'i': i_lst,
+                                                        'j': j_lst,
+                                                        'v': v_lst}))
 
 
 @pytest.mark.parametrize('url', test_urls)
@@ -298,8 +302,8 @@ xsave(
             v_lst.append(numpy.nan)
 
     pandas.testing.assert_frame_equal(array,
-        pandas.DataFrame({'i': i_lst,
-                          'v': v_lst}))
+                                      pandas.DataFrame({'i': i_lst,
+                                                        'v': v_lst}))
 
 
 @pytest.mark.parametrize('url', test_urls)
@@ -318,7 +322,8 @@ xsave(
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
-    pandas.testing.assert_frame_equal(array,
+    pandas.testing.assert_frame_equal(
+        array,
         pandas.DataFrame({'i': range(size),
                           'v': numpy.arange(0.0, float(size))}))
 
@@ -356,7 +361,8 @@ xsave(
         array = scidb_con.iquery(que, fetch=True)
         array = array.sort_values(by=['i']).reset_index(drop=True)
 
-        pandas.testing.assert_frame_equal(array,
+        pandas.testing.assert_frame_equal(
+            array,
             pandas.DataFrame(data=((i, i, i * i)
                                    for i in range(1000)
                                    if (i % 100 < 80 or i >= 800)),
@@ -515,12 +521,12 @@ xsave(
                                   columns=('i', 'j', 'v', 'w'))
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     ar = scidbbridge.Array(url)
     index_gold = ar.read_index()
     index_url = '{}/index/0'.format(url)
 
-
+    # ---
     # Add Column to Index
     index = index_gold.copy(True)
     index['k'] = index['i']
@@ -539,7 +545,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Remove Column from Index
     index = index_gold.copy(True)
     index = index.drop(['j'], axis=1)
@@ -558,7 +564,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Change Column to String in Index
     index = index_gold.copy(True)
     index['j'] = 'foo'
@@ -577,7 +583,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Index Not Compressed
     index = index_gold.copy(True)
     index_table = pyarrow.Table.from_pandas(index)
@@ -595,7 +601,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Write Text File as Index
     parts = urllib.parse.urlparse(index_url)
     if parts.scheme == 's3':
@@ -641,13 +647,13 @@ xsave(
                                   columns=('i', 'j', 'v', 'w'))
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     ar = scidbbridge.Array(url)
     ch = ar.get_chunk(0, 0)
     chunk_gold = ch.to_pandas()
     chunk_url = '{}/chunks/c_0_0'.format(url)
 
-
+    # ---
     # Add Column to Chunk
     chunk = chunk_gold.copy(True)
     chunk['x'] = chunk['v']
@@ -667,7 +673,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Remove Column from Chunk
     chunk = chunk_gold.copy(True)
     chunk = chunk.drop(['w'], axis=1)
@@ -687,7 +693,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Change Column to String in Chunk
     chunk = chunk_gold.copy(True)
     chunk['v'] = 'foo'
@@ -707,7 +713,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Chunk Compressed
     chunk = chunk_gold.copy(True)
     chunk_table = pyarrow.Table.from_pandas(chunk)
@@ -726,7 +732,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Write Text File as Chunk
     parts = urllib.parse.urlparse(chunk_url)
     if parts.scheme == 's3':
@@ -773,13 +779,13 @@ xsave(
                                   columns=('i', 'j', 'v', 'w'))
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     ar = scidbbridge.Array(url)
     ch = ar.get_chunk(0, 0)
     chunk_gold = ch.to_pandas()
     chunk_url = '{}/chunks/c_0_0'.format(url)
 
-
+    # ---
     # Add Column to Chunk
     chunk = chunk_gold.copy(True)
     chunk['x'] = chunk['v']
@@ -799,7 +805,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Remove Column from Chunk
     chunk = chunk_gold.copy(True)
     chunk = chunk.drop(['w'], axis=1)
@@ -819,7 +825,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Change Column to String in Chunk
     chunk = chunk_gold.copy(True)
     chunk['v'] = 'foo'
@@ -839,7 +845,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Chunk Not Compressed
     chunk = chunk_gold.copy(True)
     chunk_table = pyarrow.Table.from_pandas(chunk)
@@ -858,7 +864,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Write Text File as Chunk
     parts = urllib.parse.urlparse(chunk_url)
     if parts.scheme == 's3':
@@ -893,7 +899,7 @@ xsave(
     build({}, i * j),
     w, string(v)),
   '{}')""".format(schema.replace(', w:string', ''),
-                                      url))
+                  url))
 
     # Input
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
@@ -916,7 +922,7 @@ xsave(
                      'schema',
                      'version')
 
-
+    # ---
     # Delete Metadata
     scidbbridge.driver.Driver.delete(metadata_url)
     with pytest.raises(requests.exceptions.HTTPError):
@@ -928,7 +934,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Delete Metadata Field
     for key in metadata_keys:
         metadata = metadata_gold_dict.copy()
@@ -943,7 +949,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Add Metadata Field
     metadata = metadata_gold_dict.copy()
     metadata['foo'] = 'bar'
@@ -958,7 +964,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Wrong Metadata Field Value
     for key in metadata_keys:
         metadata = metadata_gold_dict.copy()
@@ -978,7 +984,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Misstyped Type in Metadata Schema Value
     metadata = metadata_gold_dict.copy()
     metadata['schema'] = metadata['schema'].replace('int64', 'unt64')
@@ -992,7 +998,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Wrong Type in Metadata Schema Value
     metadata = metadata_gold_dict.copy()
     metadata['schema'] = metadata['schema'].replace('string', 'int64')
@@ -1006,7 +1012,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Wrong Syntax in Metadata Schema Value
     metadata = metadata_gold_dict.copy()
     metadata['schema'] = metadata['schema'].replace(']', '')
@@ -1020,7 +1026,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Write Text File as Metadata
     save_metadata(metadata_url, "foo")
     with pytest.raises(requests.exceptions.HTTPError):
@@ -1055,7 +1061,7 @@ xsave(
     build({}, i * j),
     w, string(v)),
   '{}')""".format(schema.replace(', w:string', ''),
-                                      url))
+                  url))
 
     # Input
     array = scidb_con2.iquery("xinput('{}')".format(url), fetch=True)
@@ -1078,7 +1084,7 @@ xsave(
                      'schema',
                      'version')
 
-
+    # ---
     # Wrong Namespace in Metadata
     metadata = metadata_gold_dict.copy()
     metadata['namespace'] = 'foo'
@@ -1092,7 +1098,7 @@ xsave(
     array = array.sort_values(by=['i', 'j']).reset_index(drop=True)
     pandas.testing.assert_frame_equal(array, array_gold)
 
-
+    # ---
     # Cleanup
     scidb_con.drop_user('bar')
 
@@ -1168,9 +1174,10 @@ xsave(
     array = scidb_con.iquery("xinput('{}')".format(url), fetch=True)
     array = array.sort_values(by=['i']).reset_index(drop=True)
 
-    array_gold = pandas.DataFrame({'i': range(20),
-                                   'v': map(lambda i: -float(i), range(20)),
-                                   'w': map(lambda i: float(i * 10), range(20))})
+    array_gold = pandas.DataFrame(
+        {'i': range(20),
+         'v': map(lambda i: -float(i), range(20)),
+         'w': map(lambda i: float(i * 10), range(20))})
     pandas.testing.assert_frame_equal(array, array_gold)
 
     # Missing Columns
@@ -1179,7 +1186,8 @@ xsave(
         chunk.from_pandas(
             pandas.DataFrame(((i, i * 10) for i in range(10, 20)),
                              columns=list('iw')))
-    assert 'do not match array attributes plus dimensions count' in str(ex.value)
+    assert ('do not match array attributes plus dimensions count'
+            in str(ex.value))
 
     # Wrong Columns
     chunk = scidbbridge.Array(url).get_chunk(10)
