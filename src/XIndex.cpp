@@ -324,11 +324,11 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
             // Prepare Shared Buffer
             std::shared_ptr<SharedBuffer> buf;
             if (coordBuf[remoteID].size() == 0)
-                buf = std::shared_ptr<SharedBuffer>(new MemoryBuffer(NULL, 1));
+	      buf = std::shared_ptr<SharedBuffer>(new MemoryBuffer(SCIDB_CODE_LOC, NULL, 1));
             else
                 buf = std::shared_ptr<SharedBuffer>(
                     // Have to copy it
-                    new MemoryBuffer(
+                    new MemoryBuffer(SCIDB_CODE_LOC, 
                         coordBuf[remoteID].data(),
                         coordBuf[remoteID].size() * sizeof(Coordinate)));
 
@@ -371,7 +371,7 @@ std::shared_ptr<SharedBuffer> XIndex::serialize() const {
     // the index is empty or there will be nothing sent after the
     // filter is applied
     if (size() == 0)
-        return std::shared_ptr<SharedBuffer>(new MemoryBuffer(NULL, 1));
+        return std::shared_ptr<SharedBuffer>(new MemoryBuffer(SCIDB_CODE_LOC, NULL, 1));
 
     // Serialize Coordinates
     // ---
@@ -379,7 +379,7 @@ std::shared_ptr<SharedBuffer> XIndex::serialize() const {
     // because of the NULL. We get a pointer to the buffer and write
     // the data in it.
     std::shared_ptr<SharedBuffer> buf(
-        new MemoryBuffer(NULL, size() * _nDims * sizeof(Coordinate)));
+        new MemoryBuffer(SCIDB_CODE_LOC, NULL, size() * _nDims * sizeof(Coordinate)));
     Coordinate *mem = static_cast<Coordinate*>(buf->getWriteData());
     int i = 0;
     for (auto posPtr = begin(); posPtr != end(); ++posPtr, ++i)

@@ -27,6 +27,7 @@
 #include "FSDriver.h"
 
 // SciDB
+#include <query/ClientTransaction.h>
 #include <query/LogicalQueryPlan.h>
 #include <query/Parser.h>
 #include <query/Query.h>
@@ -40,10 +41,12 @@ const ArrayDesc& Metadata::getSchema(std::shared_ptr<Query> query) {
         return _schema;
 
     // Build Fake Query and Extract Schema
+    auto transaction = ClientTransaction::create(InstanceKind::Coordinator);
     std::shared_ptr<Query> innerQuery = Query::createFakeQuery(
         query->getPhysicalCoordinatorID(),
         query->mapLogicalToPhysical(query->getInstanceID()),
-        query->getCoordinatorLiveness());
+        query->getCoordinatorLiveness(),
+        transaction);
 
     // Create a scope where the query's arena is responsible for
     // memory allocation.

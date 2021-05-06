@@ -33,9 +33,10 @@ Install extra-scidb-libs following the instructions
    1. RHEL/CentOS:
       ```
       yum install libcurl-devel
-      yum install https://downloads.paradigm4.com/devtoolset-3/centos/7/sclo/x86_64/rh/devtoolset-3/scidb-devtoolset-3.noarch.rpm
-      yum install cmake3 devtoolset-3-runtime devtoolset-3-toolchain
-      scl enable devtoolset-3 bash
+      yum install centos-release-scl  # repo for devtoolset-9
+      yum install devtoolset-9
+      yum install cmake3
+      scl enable devtoolset-9 bash
       ```
 1. Download and unzip the SDK:
    ```
@@ -63,8 +64,8 @@ Install extra-scidb-libs following the instructions
            -DCMAKE_BUILD_TYPE=RelWithDebInfo                            \
            -DBUILD_SHARED_LIBS=ON                                       \
            -DCMAKE_INSTALL_PREFIX=/opt/aws                              \
-           -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc     \
-           -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++
+           -DCMAKE_C_COMPILER=/opt/rh/devtoolset-9/root/usr/bin/gcc     \
+           -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-9/root/usr/bin/g++
        ```
 1. Compile and install the SDK:
    ```
@@ -95,10 +96,11 @@ Install extra-scidb-libs following the instructions
 
 Compile cURL with OpenSSL (instead of NSS):
 ```
-> curl https://curl.haxx.se/download/curl-7.72.0.tar.gz | tar xz
+> wget https://curl.se/download/curl-7.72.0.tar.gz
+> tar xzf curl-7.72.0.tar.gz
 > ./configure --prefix=/opt/curl
 > make
-> make install
+> sudo make install
 ```
 More details: https://github.com/aws/aws-sdk-cpp/issues/1491
 
@@ -112,7 +114,7 @@ More details: https://github.com/aws/aws-sdk-cpp/issues/1491
    ```
 1. Install in SciDB:
    ```
-   bridge> cp libbridge.so /opt/scidb/19.11/lib/scidb/plugins
+   bridge> sudo cp libbridge.so /opt/scidb/19.11/lib/scidb/plugins
    ```
 1. Restart SciDB and load the plug-in:
    ```

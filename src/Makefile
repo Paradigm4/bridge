@@ -44,13 +44,13 @@ $(info Using CURL_LIB=$(CURL_LIB))
 CFLAGS  := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -Wall -Wextra -Wno-long-long -Wno-strict-aliasing -Wno-system-headers -Wno-unused -Wno-unused-parameter -Wno-variadic-macros -fPIC -fno-omit-frame-pointer -g -std=c++14
 CFLAGS  += -DAWS_COMMON_USE_IMPORT_EXPORT -DAWS_EVENT_STREAM_USE_IMPORT_EXPORT -DAWS_SDK_VERSION_MAJOR=1 -DAWS_SDK_VERSION_MINOR=8 -DAWS_SDK_VERSION_PATCH=3
 
-INC     := -DPROJECT_ROOT="\"$(SCIDB)\"" -I. -I"$(SCIDB)/include" -I"$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/include"
+INC     := -DPROJECT_ROOT="\"$(SCIDB)\"" -I. -I"$(SCIDB)/include" -I"/usr/include/boost169"
 INC     += -I/opt/aws/include
 
 CPPFLAGS := $(CFLAGS) $(INC)
 # CPPFLAGS += -Wfatal-errors
 
-LIBS    := -shared -Wl,-soname,libbridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
+LIBS    := -shared -Wl,-soname,libbridge.so -L . -L "/usr/lib64/" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
 LIBS    += -rdynamic $(AWS_LIB)/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,$(AWS_LIB) $(CURL_LIB)
 
 SRCS    := plugin.cpp LogicalXSave.cpp PhysicalXSave.cpp LogicalXInput.cpp PhysicalXInput.cpp XArray.cpp XIndex.cpp S3Driver.cpp FSDriver.cpp Driver.cpp
