@@ -37,7 +37,6 @@
 #include <arrow/io/compressed.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/reader.h>
-#include <arrow/util/compression.h>
 
 
 #define ASSIGN_OR_THROW(lhs, rexpr)                     \

@@ -53,15 +53,15 @@ typedef struct {
 
 class XCache {
 public:
-    XCache(std::shared_ptr<ArrowReader>,
-           const std::string &path,
-           const Dimensions&,
+    XCache(const ArrayDesc&,
+           const Metadata::Compression,
+           std::shared_ptr<const Driver> driver,
            size_t);
 
     std::shared_ptr<arrow::RecordBatch> get(Coordinates);
 
 private:
-    const std::shared_ptr<ArrowReader> _arrowReader;
+    ArrowReader _arrowReader;
     const std::string _path;
     const Dimensions _dims;
     size_t _size;
@@ -71,17 +71,14 @@ private:
     std::mutex _lock;
 };
 
-class XArray;
-class XArrayIterator;
 class XChunk;
 
 class XChunkIterator : public ConstChunkIterator
 {
 public:
-    XChunkIterator(const XArray& array,
-                   XChunk const* chunk,
+    XChunkIterator(const XChunk&,
                    int iterationMode,
-                   std::shared_ptr<arrow::RecordBatch> arrowBatch);
+                   std::shared_ptr<arrow::RecordBatch>);
 
     int getMode() const override;
     bool isEmpty() const override;
@@ -97,10 +94,9 @@ public:
 private:
     int64_t getCoord(size_t dim, int64_t index);
 
-    const XArray& _array;
+    const XChunk& _chunk;
     const size_t _nAtts;
     const size_t _nDims;
-    const XChunk* const _chunk;
     const int _iterationMode;
 
     Coordinates _firstPos;
@@ -123,12 +119,14 @@ private:
     bool _hasCurrent;
 };
 
+class XArrayIterator;
+
 class XChunk : public ConstChunk
 {
     friend class XChunkIterator;
 
 public:
-    XChunk(XArray& array, AttributeID attrID);
+    XChunk(XArrayIterator&);
 
     virtual const ArrayDesc& getArrayDesc() const;
     virtual const AttributeDesc& getAttributeDesc() const;
@@ -142,38 +140,41 @@ public:
     void download();
 
 private:
-    const XArray& _array;
-    const Dimensions _dims;
-    const size_t _nDims;
+    XArrayIterator& _arrayIt;
     Coordinates _firstPos;
     Coordinates _lastPos;
     Coordinates _firstPosWithOverlap;
     Coordinates _lastPosWithOverlap;
-    const AttributeID _attrID;
-    const AttributeDesc& _attrDesc;
-    const TypeEnum _attrType;
 
     std::shared_ptr<arrow::RecordBatch> _arrowBatch;
 };
 
+class XArray;
+
 class XArrayIterator : public ConstArrayIterator
 {
+    friend class XChunk;
+    friend class XChunkIterator;
+
 public:
-    XArrayIterator(XArray& array, AttributeID attrID);
+    XArrayIterator(const XArray&, AttributeID);
 
     ConstChunk const& getChunk() override;
     bool end() override;
     void operator ++() override;
     Coordinates const& getPosition() override;
-    bool setPosition(Coordinates const& pos) override;
+    bool setPosition(const Coordinates& pos) override;
     void restart() override;
 
 private:
     void _nextChunk();
 
     const XArray& _array;
+    const Dimensions& _dims;
     const AttributeID _attrID;
-    const Dimensions _dims;
+    const AttributeDesc& _attrDesc;
+    const TypeEnum _attrType;
+    ArrowReader _arrowReader;
     XChunk _chunk;
 
     Coordinates _currPos;
@@ -185,8 +186,8 @@ private:
 class XArray : public Array
 {
     friend class XArrayIterator;
-    friend class XChunkIterator;
     friend class XChunk;
+    friend class XChunkIterator;
 
 public:
     XArray(const ArrayDesc&,
@@ -208,11 +209,11 @@ private:
     const ArrayDesc _desc;
     std::shared_ptr<Query> _query;
 
-    // XBridge members
+    // Bridge members
     std::shared_ptr<const Driver> _driver;
     std::shared_ptr<const XIndex> _index;
-    std::shared_ptr<ArrowReader> _arrowReader; // Array Reader
     std::unique_ptr<XCache> _cache;
+    const Metadata::Compression _compression;
 };
 
 } // namespace scidb

@@ -51,14 +51,16 @@ namespace scidb {
     //
     // XCache
     //
-    XCache::XCache(
-        std::shared_ptr<ArrowReader> arrowReader,
-        const std::string &path,
-        const Dimensions &dims,
-        size_t cacheSize):
-        _arrowReader(arrowReader),
-        _path(path),
-        _dims(dims),
+    XCache::XCache(const ArrayDesc &desc,
+                   const Metadata::Compression compression,
+                   std::shared_ptr<const Driver> driver,
+                   size_t cacheSize):
+        _arrowReader(desc.getAttributes(true),
+                     desc.getDimensions(),
+                     compression,
+                     driver),
+        _path(driver->getURL()),
+        _dims(desc.getDimensions()),
         _size(0),
         _sizeMax(cacheSize)
     {}
@@ -73,9 +75,9 @@ namespace scidb {
                 // Download Chunk
                 auto objectName =
                     "chunks/" + Metadata::coord2ObjectName(pos, _dims);
-                auto arrowSize = _arrowReader->readObject(objectName,
-                                                          false,
-                                                          arrowBatch);
+                auto arrowSize = _arrowReader.readObject(objectName,
+                                                         false,
+                                                         arrowBatch);
 
                 // Check if Record Batch Fits in Cache
                 if (arrowSize > _sizeMax) {
@@ -125,31 +127,30 @@ namespace scidb {
     //
     // XChunk Iterator
     //
-    XChunkIterator::XChunkIterator(const XArray& array,
-                                   const XChunk* chunk,
+    XChunkIterator::XChunkIterator(const XChunk& chunk,
                                    int iterationMode,
                                    std::shared_ptr<arrow::RecordBatch> arrowBatch):
-        _array(array),
-        _nAtts(array._desc.getAttributes(true).size()),
-        _nDims(array._desc.getDimensions().size()),
         _chunk(chunk),
+        _nAtts(chunk._arrayIt._array._desc.getAttributes(true).size()),
+        _nDims(chunk._arrayIt._dims.size()),
         _iterationMode(iterationMode),
-        _firstPos(chunk->_nDims),
-        _lastPos(chunk->_nDims),
-        _currPos(chunk->_nDims),
-        _value(TypeLibrary::getType(chunk->getAttributeDesc().getType())),
-        _nullable(chunk->getAttributeDesc().isNullable()),
+        _firstPos(_nDims),
+        _lastPos(_nDims),
+        _currPos(_nDims),
+        _value(TypeLibrary::getType(chunk.getAttributeDesc().getType())),
+        _nullable(chunk.getAttributeDesc().isNullable()),
         _arrowBatch(arrowBatch),
-        _arrowLength(arrowBatch->column(array._desc.getAttributes(true).size())->length())
+        _arrowLength(arrowBatch->column(_nAtts)->length())
     {
         _trueValue.setBool(true);
         _nullValue.setNull();
 
+        auto attrID = chunk._arrayIt._attrID;
         if (_arrowLength > 0) {
-            if (!_chunk->getAttributeDesc().isEmptyIndicator()) {
-                _arrowArray = arrowBatch->column(chunk->_attrID);
-                _arrowNullCount = arrowBatch->column(chunk->_attrID)->null_count();
-                _arrowNullBitmap = arrowBatch->column(chunk->_attrID)->null_bitmap_data();
+            if (!_chunk.getAttributeDesc().isEmptyIndicator()) {
+                _arrowArray = arrowBatch->column(attrID);
+                _arrowNullCount = arrowBatch->column(attrID)->null_count();
+                _arrowNullBitmap = arrowBatch->column(attrID)->null_bitmap_data();
             }
             for (size_t i = 0; i < _nDims; ++i) {
                 _firstPos[i] = getCoord(i, 0);
@@ -174,14 +175,14 @@ namespace scidb {
         if (!_hasCurrent)
             throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
-        if (_chunk->getAttributeDesc().isEmptyIndicator())
+        if (_chunk.getAttributeDesc().isEmptyIndicator())
             return _trueValue;
 
         if (_arrowNullCount != 0 &&
             ! (_arrowNullBitmap[_arrowIndex / 8] & 1 << _arrowIndex % 8))
             _value = _nullValue;
         else
-            switch (_chunk->_attrType) {
+            switch (_chunk._arrayIt._attrType) {
             case TE_BINARY:
             {
                 int32_t sz;
@@ -204,7 +205,7 @@ namespace scidb {
                 if (str.length() != 1) {
                     std::ostringstream out;
                     out << "Invalid value for attribute "
-                        << _chunk->getArrayDesc().getAttributes(true).findattr(_chunk->_attrID).getName();
+                        << _chunk._arrayIt._attrDesc.getName();
                     throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
                                            SCIDB_LE_ILLEGAL_OPERATION) << out.str();
                 }
@@ -275,7 +276,7 @@ namespace scidb {
             {
                 std::ostringstream out;
                 out << "Type "
-                    << _chunk->getArrayDesc().getAttributes(true).findattr(_chunk->_attrID).getType()
+                    << _chunk.getAttributeDesc().getType()
                     << " not supported";
                 throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
                                        SCIDB_LE_ILLEGAL_OPERATION) << out.str();
@@ -372,85 +373,84 @@ namespace scidb {
         return _iterationMode;
     }
 
-    Coordinates const& XChunkIterator::getPosition()
+    const Coordinates& XChunkIterator::getPosition()
     {
         return _currPos;
     }
 
-    ConstChunk const& XChunkIterator::getChunk()
+    const ConstChunk& XChunkIterator::getChunk()
     {
-        return *_chunk;
+        return _chunk;
     }
 
     std::shared_ptr<Query> XChunkIterator::getQuery() {
-        return _array._query;
+        return _chunk._arrayIt._array._query;
     }
 
     //
     // XChunk
     //
-    XChunk::XChunk(XArray& array, AttributeID attrID):
-        _array(array),
-        _dims(array._desc.getDimensions()),
-        _nDims(array._desc.getDimensions().size()),
-        _firstPos(array._desc.getDimensions().size()),
-        _lastPos(array._desc.getDimensions().size()),
-        _firstPosWithOverlap(array._desc.getDimensions().size()),
-        _lastPosWithOverlap(array._desc.getDimensions().size()),
-        _attrID(attrID),
-        _attrDesc(array._desc.getAttributes().findattr(attrID)),
-        _attrType(typeId2TypeEnum(array._desc.getAttributes().findattr(attrID).getType(), true))
+    XChunk::XChunk(XArrayIterator& arrayIt):
+        _arrayIt(arrayIt),
+        _firstPos(arrayIt._dims.size()),
+        _lastPos(_firstPos),
+        _firstPosWithOverlap(_firstPos),
+        _lastPosWithOverlap(_firstPos)
     {}
 
     void XChunk::download()
     {
-        if (_array._cache != NULL)
-            _arrowBatch = _array._cache->get(_firstPos);
+        if (_arrayIt._array._cache != NULL)
+            _arrowBatch = _arrayIt._array._cache->get(_firstPos);
         else {
             // Cache is disabled
             auto objectName =
-                "chunks/" + Metadata::coord2ObjectName(_firstPos, _dims);
-            _array._arrowReader->readObject(objectName, true, _arrowBatch);
+                "chunks/" + Metadata::coord2ObjectName(_firstPos,
+                                                       _arrayIt._dims);
+            _arrayIt._arrowReader.readObject(objectName, true, _arrowBatch);
         }
     }
 
     void XChunk::setPosition(Coordinates const& pos)
     {
+        auto dims = _arrayIt._dims;
+        auto nDims = dims.size();
+
         // Set _firstPos, _firstPosWithOverlap, _lastPos, and
         // _lastPosWithOverlap based on given pos
         _firstPos = pos;
-        for (size_t i = 0; i < _nDims; i++) {
-            _firstPosWithOverlap[i] = _firstPos[i] - _dims[i].getChunkOverlap();
-            if (_firstPosWithOverlap[i] < _dims[i].getStartMin())
-                _firstPosWithOverlap[i] = _dims[i].getStartMin();
-            _lastPos[i] = _firstPos[i] + _dims[i].getChunkInterval() - 1;
-            _lastPosWithOverlap[i] = _lastPos[i] + _dims[i].getChunkOverlap();
-            if (_lastPos[i] > _dims[i].getEndMax())
-                _lastPos[i] = _dims[i].getEndMax();
-            if (_lastPosWithOverlap[i] > _dims[i].getEndMax())
-                _lastPosWithOverlap[i] = _dims[i].getEndMax();
+        for (size_t i = 0; i < nDims; i++) {
+            _firstPosWithOverlap[i] = _firstPos[i] - dims[i].getChunkOverlap();
+            if (_firstPosWithOverlap[i] < dims[i].getStartMin())
+                _firstPosWithOverlap[i] = dims[i].getStartMin();
+            _lastPos[i] = _firstPos[i] + dims[i].getChunkInterval() - 1;
+            _lastPosWithOverlap[i] = _lastPos[i] + dims[i].getChunkOverlap();
+            if (_lastPos[i] > dims[i].getEndMax())
+                _lastPos[i] = dims[i].getEndMax();
+            if (_lastPosWithOverlap[i] > dims[i].getEndMax())
+                _lastPosWithOverlap[i] = dims[i].getEndMax();
         }
     }
 
     std::shared_ptr<ConstChunkIterator> XChunk::getConstIterator(int iterationMode) const
     {
         return std::shared_ptr<ConstChunkIterator>(
-            new XChunkIterator(_array, this, iterationMode, _arrowBatch));
+            new XChunkIterator(*this, iterationMode, _arrowBatch));
     }
 
     Array const& XChunk::getArray() const
     {
-        return _array;
+        return _arrayIt._array;
     }
 
     const ArrayDesc& XChunk::getArrayDesc() const
     {
-        return _array._desc;
+        return _arrayIt._array._desc;
     }
 
     const AttributeDesc& XChunk::getAttributeDesc() const
     {
-        return _attrDesc;
+        return _arrayIt._attrDesc;
     }
 
     Coordinates const& XChunk::getFirstPosition(bool withOverlap) const
@@ -465,30 +465,39 @@ namespace scidb {
 
     CompressorType XChunk::getCompressionMethod() const
     {
-        return _array._desc.getAttributes().findattr(_attrID).getDefaultCompressionMethod();
+        return _arrayIt._attrDesc.getDefaultCompressionMethod();
     }
 
     //
     // XArray Iterator
     //
-    XArrayIterator::XArrayIterator(XArray& array, AttributeID attrID):
+    XArrayIterator::XArrayIterator(const XArray& array, AttributeID attrID):
         ConstArrayIterator(array),
         _array(array),
-        _attrID(attrID),
         _dims(array._desc.getDimensions()),
-        _chunk(array, attrID),
-        _hasCurrent(false)
+        _attrID(attrID),
+        _attrDesc(array._desc.getAttributes().findattr(attrID)),
+        _attrType(typeId2TypeEnum(_attrDesc.getType(), true)),
+        _arrowReader(array._desc.getAttributes(true),
+                     _dims,
+                     array._compression,
+                     array._driver),
+        _chunk(*this)
     {
+
+        // Sets _hasCurrent & _chunkInitialized
         restart();
     }
 
     void XArrayIterator::operator ++()
     {
         if (!_hasCurrent)
-            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION,
+                                   SCIDB_LE_NO_CURRENT_ELEMENT);
 
         if (_currIndex == _array._index->end())
-            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION,
+                                   SCIDB_LE_NO_CURRENT_ELEMENT);
 
         Query::getValidQueryPtr(_array._query);
 
@@ -539,13 +548,16 @@ namespace scidb {
         Query::getValidQueryPtr(_array._query);
 
         _currIndex = _array._index->begin();
+
+        // Sets _hasCurrent & _chunkInitialized
         _nextChunk();
     }
 
     ConstChunk const& XArrayIterator::getChunk()
     {
         if (!_hasCurrent)
-            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION,
+                                   SCIDB_LE_NO_CURRENT_ELEMENT);
 
         Query::getValidQueryPtr(_array._query);
 
@@ -583,23 +595,18 @@ namespace scidb {
         _desc(desc),
         _query(query),
         _driver(driver),
-        _index(index)
+        _index(index),
+        _compression(compression)
     {
         auto nInst = _query->getInstancesCount();
         SCIDB_ASSERT(nInst > 0 && _query->getInstanceID() < nInst);
 
-        // Prepare Reader
-        _arrowReader = std::make_shared<ArrowReader>(desc.getAttributes(true),
-                                                     desc.getDimensions(),
-                                                     compression,
-                                                     _driver);
-
         // If Cache Size Is 0, The Cache Will Be disabled
         if (cacheSize > 0)
-            _cache = std::make_unique<XCache>(_arrowReader,
-                                               _driver->getURL(),
-                                               _desc.getDimensions(),
-                                               cacheSize);
+            _cache = std::make_unique<XCache>(desc,
+                                              compression,
+                                              driver,
+                                              cacheSize);
     }
 
     ArrayDesc const& XArray::getArrayDesc() const {
@@ -609,6 +616,6 @@ namespace scidb {
     std::shared_ptr<ConstArrayIterator> XArray::getConstIteratorImpl(
         const AttributeDesc& attr) const {
         return std::shared_ptr<ConstArrayIterator>(
-            new XArrayIterator(*(XArray*)this, attr.getId()));
+            new XArrayIterator(*this, attr.getId()));
     }
 } // scidb namespace

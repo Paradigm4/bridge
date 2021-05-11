@@ -33,6 +33,9 @@
 #include <array/Dimensions.h>
 #include <query/InstanceID.h>
 
+// Arrow
+#include <arrow/util/compression.h>
+
 
 // Forward Declarastions to avoid including full headers - speed-up
 // compilation
@@ -51,9 +54,6 @@ namespace arrow {
         class BufferReader;
         class CompressedInputStream;
     }
-    namespace util {
-        class Codec;
-    }
 }
 // -- End of Forward Declarations
 
@@ -64,7 +64,6 @@ namespace std {
 } // namespace std
 
 namespace scidb {
-
 // --
 // -- - ArrowReader - --
 // --
