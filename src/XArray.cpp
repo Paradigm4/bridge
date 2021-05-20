@@ -354,8 +354,8 @@ namespace scidb {
 
     int64_t XChunkIterator::getCoord(size_t dim, int64_t index)
     {
-        return std::static_pointer_cast<arrow::Int64Array>(
-            _arrowBatch->column(_nAtts + dim))->raw_values()[index];
+        return _arrowBatch->column_data(
+            _nAtts + dim)->GetValues<int64_t>(1)[index];
     }
 
     bool XChunkIterator::end()
