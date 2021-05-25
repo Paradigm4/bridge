@@ -50,6 +50,10 @@ Array <- setRefClass(
 
     schema = function() {
       return(metadata()$schema)
+    },
+
+    index = function() {
+      return(.read_index(url), .metadata)
     }
   )
 )
@@ -97,4 +101,60 @@ Array <- setRefClass(
 
   schema <- split(df$V2, df$V1)
   return(schema)
+}
+
+# Extracts a table from a bucket/key combo
+.read_table = function(bucket, key, compression = FALSE) {
+  s3_obj = s3$get_object(Bucket = "bmsrd-ngs-64223", Key = "incoming/VariantWarehouse/bridge-test/chr22/index/0")
+
+  # Set the compression if we need to (only using gzip for now)
+  if(compression) {
+    stream = arrow::CompressedInputStream$create(arrow::BufferReader$create(s3_obj$Body), arrow::Codec$create("gzip"))
+  } else {
+    stream = arrow::CompressedInputStream$create(arrow::BufferReader$create(s3_obj$Body))
+  }
+
+  reader = arrow::RecordBatchStreamReader$create(stream)
+}
+
+.read_index = function(url, metadata) {
+
+  parts <- .parse_url(url)
+
+  keys = list()
+
+  if (parts$scheme == "s3") {
+    # Need to get all of the index arrays
+    truncated = TRUE
+    contToken = character(0)
+
+    # Get the set of keys to read
+    while(truncated) {
+      objects = s3$list_objects_v2(Bucket = parts$bucket, Prefix = parts$path, ContinuationToken = contToken)
+      truncated = objects$IsTruncated
+      contToken = objects$NextContinuationToken
+
+      append(keys, lapply(objects$Contents, function(x) unlist(x[c('Key')])))
+    }
+
+    return(rbind(lapply(function(x) .read_table_s3(bucket, x), keys)))
+
+  } else if (parts$scheme == "file") {
+    stop("Local files are yet to be implemented.")
+  }
+
+}
+
+# Read in a table in Arrow format, returning a data.frame
+.read_table_s3 <- function(bucket, key, gzipped = FALSE) {
+
+  s3_obj = .s3$get_object(Bucket = bucket, Key = key)
+  if(gzipped) {
+    stream = arrow::CompressedInputStream(arrow::BufferReader$create(s3_obj$body), arrow::Codec$create("gzip"))
+  } else {
+    stream = arrow::InputStream(arrow::BufferReader$create(s3_obj$body))
+  }
+
+  reader = arrow::RecordBatchStreamReader$create(stream)
+  return(as.data.frame(reader$read_table()))
 }
