@@ -34,6 +34,23 @@ from .driver import Driver
 
 __version__ = '19.11.1'
 
+type_map_pyarrow = dict(
+    [(t.__str__(), t) for t in (pyarrow.binary(),
+                                pyarrow.bool_(),
+                                pyarrow.int16(),
+                                pyarrow.int32(),
+                                pyarrow.int64(),
+                                pyarrow.int8(),
+                                pyarrow.string(),
+                                pyarrow.uint16(),
+                                pyarrow.uint32(),
+                                pyarrow.uint64(),
+                                pyarrow.uint8())] +
+    [('char', pyarrow.string()),
+     ('datetime', pyarrow.timestamp('s')),
+     ('double', pyarrow.float64()),
+     ('float', pyarrow.float32())])
+
 
 class Array(object):
     """Wrapper for SciDB array stored externally"""
@@ -144,7 +161,7 @@ class Array(object):
             split_size = int(self.metadata['index_split'])
 
         index_schema = pyarrow.schema(
-            [(d.name, pyarrow.int64()) for d in self.schema.dims])
+            [(d.name, pyarrow.int64(), False) for d in self.schema.dims])
         chunk_size = split_size // len(index.columns)
 
         # Remove existing index
@@ -159,7 +176,7 @@ class Array(object):
             writer = next(sink)
             writer.write_table(
                 pyarrow.Table.from_pandas(
-                    index.iloc[offset:offset + chunk_size]))
+                    index.iloc[offset:offset + chunk_size], index_schema))
             sink.close()
             i += 1
 
@@ -289,7 +306,13 @@ class Chunk(object):
                     vals.iloc[-1] >= coord + dim.chunk_length):
                 raise Exception("Coordinates outside chunk boundaries")
 
-        self._table = pyarrow.Table.from_pandas(pd)
+        # Build schema
+        schema = pyarrow.schema(
+            [(a.name, type_map_pyarrow[a.type_name], not a.not_null)
+             for a in self.array.schema.atts] +
+            [(d.name, pyarrow.int64(), False)
+             for d in self.array.schema.dims])
+        self._table = pyarrow.Table.from_pandas(pd, schema)
         self._table = self._table.replace_schema_metadata()
 
     def save(self):
