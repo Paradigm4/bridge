@@ -6,11 +6,113 @@
 This document contains installation and usage instructions of the
 `bridge` SciDB plugin.
 
+1. [Usage](#usage)
+   1. [Advanced Usage] (#advanced-usage)
 1. [Installation](#installation)
    1. [SciDB Plug-in](#scidb-plug-in)
    1. [Python Package](#python-package)
 1. [AWS Configuration](#aws-configuration)
-1. [Usage](#usage)
+
+## Usage
+
+1. Save SciDB array in S3:
+   ```
+   > iquery --afl
+   AFL% xsave(
+          filter(
+            apply(
+              build(<v:int64>[i=0:9:0:5; j=10:19:0:5], j + i),
+              w, double(v*v)),
+            i >= 5 and w % 2 = 0),
+          's3://p4tests/bridge/foo');
+   {chunk_no,dest_instance_id,source_instance_id} val
+   ```
+   The SciDB array is saved in the `p4tests` bucket in the `foo` object.
+1. Load SciDB array from S3 in Python:
+   ```
+   > python
+   >>> import scidbbridge
+   >>> ar = scidbbridge.Array('s3://p4tests/bridge/foo')
+
+   >>> ar.metadata
+   {'attribute':   'ALL',
+    'compression': None,
+    'format':      'arrow',
+    'index_split': '100000',
+    'namespace':   'public',
+    'schema':      '<v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]',
+    'version':     '1'}
+
+   >>> print(ar.schema)
+   <v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]
+
+   >>> ar.read_index()
+      i   j
+   0  5  10
+   1  5  15
+
+   >>> ch = ar.get_chunk(5, 15)
+   >>> ch.to_pandas()
+        v      w  i   j
+   0   20  400.0  5  15
+   1   22  484.0  5  17
+   2   24  576.0  5  19
+   ...
+   ```
+
+Note: If using the file system for storage, make sure the storage is
+shared across instances and that the path used by the non-admin SciDB
+users is in `io-paths-list` in SciDB `config.ini`.
+
+### Advanced Usage
+
+#### xsave
+
+Parameters:
+
+* `namespace`
+  * Assign the array to a specific namespace, defaults to
+    `public`. The user's read permission against the assigned
+    namespace is checked by `xinput` when the array is read.
+  * e.g., `xsave(..., namespace:public)`
+* `update`
+  * Specify if a new array is created (`update:false`, default) or an
+    existing array is updated (`update:true`)
+* `format`
+  * Specify array storage format. Currently only format supported and
+    the default is Apache Arrow
+  * e.g., `xsave(..., format:'arrow')`
+* `compression`
+  * Specify is the array should be stored compress and what
+    compression algorithm should be used. Currently only GZip
+    compression algorithm is supported. By default, no compression is
+    used.
+  * e.g., `xsave(..., compression:'gzip')`
+* `index_split`
+  * Specify how the index should be split in different index
+    files. The value represents the number of coordinates to store in
+    each index file. The resulting number of chunks index by each file
+    is equal to the number of coordinates specified divided by the
+    number of dimensions. The default value is `100,000`.
+  * e.g., `xsave(..., index_split:3000)` if the array has three
+    dimensions, then each index split will index `1,000` chunks.
+
+
+### Troubleshoot
+
+It is common for S3 to return _Access Denied_ for non-obvious cases
+like, for example, if the bucket specified does not exist. `xsave`
+includes an extended error message for this type of errors which
+include a link to a troubleshooting guide. E.g.:
+
+```
+> iquery -aq "xsave(build(<v:int64>[i=0:9], i), bucket_name:'foo', object_path:'bar')"
+UserException in file: PhysicalXSave.cpp function: uploadS3 line: 372 instance: s0-i1 (1)
+Error id: scidb::SCIDB_SE_ARRAY_WRITER::SCIDB_LE_UNKNOWN_ERROR
+Error description: Error while saving array. Unknown error: Upload to
+s3://foo/bar failed. Access Denied. See
+https://aws.amazon.com/premiumsupport/knowledge-center/s3-troubleshoot-403/.
+```
 
 ## Installation
 
@@ -155,70 +257,3 @@ pip install scidb-bridge
 
 Note: The credentials used need to have read/write permission to the
 S3 bucket used.
-
-## Usage
-
-1. Save SciDB array in S3:
-   ```
-   > iquery --afl
-   AFL% xsave(
-          filter(
-            apply(
-              build(<v:int64>[i=0:9:0:5; j=10:19:0:5], j + i),
-              w, double(v*v)),
-            i >= 5 and w % 2 = 0),
-          's3://p4tests/bridge/foo');
-   {chunk_no,dest_instance_id,source_instance_id} val
-   ```
-   The SciDB array is saved in the `p4tests` bucket in the `foo` object.
-1. Load SciDB array from S3 in Python:
-   ```
-   > python
-   >>> import scidbbridge
-   >>> ar = scidbbridge.Array('s3://p4tests/bridge/foo')
-
-   >>> ar.metadata
-   {'attribute':   'ALL',
-    'compression': None,
-    'format':      'arrow',
-    'index_split': '100000',
-    'namespace':   'public',
-    'schema':      '<v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]',
-    'version':     '1'}
-
-   >>> print(ar.schema)
-   <v:int64,w:double> [i=0:9:0:5; j=10:19:0:5]
-
-   >>> ar.read_index()
-      i   j
-   0  5  10
-   1  5  15
-
-   >>> ch = ar.get_chunk(5, 15)
-   >>> ch.to_pandas()
-        v      w  i   j
-   0   20  400.0  5  15
-   1   22  484.0  5  17
-   2   24  576.0  5  19
-   ...
-   ```
-
-Note: If using the file system for storage, make sure the storage is
-shared across instances and that the path used by the non-admin SciDB
-users is in `io-paths-list` in SciDB `config.ini`.
-
-### Troubleshoot
-
-It is common for S3 to return _Access Denied_ for non-obvious cases
-like, for example, if the bucket specified does not exist. `xsave`
-includes an extended error message for this type of errors which
-include a link to a troubleshooting guide. E.g.:
-
-```
-> iquery -aq "xsave(build(<v:int64>[i=0:9], i), bucket_name:'foo', object_path:'bar')"
-UserException in file: PhysicalXSave.cpp function: uploadS3 line: 372 instance: s0-i1 (1)
-Error id: scidb::SCIDB_SE_ARRAY_WRITER::SCIDB_LE_UNKNOWN_ERROR
-Error description: Error while saving array. Unknown error: Upload to
-s3://foo/bar failed. Access Denied. See
-https://aws.amazon.com/premiumsupport/knowledge-center/s3-troubleshoot-403/.
-```
