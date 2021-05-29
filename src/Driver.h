@@ -38,6 +38,7 @@
 
 // Arrow
 #include <arrow/buffer.h>
+#include <arrow/result.h>
 
 #define BRIDGE_VERSION 1
 #define INDEX_SPLIT_MIN 100
@@ -60,6 +61,13 @@
                 SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)      \
                     << _status.ToString().c_str();                      \
         }                                                               \
+    }
+
+#define ASSIGN_OR_THROW(lhs, rexpr)                     \
+    {                                                   \
+        auto status_name = (rexpr);                     \
+        THROW_NOT_OK(status_name.status());             \
+        lhs = std::move(status_name).ValueOrDie();      \
     }
 
 
@@ -193,7 +201,7 @@ protected:
                              buffer)->Resize(length, false));
         }
         else {
-            THROW_NOT_OK(arrow::AllocateBuffer(length, &buffer));
+            ASSIGN_OR_THROW(buffer, arrow::AllocateBuffer(length));
         }
     }
 

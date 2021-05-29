@@ -39,14 +39,6 @@
 #include <arrow/ipc/reader.h>
 
 
-#define ASSIGN_OR_THROW(lhs, rexpr)                     \
-    {                                                   \
-        auto status_name = (rexpr);                     \
-        THROW_NOT_OK(status_name.status());             \
-        lhs = std::move(status_name).ValueOrDie();      \
-    }
-
-
 namespace scidb {
 
 static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.xindex"));
@@ -63,7 +55,7 @@ ArrowReader::ArrowReader(
     _compression(compression),
     _driver(driver)
 {
-    THROW_NOT_OK(arrow::AllocateResizableBuffer(0, &_arrowResizableBuffer));
+    ASSIGN_OR_THROW(_arrowResizableBuffer, arrow::AllocateResizableBuffer(0));
 
     if (_compression == Metadata::Compression::GZIP)
         _arrowCodec = *arrow::util::Codec::Create(
@@ -99,12 +91,14 @@ size_t ArrowReader::readObject(
                         arrow::io::CompressedInputStream::Make(
                             _arrowCodec.get(), _arrowBufferReader));
         // Read Record Batch using Stream Reader
-        THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
-                         _arrowCompressedStream, &_arrowBatchReader));
+        ASSIGN_OR_THROW(
+            _arrowBatchReader,
+            arrow::ipc::RecordBatchStreamReader::Open(_arrowCompressedStream));
     }
     else {
-        THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
-                         _arrowBufferReader, &_arrowBatchReader));
+        ASSIGN_OR_THROW(
+            _arrowBatchReader,
+            arrow::ipc::RecordBatchStreamReader::Open(_arrowBufferReader));
     }
 
     THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatch));
