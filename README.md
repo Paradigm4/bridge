@@ -197,7 +197,8 @@ Install extra-scidb-libs following the instructions
 
 Compile cURL with OpenSSL (instead of NSS):
 ```
-> curl https://curl.haxx.se/download/curl-7.72.0.tar.gz | tar xz
+> curl https://curl.se/download/curl-7.72.0.tar.gz | tar xz
+> cd curl*
 > ./configure --prefix=/opt/curl
 > make
 > make install
