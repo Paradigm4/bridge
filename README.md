@@ -1,7 +1,7 @@
 # SciDB Input/Output Using External Storage
 
 [![SciDB 19.11](https://img.shields.io/badge/SciDB-19.11-blue.svg)](https://forum.paradigm4.com/t/scidb-release-19-11/2411)
-[![arrow 0.16.0](https://img.shields.io/badge/arrow-0.16.0-blue.svg)](https://arrow.apache.org/release/0.16.0.html)
+[![arrow 3.0.0](https://img.shields.io/badge/arrow-3.0.0-blue.svg)](https://arrow.apache.org/release/3.0.0.html)
 
 This document contains installation and usage instructions of the
 `bridge` SciDB plugin.
@@ -177,7 +177,7 @@ Install extra-scidb-libs following the instructions
 
 #### Apache Arrow
 
-1. Apache Arrow library version `0.16.0` is required. The easiest way
+1. Apache Arrow library version `3.0.0` is required. The easiest way
    to install it is by running:
    ```
    wget -O- https://paradigm4.github.io/extra-scidb-libs/install.sh \
@@ -186,11 +186,11 @@ Install extra-scidb-libs following the instructions
 1. Install Apache Arrow development library:
    1. Ubuntu
       ```
-      apt-get install libarrow-dev=0.16.0-1
+      apt-get install libarrow-dev=3.0.0-1
       ```
    1. RHEL/CentOS
       ```
-      yum install arrow-devel-0.16.0
+      yum install arrow-devel-3.0.0
       ```
 
 #### cURL (RHEL/CentOS ONLY)
