@@ -7,7 +7,7 @@ This document contains installation and usage instructions of the
 `bridge` SciDB plugin.
 
 1. [Usage](#usage)
-   1. [Advanced Usage] (#advanced-usage)
+   1. [Advanced Usage](#advanced-usage)
 1. [Installation](#installation)
    1. [SciDB Plug-in](#scidb-plug-in)
    1. [Python Package](#python-package)
@@ -197,7 +197,8 @@ Install extra-scidb-libs following the instructions
 
 Compile cURL with OpenSSL (instead of NSS):
 ```
-> curl https://curl.haxx.se/download/curl-7.72.0.tar.gz | tar xz
+> curl https://curl.se/download/curl-7.72.0.tar.gz | tar xz
+> cd curl*
 > ./configure --prefix=/opt/curl
 > make
 > make install
