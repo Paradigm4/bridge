@@ -107,67 +107,15 @@ Array <- R6Class(
     },
     schema = function() {
       return(self$metadata()$schema)
-    }
-  ),
-  private = list(
-    .metadata = NULL,
-    s3 = paws::s3(),
-    read_metadata = function() {
-      parts <- parse_url(self$url)
-      parts$path <- paste0(parts$path, "/metadata")
-
-      if (parts$scheme == "s3") {
-        req <- private$s3$get_object(Bucket = parts$bucket, Key = parts$path)
-        df <- utils::read.table(text = rawToChar(req$Body), sep = "\t")
-      }
-      else if (parts$scheme == "file")
-        df <- utils::read.table(parts$path, sep = "\t")
-
-      schema <- split(df$V2, df$V1)
-      return(schema)
     },
-    read_table_s3 = function(bucket, key, gzipped = TRUE) {
-
-      s3_obj = private$s3$get_object(Bucket = bucket, Key = key)
-
-      if(gzipped) {
-        stream = arrow::CompressedInputStream$create(arrow::BufferReader$create(s3_obj$Body), arrow::Codec$create("gzip"))
-      } else {
-        stream = arrow::BufferReader$create(s3_obj$Body)
-      }
-
-      reader = arrow::RecordBatchStreamReader$create(stream)
-      return(as.data.frame(reader$read_table()))
-    },
-
-    get_chunk_prefix = function(...) {
-      # Get the coordinates
-      coords = list(...)
-
-      schema_dims = private$get_dimensions()
-
-      all_match = all(names(coords) == schema_dims$name)
-      stopifnot(names(coords) == schema_dims$name)
-
-      dims = schema_dims
-      dims$parts = unlist(coords)
-
-      # TODO: The input needs to be checked to ensure it is valid.
-      dims$parts = dims$parts - as.integer(dims$start)
-      dims$parts = floor(dims$parts/as.integer(dims$chunk))
-
-      chunk_str = paste(c("c", dims$parts), sep="", collapse="_")
-      return(chunk_str)
-    },
-
     #' Gets the dimensions for a bridge array as a data frame
     #'
     #' Taken from unexported methods of the SciDBR package
     get_dimensions = function() {
-
+      
       # Get the schema here for the object
       x = self$metadata()$schema
-
+      
       x = gsub("\\t", " ", x)
       x = gsub("\\n", " ", x)
       tokenize = function(s, token)
@@ -176,7 +124,7 @@ Array <- R6Class(
         x = as.vector(rbind(x, rep(token, length(x))))
         x[- length(x)]
       }
-
+      
       diagram = function(tokens, labels=c())
       {
         if(length(tokens) == 0) return(labels)
@@ -214,7 +162,7 @@ Array <- R6Class(
       {
         c(name=x["name"], start=x["start"], end=x["end"], chunk=x["chunk"], overlap=x["overlap"])
       }
-
+      
       s = tryCatch(gsub("]", "", strsplit(x, "\\[")[[1]][[2]]), error=function(e) NULL)
       if(is.null(s) || nchar(s) == 0) return(NULL)
       tokens = Reduce(c, lapply(Reduce(c, lapply(Reduce(c, lapply(tokenize(s, "="), tokenize, ":")), tokenize, ";")), tokenize, ","))
@@ -230,7 +178,7 @@ Array <- R6Class(
       ans$name = gsub(" ", "", ans$name)
       return(ans)
     },
-
+    
     #' Internal function for processing SciDB attribute schema
     #' @param x a scidb object or schema string
     #' @return a data frame with parsed attribute data
@@ -254,6 +202,57 @@ Array <- R6Class(
       data.frame(name=gsub("[ \\\t\\\n]", "", vapply(s, function(x) x[1], "")),
                  type=type,
                  nullable=null, stringsAsFactors=FALSE)
+    }
+  ),
+  private = list(
+    .metadata = NULL,
+    s3 = paws::s3(),
+    read_metadata = function() {
+      parts <- parse_url(self$url)
+      parts$path <- paste0(parts$path, "/metadata")
+
+      if (parts$scheme == "s3") {
+        req <- private$s3$get_object(Bucket = parts$bucket, Key = parts$path)
+        df <- utils::read.table(text = rawToChar(req$Body), sep = "\t")
+      }
+      else if (parts$scheme == "file")
+        df <- utils::read.table(parts$path, sep = "\t")
+
+      schema <- split(df$V2, df$V1)
+      return(schema)
+    },
+    read_table_s3 = function(bucket, key, gzipped = TRUE) {
+
+      s3_obj = private$s3$get_object(Bucket = bucket, Key = key)
+
+      if(gzipped) {
+        stream = arrow::CompressedInputStream$create(arrow::BufferReader$create(s3_obj$Body), arrow::Codec$create("gzip"))
+      } else {
+        stream = arrow::BufferReader$create(s3_obj$Body)
+      }
+
+      reader = arrow::RecordBatchStreamReader$create(stream)
+      return(as.data.frame(reader$read_table()))
+    },
+
+    get_chunk_prefix = function(...) {
+      # Get the coordinates
+      coords = list(...)
+
+      schema_dims = self$get_dimensions()
+
+      all_match = all(names(coords) == schema_dims$name)
+      stopifnot(names(coords) == schema_dims$name)
+
+      dims = schema_dims
+      dims$parts = unlist(coords)
+
+      # TODO: The input needs to be checked to ensure it is valid.
+      dims$parts = dims$parts - as.integer(dims$start)
+      dims$parts = floor(dims$parts/as.integer(dims$chunk))
+
+      chunk_str = paste(c("c", dims$parts), sep="", collapse="_")
+      return(chunk_str)
     }
   )
 )
