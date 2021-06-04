@@ -34,7 +34,9 @@ class LogicalXSave : public  LogicalOperator
 public:
     LogicalXSave(const std::string& logicalName, const std::string& alias):
         LogicalOperator(logicalName, alias)
-    {}
+    {
+//	_properties.ddl = true;
+    }
 
     static PlistSpec const* makePlistSpec()
     {
@@ -90,22 +92,7 @@ public:
     ArrayDesc inferSchema(std::vector<ArrayDesc> schemas,
                           std::shared_ptr<Query> query)
     {
-        std::vector<DimensionDesc> dimensions(3);
-        size_t const nInstances = query->getInstancesCount();
-        dimensions[0] = DimensionDesc("chunk_no",    0, 0, CoordinateBounds::getMax(), CoordinateBounds::getMax(), 1, 0);
-        dimensions[1] = DimensionDesc("dest_instance_id",   0, 0, nInstances-1, nInstances-1, 1, 0);
-        dimensions[2] = DimensionDesc("source_instance_id", 0, 0, nInstances-1, nInstances-1, 1, 0);
-        Attributes attributes;
-        attributes.push_back(
-            AttributeDesc("val", TID_STRING, AttributeDesc::IS_NULLABLE, CompressorType::NONE));
-        return ArrayDesc(
-            "xsave",
-            attributes,
-            dimensions,
-            createDistribution(defaultDistType()),
-            query->getDefaultArrayResidency(),
-            0,
-            false);
+    	return nullArrayDesc(query);
     }
 };
 

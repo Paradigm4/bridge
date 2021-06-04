@@ -547,6 +547,23 @@ public:
     std::shared_ptr<Array> execute(std::vector<std::shared_ptr<Array> >& inputArrays,
                                    std::shared_ptr<Query> query)
     {
+        std::vector<DimensionDesc> dimensions(3);
+        size_t const nInstances = query->getInstancesCount();
+        dimensions[0] = DimensionDesc("chunk_no",    0, 0, CoordinateBounds::getMax(), CoordinateBounds::getMax(), 1, 0);
+        dimensions[1] = DimensionDesc("dest_instance_id",   0, 0, nInstances-1, nInstances-1, 1, 0);
+        dimensions[2] = DimensionDesc("source_instance_id", 0, 0, nInstances-1, nInstances-1, 1, 0);
+        Attributes attributes;
+        attributes.push_back(
+            AttributeDesc("val", TID_STRING, AttributeDesc::IS_NULLABLE, CompressorType::NONE));
+        _schema = ArrayDesc(
+            "xsave",
+            attributes,
+            dimensions,
+            createDistribution(defaultDistType()),
+            query->getDefaultArrayResidency(),
+            0,
+            false);
+
         // Initialize Settings If Not Already Set By preSingleExecute
         if (_settings == NULL)
             _settings = std::make_shared<XSaveSettings>(_parameters, _kwParameters, false, query);
