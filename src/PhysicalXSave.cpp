@@ -450,10 +450,6 @@ public:
                 arrowWriter,
                 arrow::ipc::MakeStreamWriter(&*arrowBufferStream, _arrowSchema));
         }
-        // TODO Arrow >= 0.17.0
-        // ARROW_ASSIGN_OR_RAISE(
-        //     arrowWriter,
-        //     arrow::ipc::NewStreamWriter(&*arrowStream, _arrowSchema));
 
         ARROW_RETURN_NOT_OK(arrowWriter->WriteRecordBatch(*arrowBatch));
         ARROW_RETURN_NOT_OK(arrowWriter->Close());
