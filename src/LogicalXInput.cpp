@@ -74,7 +74,8 @@ public:
         query->getRights()->upsert(rbac::ET_NAMESPACE, namespaceName, rbac::P_NS_READ);
     }
 
-    ArrayDesc inferSchema(std::vector<ArrayDesc> schemas, std::shared_ptr<Query> query)
+    ArrayDesc inferSchema(std::vector<ArrayDesc> schemas,
+                          std::shared_ptr<Query> query) override
     {
         if (_settings == NULL)
             _settings = std::make_shared<XInputSettings>(

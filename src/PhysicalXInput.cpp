@@ -47,7 +47,7 @@ public:
 
     std::shared_ptr<Array> execute(
         std::vector<std::shared_ptr<Array> > &inputArrays,
-        std::shared_ptr<Query> query)
+        std::shared_ptr<Query> query) override
     {
         LOG4CXX_DEBUG(logger, "XINPUT|" << query->getInstanceID() << "|execute");
 
