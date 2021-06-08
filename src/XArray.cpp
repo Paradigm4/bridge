@@ -149,8 +149,8 @@ namespace scidb {
         if (_arrowLength > 0) {
             if (!_chunk.getAttributeDesc().isEmptyIndicator()) {
                 _arrowArray = arrowBatch->column(attrID);
-                _arrowNullCount = arrowBatch->column(attrID)->null_count();
-                _arrowNullBitmap = arrowBatch->column(attrID)->null_bitmap_data();
+                _arrowNullCount = _arrowArray->null_count();
+                _arrowNullBitmap = _arrowArray->null_bitmap_data();
             }
             for (size_t i = 0; i < _nDims; ++i) {
                 _firstPos[i] = getCoord(i, 0);
