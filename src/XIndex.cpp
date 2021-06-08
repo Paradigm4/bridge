@@ -212,12 +212,10 @@ std::shared_ptr<arrow::Schema> ArrowReader::scidb2ArrowSchema(
         }
         }
 
-        // TODO Set null flag
         arrowFields[i] = arrow::field(
             attr.getName(), arrowType, attr.isNullable());
         i++;
     }
-    // TODO Set null flag
     for (size_t i = 0; i < nDims; ++i)
         arrowFields[nAttrs + i] = arrow::field(
             dimensions[i].getBaseName(), arrow::int64(), false);

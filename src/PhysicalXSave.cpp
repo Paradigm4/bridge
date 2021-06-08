@@ -524,7 +524,7 @@ public:
         PhysicalOperator(logicalName, physicalName, parameters, schema)
     {}
 
-    void preSingleExecute(std::shared_ptr<Query> query)
+    void preSingleExecute(std::shared_ptr<Query> query) override
     {
         // Initialize Settings
         if (_settings == NULL)
@@ -541,7 +541,7 @@ public:
     }
 
     std::shared_ptr<Array> execute(std::vector<std::shared_ptr<Array> >& inputArrays,
-                                   std::shared_ptr<Query> query)
+                                   std::shared_ptr<Query> query) override
     {
         // Initialize Settings If Not Already Set By preSingleExecute
         if (_settings == NULL)

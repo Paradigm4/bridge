@@ -88,7 +88,7 @@ public:
     }
 
     ArrayDesc inferSchema(std::vector<ArrayDesc> schemas,
-                          std::shared_ptr<Query> query)
+                          std::shared_ptr<Query> query) override
     {
         std::vector<DimensionDesc> dimensions(3);
         size_t const nInstances = query->getInstancesCount();
