@@ -440,6 +440,101 @@ xsave(
   build(<v:int64> [i=0:9:0:5; j=10:20:0:5], i),
   '{}', update:true, namespace:public)""".format(url))
 
+    # Existing array w/ different attribute type
+    scidb_con.iquery("""
+store(
+  build(<v:double> [i=0:9:0:5; j=10:19:0:5], i),
+  update_error)""")
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("xsave(update_error, '{}', update:true)".format(url))
+    scidb_con.remove("update_error")
+
+    # Existing array w/ different attribute name
+    scidb_con.iquery("""
+store(
+  build(<w:int64> [i=0:9:0:5; j=10:19:0:5], i),
+  update_error)""")
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("xsave(update_error, '{}', update:true)".format(url))
+    scidb_con.remove("update_error")
+
+    # Existing array w/ different number of attributes
+    scidb_con.iquery("""
+store(
+  apply(
+    build(<v:int64> [i=0:9:0:5; j=10:19:0:5], i),
+    w, double(j)),
+  update_error)""")
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("xsave(update_error, '{}', update:true)".format(url))
+    scidb_con.remove("update_error")
+
+    # Existing array w/ different number of dimensions
+    scidb_con.iquery("""
+store(
+  build(<v:int64> [i=0:9:0:5], i),
+  update_error)""")
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("xsave(update_error, '{}', update:true)".format(url))
+    scidb_con.remove("update_error")
+
+    # Existing array w/ different dimension bounds
+    scidb_con.iquery("""
+store(
+  build(<v:int64> [i=0:19:0:5; j=10:19:0:5], i),
+  update_error)""")
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("xsave(update_error, '{}', update:true)".format(url))
+    scidb_con.remove("update_error")
+
+    # Existing array w/ different dimension chunk size
+    scidb_con.iquery("""
+store(
+  build(<v:int64> [i=0:9:0:5; j=10:19:0:10], i),
+  update_error)""")
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("xsave(update_error, '{}', update:true)".format(url))
+    scidb_con.remove("update_error")
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_update_array(scidb_con, url):
+    url = '{}/update_all'.format(url)
+    schema = '<v:int64> [i=0:9:0:5; j=10:19:0:5]'
+
+    scidb_con.iquery("""
+xsave(
+  build({}, i),
+  '{}')""".format(schema, url))
+
+    scidb_con.iquery("""
+store(
+  build({}, i + 1),
+  update_all)""".format(schema, url))
+
+    scidb_con.iquery("xsave(update_all, '{}', update:true)".format(url))
+
+    array = scidbbridge.Array(url)
+
+    assert array.__str__() == url
+    assert array.metadata == {**base_metadata,
+                              **{'schema': '{}'.format(schema)}}
+    pandas.testing.assert_frame_equal(
+        array.read_index(),
+        pandas.DataFrame(data=((i, j)
+                               for i in range(0, 9, 5)
+                               for j in range(10, 20, 5)),
+                         columns=('i', 'j')))
+    pandas.testing.assert_frame_equal(
+        array.get_chunk(0, 10).to_pandas(),
+        pandas.DataFrame(data=((i + 1, i, j)
+                               for i in range(5)
+                               for j in range(10, 15)),
+                         columns=('v', 'i', 'j')))
+
+    # Cleanup
+    scidb_con.remove("update_all")
+
 
 @pytest.mark.parametrize('url', test_urls)
 def test_update_all(scidb_con, url):
