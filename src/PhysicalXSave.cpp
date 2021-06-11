@@ -587,13 +587,13 @@ public:
             std::ostringstream existingAttrs, inputAttrs;
             inputSchema.getAttributes().stream_out(inputAttrs);
             existingSchema.getAttributes().stream_out(existingAttrs);
-            if ((!inputSchema.sameSchema(
-                     existingSchema,
-                     ArrayDesc::SchemaFieldSelector(
-                         ).startMin(true
-                             ).endMax(true
-                                 ).chunkInterval(true
-                                     ).chunkOverlap(true))
+            if (!(inputSchema.sameSchema(
+                      existingSchema,
+                      ArrayDesc::SchemaFieldSelector(
+                          ).startMin(true
+                              ).endMax(true
+                                  ).chunkInterval(true
+                                      ).chunkOverlap(true))
                  && inputAttrs.str() == existingAttrs.str())) {
                 error << "Existing schema ";
                 printSchema(error, existingSchema);
