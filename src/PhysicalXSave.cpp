@@ -584,15 +584,17 @@ public:
 
             // Check Schema
             auto existingSchema = metadata.getSchema(query);
-            if (!(inputSchema.sameSchema(
-                      existingSchema,
-                      ArrayDesc::SchemaFieldSelector(
-                          ).startMin(true
-                              ).endMax(true
-                                  ).chunkInterval(true
-                                      ).chunkOverlap(true))
-                  && inputSchema.getAttributes(true)
-                  == existingSchema.getAttributes(true))) {
+            std::ostringstream existingAttrs, inputAttrs;
+            inputSchema.getAttributes().stream_out(inputAttrs);
+            existingSchema.getAttributes().stream_out(existingAttrs);
+            if ((!inputSchema.sameSchema(
+                     existingSchema,
+                     ArrayDesc::SchemaFieldSelector(
+                         ).startMin(true
+                             ).endMax(true
+                                 ).chunkInterval(true
+                                     ).chunkOverlap(true))
+                 && inputAttrs.str() == existingAttrs.str())) {
                 error << "Existing schema ";
                 printSchema(error, existingSchema);
                 error << " and provided schema ";
