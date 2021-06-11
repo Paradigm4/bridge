@@ -50,7 +50,7 @@
             if (error.GetResponseCode() ==                              \
                 Aws::Http::HttpResponseCode::FORBIDDEN)                 \
                 exceptionOutput                                         \
-                    << "See https://aws.amazon.com/premiumsupport/"     \
+                    << " See https://aws.amazon.com/premiumsupport/"    \
                     << "knowledge-center/s3-troubleshoot-403/";         \
             throw SYSTEM_EXCEPTION(                                     \
                 SCIDB_SE_NETWORK,                                       \
