@@ -97,6 +97,16 @@ Parameters:
   * e.g., `xsave(..., index_split:3000)` if the array has three
     dimensions, then each index split will index `1,000` chunks.
 
+#### Python API
+
+Rebuild the index of an array stored in S3:
+
+```
+import scidbbridge
+ar = scidbbridge.Array('s3://p4tests/bridge/foo')
+ix = ar.build_index()
+ar.write_index(ix)
+```
 
 ### Troubleshoot
 
@@ -226,8 +236,16 @@ More details: https://github.com/aws/aws-sdk-cpp/issues/1491
 
 ### Python Package
 
+#### Install Latest Release from PyPI
+
 ```
 pip install scidb-bridge
+```
+
+#### Install Latest Version from GitHub
+
+```
+pip install --user git+https://github.com/Paradigm4/bridge.git#subdirectory=py_pkg`
 ```
 
 ## AWS Configuration
