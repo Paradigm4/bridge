@@ -56,6 +56,7 @@ private:
     Metadata::Format      _format;
     Metadata::Compression _compression;
     size_t                _indexSplit;
+    std::string           _s3_sse;
 
     Parameter findKeyword(const KeywordParameters& kwParams,
                           const std::string& kw) const {
@@ -82,7 +83,8 @@ public:
         _isUpdate(false),
         _format(Metadata::Format::ARROW),
         _compression(Metadata::Compression::NONE),
-        _indexSplit(INDEX_SPLIT_DEFAULT)
+        _indexSplit(INDEX_SPLIT_DEFAULT),
+        _s3_sse(S3_SSE_DEFAULT)
     {
         // Evaluate Parameters
         // ---
@@ -147,6 +149,10 @@ public:
             }
             _indexSplit = indexSplit;
         }
+
+        // S3 SSE (Sever Side Encryption) | Validated in S3Driver
+        param = findKeyword(kwParams, KW_S3_SSE);
+        if (param) _s3_sse = paramToString(param);
     }
 
     const std::string& getURL() const {
@@ -167,6 +173,10 @@ public:
 
     Metadata::Compression getCompression() const {
         return _compression;
+    }
+
+    const std::string& getS3SSE() const {
+        return _s3_sse;
     }
 
     // Used by Updates

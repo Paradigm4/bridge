@@ -538,7 +538,8 @@ public:
         if (_driver == NULL)
             _driver = Driver::makeDriver(
                 _settings->getURL(),
-                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
+                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE,
+                _settings->getS3SSE());
 
         // Coordinator Creates/Checks Directories
         _driver->init(*query);
@@ -555,7 +556,8 @@ public:
         if (_driver == NULL)
             _driver = Driver::makeDriver(
                 _settings->getURL(),
-                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
+                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE,
+                _settings->getS3SSE());
 
         std::shared_ptr<Array> result(new MemArray(_schema, query));
         auto instID = query->getInstanceID();

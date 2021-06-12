@@ -47,6 +47,8 @@
 #define CACHE_SIZE_DEFAULT 268435456 // 256MB in Bytes
 #define CHUNK_MAX_SIZE 2147483648
 
+#define S3_SSE_DEFAULT "NOT_SET"
+
 #define _STR(x) #x
 #define STR(x) _STR(x)
 
@@ -132,7 +134,7 @@ public:
         UPDATE = 2
     };
 
-    Driver(const std::string &url, const Driver::Mode mode):
+    Driver(const std::string& url, const Driver::Mode mode):
         _url(url),
         _mode(mode)
     {}
@@ -167,8 +169,9 @@ public:
     // Return print-friendly path used by driver
     virtual const std::string& getURL() const = 0;
 
-    static std::shared_ptr<Driver> makeDriver(const std::string url,
-                                              const Mode mode=Mode::READ);
+    static std::shared_ptr<Driver> makeDriver(const std::string& url,
+                                              const Mode mode=Mode::READ,
+                                              const std::string& s3_sse=S3_SSE_DEFAULT);
 
 protected:
     const std::string _url;

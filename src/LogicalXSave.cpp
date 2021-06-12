@@ -45,11 +45,12 @@ public:
                  RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) // URL
               })
             },
-            { KW_COMPRESSION,   RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
-            { KW_FORMAT,        RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
-            { KW_INDEX_SPLIT,   RE(PP(PLACEHOLDER_CONSTANT, TID_UINT64))  },
-            { KW_NAMESPACE,     RE(PP(PLACEHOLDER_NS_NAME))              },
-            { KW_UPDATE,        RE(PP(PLACEHOLDER_CONSTANT, TID_BOOL))   }
+            { KW_COMPRESSION, RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
+            { KW_FORMAT,      RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
+            { KW_INDEX_SPLIT, RE(PP(PLACEHOLDER_CONSTANT, TID_UINT64)) },
+            { KW_NAMESPACE,   RE(PP(PLACEHOLDER_NS_NAME))              },
+            { KW_S3_SSE,      RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
+            { KW_UPDATE,      RE(PP(PLACEHOLDER_CONSTANT, TID_BOOL))   }
         };
         return &argSpec;
     }
@@ -65,7 +66,8 @@ public:
         if (_settings.isUpdate()) {
             std::shared_ptr<Driver> _driver = Driver::makeDriver(
                 _settings.getURL(),
-                _settings.isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
+                _settings.isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE,
+                _settings.getS3SSE());
 
             std::shared_ptr<Metadata> metadata = std::make_shared<Metadata>();
             _driver->readMetadata(metadata);

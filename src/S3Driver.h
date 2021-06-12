@@ -63,7 +63,9 @@ private:
 
 class S3Driver: public Driver {
 public:
-    S3Driver(const std::string &url, const Driver::Mode);
+    S3Driver(const std::string& url,
+             const Driver::Mode,
+             const std::string& s3_sse);
 
     void init(const Query&);
 
@@ -87,11 +89,13 @@ private:
     Aws::String _bucket;
     std::string _prefix;
     std::shared_ptr<Aws::S3::S3Client> _client;
+    Aws::S3::Model::ServerSideEncryption _s3_sse; // Server-Side Encryption
 
     size_t _readArrow(const std::string&, std::shared_ptr<arrow::Buffer>&, bool) const;
 
     Aws::S3::Model::GetObjectResult _getRequest(const Aws::String&) const;
-    void _putRequest(const Aws::String&, std::shared_ptr<Aws::IOStream>) const;
+    void _putRequest(const Aws::String&,
+                     const std::shared_ptr<Aws::IOStream>) const;
 
     template <typename Outcome, typename Request, typename RequestFunc>
     Outcome _retryLoop(const std::string &name,

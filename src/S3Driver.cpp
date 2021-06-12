@@ -100,17 +100,36 @@ namespace scidb {
     //
     // S3Driver
     //
-    S3Driver::S3Driver(const std::string &url, const Driver::Mode mode):
+    S3Driver::S3Driver(const std::string& url,
+                       const Driver::Mode mode,
+                       const std::string& s3_sse):
         Driver(url, mode)
     {
         const size_t prefix_len = 5; // "s3://"
         size_t pos = _url.find("/", prefix_len);
-        if (_url.rfind("s3://", 0) != 0 || pos == std::string::npos)
-            throw USER_EXCEPTION(SCIDB_SE_METADATA,
-                                 SCIDB_LE_ILLEGAL_OPERATION)
-                << "Invalid S3 URL " << _url;
+        if (_url.rfind("s3://", 0) != 0 || pos == std::string::npos) {
+            std::ostringstream out;
+            out << "Invalid S3 URL " << _url;
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+                << out.str();
+        }
         _bucket = _url.substr(prefix_len, pos - prefix_len).c_str();
         _prefix = _url.substr(pos + 1);
+
+        // Evaluate S3 SSE (Server-Side Encryption) Parameter
+        if (s3_sse == "NOT_SET")
+            _s3_sse = Aws::S3::Model::ServerSideEncryption::NOT_SET;
+        else if (s3_sse == "AES256")
+            _s3_sse = Aws::S3::Model::ServerSideEncryption::AES256;
+        else if (s3_sse == "aws:kms")
+            _s3_sse = Aws::S3::Model::ServerSideEncryption::aws_kms;
+        else {
+            std::ostringstream out;
+            out << "Invalid s3_sse value " << s3_sse
+                << ". Supported values are NOT_SET, AES256, and aws:kms";
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+                << out.str();
+        }
 
         _client = std::make_unique<Aws::S3::S3Client>();
     }
@@ -235,12 +254,13 @@ namespace scidb {
     }
 
     void S3Driver::_putRequest(const Aws::String &key,
-                              std::shared_ptr<Aws::IOStream> data) const
+                               const std::shared_ptr<Aws::IOStream> data) const
     {
         Aws::S3::Model::PutObjectRequest request;
         request.SetBucket(_bucket);
         request.SetKey(key);
         request.SetBody(data);
+        request.SetServerSideEncryption(_s3_sse);
 
         _retryLoop<Aws::S3::Model::PutObjectOutcome>(
             "Put", key, request, &Aws::S3::S3Client::PutObject);
