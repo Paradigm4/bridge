@@ -42,21 +42,14 @@ public:
             { "", // positionals
               RE(RE::LIST, {
                  RE(PP(PLACEHOLDER_INPUT)),
-                 RE(RE::STAR, {
-                    RE(PP(PLACEHOLDER_CONSTANT, TID_STRING))
-                 })
+                 RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) // URL
               })
             },
-            { "", // positionals
-              RE(RE::STAR, {
-                      RE(PP(PLACEHOLDER_CONSTANT, TID_STRING))
-                  })
-            },
-            { KW_NS,            RE(PP(PLACEHOLDER_NS_NAME))              },
-            { KW_UPDATE,        RE(PP(PLACEHOLDER_CONSTANT, TID_BOOL))   },
-            { KW_FORMAT,        RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
             { KW_COMPRESSION,   RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
-            { KW_INDEX_SPLIT,   RE(PP(PLACEHOLDER_CONSTANT, TID_INT64))  }
+            { KW_FORMAT,        RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) },
+            { KW_INDEX_SPLIT,   RE(PP(PLACEHOLDER_CONSTANT, TID_UINT64))  },
+            { KW_NAMESPACE,     RE(PP(PLACEHOLDER_NS_NAME))              },
+            { KW_UPDATE,        RE(PP(PLACEHOLDER_CONSTANT, TID_BOOL))   }
         };
         return &argSpec;
     }
