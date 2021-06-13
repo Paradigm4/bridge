@@ -278,11 +278,11 @@ namespace scidb {
         auto outcome = ((*_client).*requestFunc)(request);
 
         // -- - Retry - --
-        int retry = 1;
+        int retry = 0;
         while (!outcome.IsSuccess() && retry < RETRY_COUNT) {
             LOG4CXX_WARN(logger,
                          "S3DRIVER|" << name << " s3://" << _bucket << "/"
-                         << key << " attempt #" << retry << " failed");
+                         << key << " attempt #" << (retry + 1) << " failed");
             retry++;
 
             std::this_thread::sleep_for(
