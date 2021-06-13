@@ -38,34 +38,6 @@
 #define RETRY_COUNT 5
 #define RETRY_SLEEP 1000        // milliseconds
 
-#define S3_EXCEPTION_NOT_SUCCESS(operation)                             \
-    {                                                                   \
-        if (!outcome.IsSuccess()) {                                     \
-            std::ostringstream exceptionOutput;                         \
-            exceptionOutput                                             \
-            << (operation) << " operation on s3://"                     \
-            << _bucket << "/" << key << " failed. ";                    \
-            auto error = outcome.GetError();                            \
-            exceptionOutput << error.GetMessage();                      \
-            if (error.GetResponseCode() ==                              \
-                Aws::Http::HttpResponseCode::FORBIDDEN)                 \
-                exceptionOutput                                         \
-                    << " See https://aws.amazon.com/premiumsupport/"    \
-                    << "knowledge-center/s3-troubleshoot-403/";         \
-            throw SYSTEM_EXCEPTION(                                     \
-                SCIDB_SE_NETWORK,                                       \
-                SCIDB_LE_UNKNOWN_ERROR) << exceptionOutput.str();       \
-        }                                                               \
-    }
-
-#define FAIL(reason, bucket, key)                                               \
-    {                                                                           \
-        std::ostringstream out;                                                 \
-        out << (reason) << " s3://" << (bucket) << "/" << (key);                \
-        throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_UNKNOWN_ERROR)      \
-            << out.str();                                                       \
-    }
-
 
 namespace scidb {
     static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3driver"));
@@ -143,20 +115,18 @@ namespace scidb {
         request.SetKey(key);
 
         auto outcome = _retryLoop<Aws::S3::Model::GetObjectOutcome>(
-            "Get", key, request, &Aws::S3::S3Client::GetObject, false);
+            "Get",
+            key,
+            request,
+            &Aws::S3::S3Client::GetObject,
+            _mode == Driver::Mode::READ || _mode == Driver::Mode::UPDATE);
 
-        if (_mode == Driver::Mode::READ
-            || _mode == Driver::Mode::UPDATE) {
-            // metadata *needs to* exist
-            if (!outcome.IsSuccess()) {
-                FAIL("Array not found, missing metadata", _bucket, key);
-            }
-        }
-        else if (_mode == Driver::Mode::WRITE) {
-            // metadata *cannot* exist
-            if (outcome.IsSuccess()) {
-                FAIL("Array found, metadata exists", _bucket, key);
-            }
+        if (_mode == Driver::Mode::WRITE && outcome.IsSuccess()) {
+            std::ostringstream out;
+            out << "Array found, metadata exists s3://"
+                << _bucket << "/" << key;
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_UNKNOWN_ERROR)
+                << out.str();
         }
     }
 
@@ -291,9 +261,19 @@ namespace scidb {
             outcome = ((*_client).*requestFunc)(request);
         }
 
-        if (throwIfFails) {
-            S3_EXCEPTION_NOT_SUCCESS(name);
+        if (throwIfFails && !outcome.IsSuccess()) {
+            std::ostringstream out;
+            out << name << " operation on s3://"
+                << _bucket << "/" << key << " failed. ";
+            auto error = outcome.GetError();
+            out << error.GetMessage();
+            if (error.GetResponseCode() == Aws::Http::HttpResponseCode::FORBIDDEN)
+                out << " See https://aws.amazon.com/premiumsupport/"
+                    << "knowledge-center/s3-troubleshoot-403/";
+            throw SYSTEM_EXCEPTION(SCIDB_SE_NETWORK, SCIDB_LE_UNKNOWN_ERROR)
+                << out.str();
         }
+
         return outcome;
     }
 } // namespace scidb

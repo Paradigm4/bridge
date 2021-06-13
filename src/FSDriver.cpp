@@ -83,7 +83,7 @@ namespace scidb {
 
             // Check that path does NOT exist
             if (boost::filesystem::exists(_prefix))
-                FAIL("Path exists. Path", _prefix);
+                FAIL("Array found, path exists. Exists not", _prefix);
 
             // Create base, index, and chunks directories
             for (const std::string &postfix : {"", "/index", "/chunks"})
