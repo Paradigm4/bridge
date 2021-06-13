@@ -1585,3 +1585,33 @@ xsave(
 
     # Cleanup
     scidb_con.drop_user('bar')
+
+
+@pytest.mark.parametrize('url', test_urls)
+def test_s3_server_side_encryption(scidb_con, url):
+    url = '{}/s3_sse'.format(url)
+    schema = '<v:int64> [i=0:19:0:5]'
+
+    if not url.startswith('s3://'):
+        return
+
+    # Wrong usage
+    que = "xsave(build({}, i), '{}', {{}})".format(schema, url)
+    for arg in ('s3_sse',
+                's3_sse:0'
+                's3_sse:true',
+                "s3_sse:''",
+                "s3_sse:'0'",
+                "s3_sse:'true'",
+                "s3_sse:'foo'"):
+        with pytest.raises(requests.exceptions.HTTPError):
+            scidb_con.iquery(que.format(arg))
+
+    # Corect usage
+    que = "xsave(build({}, i), '{}{{}}', {{}})".format(schema, url)
+    i = 0
+    for arg in ("s3_sse:'NOT_SET'",
+                "s3_sse:'AES256'",
+                "s3_sse:'aws:kms'"):
+        scidb_con.iquery(que.format(i, arg))
+        i += 1
