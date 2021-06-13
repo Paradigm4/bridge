@@ -100,7 +100,7 @@ Parameters:
   * Specify S3 Server-Side Encryption algorithm. By default, no
     server-side encryption algorithm is used, i.e.,
     `s3_sse:'NOT_SET'`. Accepted values are `NOT_SET`, `AES256`, and
-    `aws_kms`.
+    `aws:kms`.
   * e.g., `xsave(..., s3_sse:'AES256')`
 
 #### Python API
