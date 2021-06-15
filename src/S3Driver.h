@@ -52,6 +52,7 @@ public:
     S3Init(const S3Init&) = delete;
     S3Init& operator=(const S3Init&) = delete;
 
+    static std::vector<std::string> s_paths_list;
 private:
     static size_t s_count;
 

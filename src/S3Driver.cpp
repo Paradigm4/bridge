@@ -26,6 +26,7 @@
 #include "S3Driver.h"
 
 #include <log4cxx/logger.h>
+#include <boost/algorithm/string.hpp>
 
 // AWS
 #include <aws/s3/S3Client.h>
@@ -34,6 +35,8 @@
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 
+// SciDB
+#include <system/Config.h>
 
 #define RETRY_COUNT 5
 #define RETRY_SLEEP 1000        // milliseconds
@@ -61,13 +64,39 @@ namespace scidb {
         {
              ScopedMutex lock(_lock); // LOCK
 
-             if (s_count == 0)
+             if (s_count == 0) {
                  Aws::InitAPI(_awsOptions);
+
+                 // Get and parse io-paths-list from the configuration.
+                 Config& config = *Config::getInstance();
+                 std::vector<std::string> dirs;
+                 boost::split(
+                     dirs,
+                     config.getOption<std::string>(CONFIG_IO_PATHS_LIST),
+                     boost::is_any_of(":"));
+
+                 for (std::string& d : dirs) {
+                     // Only interested in values that start with
+                     // "s3/"
+                     if (d.rfind("s3/", 0) != 0)
+                         continue;
+
+                     // Construct a valid S3 URL
+                     s_paths_list.push_back(d.insert(2, ":/"));
+                 }
+
+                 std::stringstream out;
+                 std::copy(s_paths_list.begin(),
+                           s_paths_list.end(),
+                           std::ostream_iterator<std::string>(out, ","));
+                 LOG4CXX_DEBUG(logger, "S3DRIVER|io-paths-list:" << out.str());
+             }
              s_count++;
         }
     }
 
     size_t S3Init::s_count = 0;
+    std::vector<std::string> S3Init::s_paths_list;
 
     //
     // S3Driver
@@ -85,6 +114,21 @@ namespace scidb {
             throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
                 << out.str();
         }
+
+        // Check if URL in io-paths-list
+        bool in_io_paths_list = false;
+        for (std::string &path : S3Init::s_paths_list)
+            if (_url.rfind(path, 0) == 0)
+                in_io_paths_list = true;
+        if (!in_io_paths_list) {
+            Config& config = *Config::getInstance();
+            std::ostringstream out;
+            out << "S3 URL " << _url << " not listed in "
+                << config.getOptionName(CONFIG_IO_PATHS_LIST);
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_INVALID_PERMISSIONS)
+                << out.str();
+        }
+
         _bucket = _url.substr(prefix_len, pos - prefix_len).c_str();
         _prefix = _url.substr(pos + 1);
 
