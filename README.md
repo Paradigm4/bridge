@@ -66,6 +66,41 @@ users is in `io-paths-list` in SciDB `config.ini`.
 
 ### Advanced Usage
 
+#### Permissions
+
+When using `xinput`/`xsave` to read/write to a mounted file system,
+the `io-paths-list` values are enforced. This is similar to the
+`input`/`save` operators. Please see [File I/O
+Restrictions](https://paradigm4.atlassian.net/l/c/uhmpNqz7) in the
+SciDB documentations for more details. Note that user running the
+SciDB process also needs appropriate I/O permissions to the file
+system path used.
+
+S3 paths are also supported in the `io-paths-list` value as
+follows. Any paths that start with `s3/` are considered S3 paths. For
+example, a value of `s3/foo/bar` in `io-paths-list` is converted to
+the `s3://foo/bar` S3 URL. The S3 URLs used in the `xinput`/`xsave`
+operators have to be a super-set of one of the URLS listed in
+`io-paths-list`.
+
+For example, given:
+```
+io-paths-list=s3/foo/bar:s3/taz/qux/
+```
+the following calls are accepted:
+```
+xinput('s3://foo/bar/1')
+xinput('s3://foo/bartaz/2')     # matches s3://foo/bar
+xsave(..., 's3://taz/qux/3)
+```
+while the following are *not*:
+```
+xsave(..., 's3://taz/quxfoo/4)  # does not match s3://taz/qux/
+```
+
+The S3 URLs are checked against the `io-paths-list` values for *all*
+SciDB users.
+
 #### xsave
 
 Parameters:
