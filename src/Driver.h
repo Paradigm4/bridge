@@ -53,14 +53,14 @@
 #define STR(x) _STR(x)
 
 // TODO use __builtin_expect
-#define THROW_NOT_OK(status)                                            \
+#define THROW_NOT_OK(status, message)                                   \
     {                                                                   \
         arrow::Status _status = (status);                               \
         if (!_status.ok())                                              \
         {                                                               \
             throw SYSTEM_EXCEPTION(                                     \
                 SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)      \
-                    << _status.ToString().c_str();                      \
+                << _status.ToString().c_str() << " " << (message);      \
         }                                                               \
     }
 
@@ -193,10 +193,12 @@ protected:
         }
         if (reuse) {
             THROW_NOT_OK(std::static_pointer_cast<arrow::ResizableBuffer>(
-                             buffer)->Resize(length, false));
+                             buffer)->Resize(length, false),
+                         "resize buffer for " + suffix);
         }
         else {
-            THROW_NOT_OK(arrow::AllocateBuffer(length, &buffer));
+            THROW_NOT_OK(arrow::AllocateBuffer(length, &buffer),
+                         "allocate buffer for " + suffix);
         }
     }
 

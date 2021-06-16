@@ -83,13 +83,15 @@ public:
 
             THROW_NOT_OK(arrow::MakeBuilder(_arrowPool,
                                             _arrowSchema->field(i)->type(),
-                                            &_arrowBuilders[i]));
+                                            &_arrowBuilders[i]),
+                         "make builder");
             i++;
         }
         for(size_t i = _nAttrs; i < _nAttrs + _nDims; ++i) {
             THROW_NOT_OK(arrow::MakeBuilder(_arrowPool,
                                             _arrowSchema->field(i)->type(),
-                                            &_arrowBuilders[i]));
+                                            &_arrowBuilders[i]),
+                         "make builder");
         }
     }
 
@@ -699,6 +701,7 @@ public:
                     existingArrayIters[attr.getId()] =
                         existingArray->getConstIterator(attr);
             }
+
             // Init Writer
             // if (_settings->isArrowFormat())
             ArrowWriter dataWriter(inputSchema.getAttributes(true),
@@ -747,13 +750,15 @@ public:
                             if (inputPos == nullptr) { // Ended Input, Write Existing
                                 THROW_NOT_OK(
                                     dataWriter.writePartArrowBuffer(
-                                        existingChunkIters, existingPos, arrowBuffer));
+                                        existingChunkIters, existingPos, arrowBuffer),
+                                    "serialize existing pos (input ended) to " + objectName);
                                 nextExisting = true;
                             }
                             else if (existingPos == nullptr) { // Ended Existing, Write Input
                                 THROW_NOT_OK(
                                     dataWriter.writePartArrowBuffer(
-                                        inputChunkIters, inputPos, arrowBuffer));
+                                        inputChunkIters, inputPos, arrowBuffer),
+                                    "serialize input pos (existing ended) to " + objectName);
                                 nextInput = true;
                             }
                             else {
@@ -762,19 +767,22 @@ public:
                                 if (res < 0) { // Input Has Lower Coordinate, Write Input
                                     THROW_NOT_OK(
                                         dataWriter.writePartArrowBuffer(
-                                            inputChunkIters, inputPos, arrowBuffer));
+                                            inputChunkIters, inputPos, arrowBuffer),
+                                        "serialize input pos (lower) to " + objectName);
                                     nextInput = true;
                                 }
                                 else if ( res > 0 ) { // Existing Has Lower Coordinate, Write Existing
                                     THROW_NOT_OK(
                                         dataWriter.writePartArrowBuffer(
-                                            existingChunkIters, existingPos, arrowBuffer));
+                                            existingChunkIters, existingPos, arrowBuffer),
+                                        "serialize existing pos (lower) to " + objectName);
                                     nextExisting = true;
                                 }
                                 else { // Coordinates are Equal, Write Input, Advance Both
                                     THROW_NOT_OK(
                                         dataWriter.writePartArrowBuffer(
-                                            inputChunkIters, inputPos, arrowBuffer));
+                                            inputChunkIters, inputPos, arrowBuffer),
+                                        "serialize input pos (equal) to " + objectName);
                                     nextInput = true;
                                     nextExisting = true;
                                 }
@@ -794,8 +802,10 @@ public:
                         }
 
                         // Finalize Chunk
-                        THROW_NOT_OK(dataWriter.finalize(arrowBuffer));
+                        THROW_NOT_OK(dataWriter.finalize(arrowBuffer),
+                                     "finalize " + objectName);
                     }
+
                     // -- -
                     // Add Input Chunk
                     // -- -
@@ -808,9 +818,9 @@ public:
                             index->insert(pos);
 
                         // Serialize Chunk
-                        THROW_NOT_OK(
-                            dataWriter.writeArrowBuffer(
-                                inputChunkIters, arrowBuffer));
+                        THROW_NOT_OK(dataWriter.writeArrowBuffer(
+                                         inputChunkIters, arrowBuffer),
+                                     "serialize input chunk to " + objectName);
                     }
 
                     // Write Chunk
@@ -859,10 +869,10 @@ public:
 
                 // Convert to Arrow
                 std::shared_ptr<arrow::Buffer> arrowBuffer;
-                THROW_NOT_OK(indexWriter.writeArrowBuffer(splitPtr,
-                                                          index->end(),
-                                                          szSplit,
-                                                          arrowBuffer));
+                THROW_NOT_OK(
+                    indexWriter.writeArrowBuffer(
+                        splitPtr, index->end(), szSplit, arrowBuffer),
+                    "serialize index to " + objectName);
 
                 // Write Index
                 _driver->writeArrow(objectName, arrowBuffer);

@@ -85,8 +85,8 @@ namespace scidb {
                         << _path << "/" << objectName
                         << " for position " << pos
                         << " is bigger than cache size " << _sizeMax;
-                    throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                           SCIDB_LE_UNKNOWN_ERROR) << out.str();
+                    throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER, SCIDB_LE_UNKNOWN_ERROR)
+                        << out.str();
                 }
 
                 // Make Space in Cache
@@ -204,9 +204,11 @@ namespace scidb {
                 if (str.length() != 1) {
                     std::ostringstream out;
                     out << "Invalid value for attribute "
-                        << _chunk._arrayIt._attrDesc.getName();
-                    throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                           SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+                        << _chunk._arrayIt._attrDesc.getName()
+                        << " in " << Metadata::coord2ObjectName(
+                            _chunk._firstPos, _chunk._arrayIt._dims);
+                    throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)
+                        << out.str();
                 }
                 _value.setChar(str[0]);
                 break;
@@ -274,11 +276,11 @@ namespace scidb {
             default:
             {
                 std::ostringstream out;
-                out << "Type "
-                    << _chunk.getAttributeDesc().getType()
-                    << " not supported";
-                throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                                       SCIDB_LE_ILLEGAL_OPERATION) << out.str();
+                out << "Type " << _chunk.getAttributeDesc().getType()
+                    << " not supported in " << Metadata::coord2ObjectName(
+                        _chunk._firstPos, _chunk._arrayIt._dims);
+                throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)
+                    << out.str();
             }
             }
 
@@ -490,12 +492,10 @@ namespace scidb {
     void XArrayIterator::operator ++()
     {
         if (!_hasCurrent)
-            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION,
-                                   SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
         if (_currIndex == _array._index->end())
-            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION,
-                                   SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
         Query::getValidQueryPtr(_array._query);
 
@@ -554,8 +554,7 @@ namespace scidb {
     ConstChunk const& XArrayIterator::getChunk()
     {
         if (!_hasCurrent)
-            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION,
-                                   SCIDB_LE_NO_CURRENT_ELEMENT);
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_NO_CURRENT_ELEMENT);
 
         Query::getValidQueryPtr(_array._query);
 
