@@ -52,17 +52,17 @@
 #define _STR(x) #x
 #define STR(x) _STR(x)
 
-// TODO use __builtin_expect
+#define PREDICT_FALSE(x) (__builtin_expect(!!(x), 0))
 #define THROW_NOT_OK(status, message)                                   \
-    {                                                                   \
-        arrow::Status _status = (status);                               \
-        if (!_status.ok())                                              \
+    ({                                                                  \
+        arrow::Status __s = (status);                                   \
+        if (PREDICT_FALSE(!__s.ok()))                                   \
         {                                                               \
             throw SYSTEM_EXCEPTION(                                     \
                 SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)      \
-                << _status.ToString().c_str() << " " << (message);      \
+                << __s.ToString().c_str() << " " << (message);          \
         }                                                               \
-    }
+    })
 
 
 // Forward Declarastions to avoid including full headers - speed-up

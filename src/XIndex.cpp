@@ -40,11 +40,11 @@
 
 
 #define ASSIGN_OR_THROW(lhs, rexpr, message)            \
-    {                                                   \
-        auto status_name = (rexpr);                     \
-        THROW_NOT_OK(status_name.status(), (message));  \
-        lhs = std::move(status_name).ValueOrDie();      \
-    }
+    ({                                                  \
+        auto __s_name = (rexpr);                        \
+        THROW_NOT_OK(__s_name.status(), (message));     \
+        lhs = std::move(__s_name).ValueOrDie();         \
+    })
 
 
 namespace scidb {
