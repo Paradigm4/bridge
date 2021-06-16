@@ -48,15 +48,22 @@ parse_url = function(url) {
               "path"   = path))
 }
 
-#' A class representing an externally stored SciDB array
+#' An R6 class representing an externally stored SciDB array
+#'
 Array <- R6Class(
   "Array",
   clone = F, portable = F,
   public = list(
+    #' @field The URL for the bridge array
     url = NA,
+
+    #' @description Create a new Array object
+    #' @param url The URL for the Bridge Array
     initialize = function(url) {
       self$url = url
     },
+
+    #' @description Get the Array's metadata
     metadata = function() {
       if(is.null(private$.metadata)) {
         private$.metadata = private$read_metadata()
@@ -64,6 +71,8 @@ Array <- R6Class(
 
       return(private$.metadata)
     },
+
+    #' @description Get the index for the bridge array
     read_index = function() {
       parts <- parse_url(self$url)
 
@@ -85,37 +94,44 @@ Array <- R6Class(
         }
 
         frames = lapply(keys, function(x) read_table_s3(bucket = parts$bucket, key = x))
-        return(do.call(rbind, frames))
       } else if (parts$scheme == "file") {
-        stop("Local files are yet to be implemented.")
+        idx_files = list.files(file.path(parts$path, "index"))
+
+        frames = lapply(idx_files, function(x) read_table_fs(path = file.path(parts$path, "index", x)))
       }
+
+      return(do.call(rbind, frames))
     },
+
+    #' @description Gets a data.frame for a specified chunk
+    #' @param ... One parameter for each column in the index file.
     get_chunk = function(...) {
 
       chunk_file = private$get_chunk_prefix(...)
       parts = parse_url(self$url)
 
       chunk_key = glue::glue("{parts$path}/chunks/{chunk_file}")
+      gzipped = self$metadata()$compression == "gzip"
 
       if(parts$scheme == "s3") {
-        gzipped = self$metadata()$compression == "gzip"
         return(private$read_table_s3(bucket = parts$bucket, key = chunk_key, gzipped = gzipped))
       } else {
-        stop("Local files not yet implemented.")
+        return(private$read_table_fs(path = chunk_key, gzipped = gzipped))
       }
 
     },
+
+    #' @description Gets the schema string for the Bridge Array
     schema = function() {
       return(self$metadata()$schema)
     },
-    #' Gets the dimensions for a bridge array as a data frame
-    #'
-    #' Taken from unexported methods of the SciDBR package
+
+    #' @description Gets the dimensions of the array as a data.frame
     get_dimensions = function() {
-      
+
       # Get the schema here for the object
       x = self$metadata()$schema
-      
+
       x = gsub("\\t", " ", x)
       x = gsub("\\n", " ", x)
       tokenize = function(s, token)
@@ -124,7 +140,7 @@ Array <- R6Class(
         x = as.vector(rbind(x, rep(token, length(x))))
         x[- length(x)]
       }
-      
+
       diagram = function(tokens, labels=c())
       {
         if(length(tokens) == 0) return(labels)
@@ -162,7 +178,7 @@ Array <- R6Class(
       {
         c(name=x["name"], start=x["start"], end=x["end"], chunk=x["chunk"], overlap=x["overlap"])
       }
-      
+
       s = tryCatch(gsub("]", "", strsplit(x, "\\[")[[1]][[2]]), error=function(e) NULL)
       if(is.null(s) || nchar(s) == 0) return(NULL)
       tokens = Reduce(c, lapply(Reduce(c, lapply(Reduce(c, lapply(tokenize(s, "="), tokenize, ":")), tokenize, ";")), tokenize, ","))
@@ -178,7 +194,7 @@ Array <- R6Class(
       ans$name = gsub(" ", "", ans$name)
       return(ans)
     },
-    
+
     #' Internal function for processing SciDB attribute schema
     #' @param x a scidb object or schema string
     #' @return a data frame with parsed attribute data
@@ -234,6 +250,18 @@ Array <- R6Class(
       reader = arrow::RecordBatchStreamReader$create(stream)
       return(as.data.frame(reader$read_table()))
     },
+
+    read_table_fs = function(path, gzipped = TRUE) {
+      if (gzipped) {
+        stream = arrow::CompressedInputStream$create(path, arrow::Codec$create("gzip"))
+      } else {
+        stream = arrow::ReadableFile$create(path)
+      }
+
+      reader = arrow::RecordBatchStreamReader$create(stream)
+      return(as.data.frame(reader$read_table()))
+    },
+
 
     get_chunk_prefix = function(...) {
       # Get the coordinates
