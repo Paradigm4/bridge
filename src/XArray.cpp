@@ -73,8 +73,7 @@ namespace scidb {
             std::shared_ptr<arrow::RecordBatch> arrowBatch;
             if (_mem.find(pos) == _mem.end()) {
                 // Download Chunk
-                auto objectName =
-                    "chunks/" + Metadata::coord2ObjectName(pos, _dims);
+                auto objectName = Metadata::coord2ObjectName(pos, _dims);
                 auto arrowSize = _arrowReader.readObject(objectName,
                                                          false,
                                                          arrowBatch);
@@ -404,9 +403,8 @@ namespace scidb {
             _arrowBatch = _arrayIt._array._cache->get(_firstPos);
         else {
             // Cache is disabled
-            auto objectName =
-                "chunks/" + Metadata::coord2ObjectName(_firstPos,
-                                                       _arrayIt._dims);
+            auto objectName = Metadata::coord2ObjectName(
+                _firstPos, _arrayIt._dims);
             _arrayIt._arrowReader.readObject(objectName, true, _arrowBatch);
         }
     }

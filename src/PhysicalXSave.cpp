@@ -717,6 +717,7 @@ public:
 
                     // Set Object Name using Top-Left Coordinates
                     Coordinates const &pos = inputChunkIters[0]->getFirstPosition();
+                    auto objectName = Metadata::coord2ObjectName(pos, dims);
 
                     // Declare Output;
                     std::shared_ptr<arrow::Buffer> arrowBuffer;
@@ -813,9 +814,7 @@ public:
                     }
 
                     // Write Chunk
-                    _driver->writeArrow(
-                        "chunks/" +
-                        Metadata::coord2ObjectName(pos, dims), arrowBuffer);
+                    _driver->writeArrow(objectName, arrowBuffer);
                 }
 
                 // Advance Array Iterators
@@ -853,6 +852,11 @@ public:
 
             auto splitPtr = index->begin();
             while (splitPtr != index->end()) {
+                // Assemble Object Name
+                std::ostringstream out;
+                out << "index/" << split;
+                auto objectName = out.str();
+
                 // Convert to Arrow
                 std::shared_ptr<arrow::Buffer> arrowBuffer;
                 THROW_NOT_OK(indexWriter.writeArrowBuffer(splitPtr,
@@ -861,9 +865,7 @@ public:
                                                           arrowBuffer));
 
                 // Write Index
-                std::ostringstream out;
-                out << "index/" << split;
-                _driver->writeArrow(out.str(), arrowBuffer);
+                _driver->writeArrow(objectName, arrowBuffer);
 
                 // Advance to Next Index Split
                 splitPtr += std::min<size_t>(

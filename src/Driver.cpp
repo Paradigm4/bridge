@@ -208,7 +208,7 @@ void Metadata::validate() const {
 std::string Metadata::coord2ObjectName(const Coordinates &pos,
                                        const Dimensions &dims) {
     std::ostringstream out;
-    out << "c";
+    out << "chunks/c";
     for (size_t i = 0; i < dims.size(); ++i)
         out << "_" << (pos[i] -
                        dims[i].getStartMin()) / dims[i].getChunkInterval();
