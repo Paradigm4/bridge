@@ -390,7 +390,7 @@ xsave(
         reader = pyarrow.ipc.open_stream(obj['Body'].read())
     elif url.startswith('file://'):
         fn = '{}/{}/chunks/c_0'.format(fs_base, prefix)
-        reader = pyarrow.open_stream(pyarrow.OSFile(fn))
+        reader = pyarrow.ipc.open_stream(pyarrow.OSFile(fn))
 
     tbl = reader.read_all()
 
