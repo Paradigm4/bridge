@@ -39,14 +39,6 @@
 #include <arrow/ipc/reader.h>
 
 
-#define ASSIGN_OR_THROW(lhs, rexpr, message)            \
-    ({                                                  \
-        auto __s_name = (rexpr);                        \
-        THROW_NOT_OK(__s_name.status(), (message));     \
-        lhs = std::move(__s_name).ValueOrDie();         \
-    })
-
-
 namespace scidb {
 
 static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.xindex"));

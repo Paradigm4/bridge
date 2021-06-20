@@ -64,6 +64,13 @@
         }                                                               \
     })
 
+#define ASSIGN_OR_THROW(lhs, rexpr, message)            \
+    ({                                                  \
+        auto __s_name = (rexpr);                        \
+        THROW_NOT_OK(__s_name.status(), (message));     \
+        lhs = std::move(__s_name).ValueOrDie();         \
+    })
+
 
 // Forward Declarastions to avoid including full headers - speed-up
 // compilation
