@@ -429,10 +429,11 @@ public:
         // Stream Arrow Record Batch to Arrow Buffer using Arrow
         // Record Batch Writer and Arrow Buffer Output Stream
         std::shared_ptr<arrow::io::BufferOutputStream> arrowBufferStream;
-        ARROW_ASSIGN_OR_RAISE(
+        ASSIGN_OR_THROW(
             arrowBufferStream,
             // TODO Better initial estimate for Create
-            arrow::io::BufferOutputStream::Create(4096, _arrowPool));
+            arrow::io::BufferOutputStream::Create(4096, _arrowPool),
+            "create buffer output stream");
 
         // Setup Arrow Compression, If Enabled
         std::shared_ptr<arrow::ipc::RecordBatchWriter> arrowWriter;
@@ -440,9 +441,10 @@ public:
         if (_compression == Metadata::Compression::GZIP) {
             std::unique_ptr<arrow::util::Codec> codec = *arrow::util::Codec::Create(
                 arrow::Compression::type::GZIP);
-            ARROW_ASSIGN_OR_RAISE(
+            ASSIGN_OR_THROW(
                 arrowCompressedStream,
-                arrow::io::CompressedOutputStream::Make(codec.get(), arrowBufferStream));
+                arrow::io::CompressedOutputStream::Make(codec.get(), arrowBufferStream),
+                "make compressed output stream");
             ASSIGN_OR_THROW(
                 arrowWriter,
                 arrow::ipc::MakeStreamWriter(&*arrowCompressedStream, _arrowSchema),
@@ -463,7 +465,9 @@ public:
             ARROW_RETURN_NOT_OK(arrowCompressedStream->Close());
         }
 
-        ARROW_ASSIGN_OR_RAISE(arrowBuffer, arrowBufferStream->Finish());
+        ASSIGN_OR_THROW(arrowBuffer,
+                        arrowBufferStream->Finish(),
+                        "finish buffer output stream");
         LOG4CXX_DEBUG(logger, "XSAVE|arrowBuffer::size: " << arrowBuffer->size());
 
         return arrow::Status::OK();
