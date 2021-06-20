@@ -29,32 +29,41 @@
 #include "Driver.h"
 
 // SciDB
-#include <query/Expression.h>
 #include <query/LogicalOperator.h>
 #include <query/Query.h>
 
 
 namespace scidb {
 // Logger for operator. static to prevent visibility of variable outside of file
-static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.operators.xsave"));
+static log4cxx::LoggerPtr logger(
+    log4cxx::Logger::getLogger("scidb.operators.xsave"));
 
-static const char* const KW_NS     	= "namespace";
-static const char* const KW_UPDATE	= "update";
-static const char* const KW_FORMAT	= "format";
 static const char* const KW_COMPRESSION	= "compression";
+static const char* const KW_FORMAT	= "format";
 static const char* const KW_INDEX_SPLIT	= "index_split";
+static const char* const KW_NAMESPACE   = "namespace";
+static const char* const KW_S3_SSE      = "s3_sse";
+static const char* const KW_UPDATE	= "update";
 
 typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t;
 
 class XSaveSettings
 {
 private:
-    std::string            _url;
-    NamespaceDesc          _namespace;
-    bool                   _isUpdate;
-    Metadata::Format       _format;
-    Metadata::Compression  _compression;
-    size_t                 _indexSplit;
+    std::string           _url;
+    NamespaceDesc         _namespace;
+    bool                  _isUpdate;
+    Metadata::Format      _format;
+    Metadata::Compression _compression;
+    size_t                _indexSplit;
+    std::string           _s3_sse;
+
+    Parameter findKeyword(const KeywordParameters& kwParams,
+                          const std::string& kw) const {
+        // Copied from PhysicalOperator.h (same as in LogicalOperator.h)
+        auto const kwPair = kwParams.find(kw);
+        return kwPair == kwParams.end() ? Parameter() : kwPair->second;
+    }
 
     void failIfUpdate(std::string param) {
         if (_isUpdate) {
@@ -65,245 +74,85 @@ private:
         }
     }
 
-    void setParamNamespace(std::vector<NamespaceDesc> ns) {
-        failIfUpdate("namespace");
-
-        _namespace = ns[0];
-    }
-
-    void setParamUpdate(std::vector<bool> isUpdate) {
-        _isUpdate = isUpdate[0];
-    }
-
-    void setParamFormat(std::vector<std::string> format) {
-        failIfUpdate("format");
-
-        if (format[0] == "arrow")
-            _format = Metadata::Format::ARROW;
-        else
-            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
-                << "format must be 'arrow'";
-    }
-
-    void setParamCompression(std::vector<std::string> compression) {
-        failIfUpdate("compression");
-
-        if (compression[0] == "none")
-            _compression = Metadata::Compression::NONE;
-        else if (compression[0] == "gzip")
-            _compression = Metadata::Compression::GZIP;
-        else
-            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
-                << "unsupported compression";
-    }
-
-    void setParamIndexSplit(std::vector<int64_t> indexSplit) {
-        failIfUpdate("index_split");
-
-        _indexSplit = indexSplit[0];
-        if(_indexSplit < INDEX_SPLIT_MIN) {
-            std::ostringstream err;
-            err << "index_split must be at or above " << INDEX_SPLIT_MIN;
-            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << err.str();
-        }
-    }
-
-    Parameter getKeywordParam(KeywordParameters const& kwp, const std::string& kw) const {
-        auto const& kwPair = kwp.find(kw);
-        return kwPair == kwp.end() ? Parameter() : kwPair->second;
-    }
-
-    bool getParamContentBool(Parameter& param) {
-        bool paramContent;
-
-        if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
-            ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
-            paramContent = evaluate(paramExpr->getExpression(), TID_BOOL).getBool();
-        }
-        else {
-            OperatorParamPhysicalExpression* exp =
-                dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
-            SCIDB_ASSERT(exp != nullptr);
-            paramContent = exp->getExpression()->evaluate().getBool();
-            LOG4CXX_DEBUG(logger, "XSAVE|param bool:" << paramContent)
-        }
-        return paramContent;
-    }
-
-    int64_t getParamContentInt64(Parameter& param) {
-        int64_t paramContent;
-
-        if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
-            ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
-            paramContent = evaluate(paramExpr->getExpression(), TID_INT64).getInt64();
-        }
-        else {
-            OperatorParamPhysicalExpression* exp =
-                dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
-            SCIDB_ASSERT(exp != nullptr);
-            paramContent = exp->getExpression()->evaluate().getInt64();
-            LOG4CXX_DEBUG(logger, "XSAVE|param integer:" << paramContent)
-        }
-        return paramContent;
-    }
-
-    std::string getParamContentString(Parameter& param) {
-        std::string paramContent;
-
-        if(param->getParamType() == PARAM_LOGICAL_EXPRESSION) {
-            ParamType_t& paramExpr = reinterpret_cast<ParamType_t&>(param);
-            paramContent = evaluate(paramExpr->getExpression(), TID_STRING).getString();
-        } else {
-            OperatorParamPhysicalExpression* exp =
-                dynamic_cast<OperatorParamPhysicalExpression*>(param.get());
-            SCIDB_ASSERT(exp != nullptr);
-            paramContent = exp->getExpression()->evaluate().getString();
-            LOG4CXX_DEBUG(logger, "XSAVE|param string:" << paramContent)
-        }
-        return paramContent;
-    }
-
-    NamespaceDesc getParamContentNamespace(Parameter& param) {
-        if(param->getParamType() == PARAM_NS_REF) {
-            const OperatorParamNamespaceReference* namespaceRef =
-                safe_dynamic_cast<OperatorParamNamespaceReference*>(param.get());
-            return namespaceRef->getNamespace();
-        }
-
-        throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
-            << "Unknown value for 'namespace' parameter";
-    }
-
-    bool setKeywordParamBool(KeywordParameters const& kwParams,
-                             const char* const kw,
-                             void (XSaveSettings::* innersetter)(std::vector<bool>)) {
-        std::vector<bool> paramContent;
-        size_t numParams;
-        bool retSet = false;
-
-        Parameter kwParam = getKeywordParam(kwParams, kw);
-        if (kwParam) {
-            if (kwParam->getParamType() == PARAM_NESTED) {
-                auto group = dynamic_cast<OperatorParamNested*>(kwParam.get());
-                Parameters& gParams = group->getParameters();
-                numParams = gParams.size();
-                for (size_t i = 0; i < numParams; ++i)
-                    paramContent.push_back(getParamContentBool(gParams[i]));
-            }
-            else
-                paramContent.push_back(getParamContentBool(kwParam));
-
-            (this->*innersetter)(paramContent);
-            retSet = true;
-        }
-        else
-            LOG4CXX_DEBUG(logger, "XSAVE|findKeyword null: " << kw);
-
-        return retSet;
-    }
-
-    bool setKeywordParamInt64(KeywordParameters const& kwParams,
-                              const char* const kw,
-                              void (XSaveSettings::* innersetter)(std::vector<int64_t>)) {
-        std::vector<int64_t> paramContent;
-        size_t numParams;
-        bool retSet = false;
-
-        Parameter kwParam = getKeywordParam(kwParams, kw);
-        if (kwParam) {
-            if (kwParam->getParamType() == PARAM_NESTED) {
-                auto group = dynamic_cast<OperatorParamNested*>(kwParam.get());
-                Parameters& gParams = group->getParameters();
-                numParams = gParams.size();
-                for (size_t i = 0; i < numParams; ++i)
-                    paramContent.push_back(getParamContentInt64(gParams[i]));
-            }
-            else
-                paramContent.push_back(getParamContentInt64(kwParam));
-
-            (this->*innersetter)(paramContent);
-            retSet = true;
-        }
-        else
-            LOG4CXX_DEBUG(logger, "XSAVE|findKeyword null: " << kw);
-
-        return retSet;
-    }
-
-    bool setKeywordParamString(KeywordParameters const& kwParams,
-                               const char* const kw,
-                               void (XSaveSettings::* innersetter)(std::vector<std::string>)) {
-        std::vector<std::string> paramContent;
-        bool retSet = false;
-
-        Parameter kwParam = getKeywordParam(kwParams, kw);
-        if (kwParam) {
-            if (kwParam->getParamType() == PARAM_NESTED) {
-                auto group = dynamic_cast<OperatorParamNested*>(kwParam.get());
-                Parameters& gParams = group->getParameters();
-                for (size_t i = 0; i < gParams.size(); ++i) {
-                    paramContent.push_back(getParamContentString(gParams[i]));
-                }
-            } else {
-                paramContent.push_back(getParamContentString(kwParam));
-            }
-            (this->*innersetter)(paramContent);
-            retSet = true;
-        } else
-            LOG4CXX_DEBUG(logger, "XSAVE|findKeyword null: " << kw);
-
-        return retSet;
-    }
-
-    bool setKeywordParamNamespace(KeywordParameters const& kwParams,
-                                  const char* const kw,
-                                  void (XSaveSettings::* innersetter)(std::vector<NamespaceDesc>)) {
-        std::vector<NamespaceDesc> paramContent;
-        bool retSet = false;
-
-        Parameter kwParam = getKeywordParam(kwParams, kw);
-        if (kwParam) {
-            if (kwParam->getParamType() == PARAM_NESTED) {
-                auto group = dynamic_cast<OperatorParamNested*>(kwParam.get());
-                Parameters& gParams = group->getParameters();
-                for (size_t i = 0; i < gParams.size(); ++i) {
-                    paramContent.push_back(getParamContentNamespace(gParams[i]));
-                }
-            } else {
-                paramContent.push_back(getParamContentNamespace(kwParam));
-            }
-            (this->*innersetter)(paramContent);
-            retSet = true;
-        } else
-            LOG4CXX_DEBUG(logger, "XSAVE|findKeyword null: " << kw);
-
-        return retSet;
-    }
-
-
 public:
-    XSaveSettings(std::vector<std::shared_ptr<OperatorParam> > const& operatorParameters,
-                  KeywordParameters const& kwParams,
+    XSaveSettings(const std::vector<std::shared_ptr<OperatorParam> >& params,
+                  const KeywordParameters& kwParams,
                   bool logical,
                   const std::shared_ptr<Query>& query):
         _namespace(NamespaceDesc("public")),
         _isUpdate(false),
         _format(Metadata::Format::ARROW),
         _compression(Metadata::Compression::NONE),
-        _indexSplit(INDEX_SPLIT_DEFAULT) {
-        if (operatorParameters.size() != 1)
-            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION) << "illegal number of parameters passed to xsave";
-        std::shared_ptr<OperatorParam>const& param = operatorParameters[0];
-        if (logical)
-            _url = evaluate(((std::shared_ptr<OperatorParamLogicalExpression>&) param)->getExpression(), TID_STRING).getString();
-        else
-            _url = ((std::shared_ptr<OperatorParamPhysicalExpression>&) param)->getExpression()->evaluate().getString();
+        _indexSplit(INDEX_SPLIT_DEFAULT),
+        _s3_sse(S3_SSE_DEFAULT)
+    {
+        // Evaluate Parameters
+        // ---
+        // URL
+        if (params.size() == 1) _url = paramToString(params[0]);
 
-        setKeywordParamNamespace( kwParams, KW_NS,          &XSaveSettings::setParamNamespace);
-        setKeywordParamBool     ( kwParams, KW_UPDATE,      &XSaveSettings::setParamUpdate);
-        setKeywordParamString   ( kwParams, KW_FORMAT,      &XSaveSettings::setParamFormat);
-        setKeywordParamString   ( kwParams, KW_COMPRESSION, &XSaveSettings::setParamCompression);
-        setKeywordParamInt64    ( kwParams, KW_INDEX_SPLIT, &XSaveSettings::setParamIndexSplit);
+        // Update
+        auto param = findKeyword(kwParams, KW_UPDATE);
+        if (param) _isUpdate = paramToBool(param);
+
+        // Namespace
+        param = findKeyword(kwParams, KW_NAMESPACE);
+        if (param) {
+            failIfUpdate("namespace");
+
+            _namespace = safe_dynamic_cast<OperatorParamNamespaceReference*>(
+                param.get())->getNamespace();
+        }
+
+        // Format
+        param = findKeyword(kwParams, KW_FORMAT);
+        if (param) {
+            failIfUpdate("format");
+
+            auto format = paramToString(param);
+            if (format == "arrow")
+                _format = Metadata::Format::ARROW;
+            else
+                throw USER_EXCEPTION(SCIDB_SE_METADATA,
+                                     SCIDB_LE_ILLEGAL_OPERATION)
+                    << "format must be 'arrow'";
+        }
+
+        // Compression
+        param = findKeyword(kwParams, KW_COMPRESSION);
+        if (param) {
+            failIfUpdate("compression");
+
+            auto compression = paramToString(param);
+            if (compression == "none")
+                _compression = Metadata::Compression::NONE;
+            else if (compression == "gzip")
+                _compression = Metadata::Compression::GZIP;
+            else
+                throw USER_EXCEPTION(SCIDB_SE_METADATA,
+                                     SCIDB_LE_ILLEGAL_OPERATION)
+                    << "unsupported compression";
+        }
+
+        // Index Split
+        param = findKeyword(kwParams, KW_INDEX_SPLIT);
+        if (param) {
+            failIfUpdate("index_split");
+
+            auto indexSplit = paramToUInt64(param);
+
+            if(indexSplit < INDEX_SPLIT_MIN) {
+                std::ostringstream err;
+                err << "index_split must be at or above " << INDEX_SPLIT_MIN;
+                throw USER_EXCEPTION(SCIDB_SE_METADATA,
+                                     SCIDB_LE_ILLEGAL_OPERATION) << err.str();
+            }
+            _indexSplit = indexSplit;
+        }
+
+        // S3 SSE (Sever Side Encryption) | Validated in S3Driver
+        param = findKeyword(kwParams, KW_S3_SSE);
+        if (param) _s3_sse = paramToString(param);
     }
 
     const std::string& getURL() const {
@@ -324,6 +173,10 @@ public:
 
     Metadata::Compression getCompression() const {
         return _compression;
+    }
+
+    const std::string& getS3SSE() const {
+        return _s3_sse;
     }
 
     // Used by Updates

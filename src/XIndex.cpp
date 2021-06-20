@@ -55,7 +55,9 @@ ArrowReader::ArrowReader(
     _compression(compression),
     _driver(driver)
 {
-    ASSIGN_OR_THROW(_arrowResizableBuffer, arrow::AllocateResizableBuffer(0));
+    ASSIGN_OR_THROW(_arrowResizableBuffer,
+                    arrow::AllocateResizableBuffer(0),
+                    "allocate empty resizable buffer");
 
     if (_compression == Metadata::Compression::GZIP)
         _arrowCodec = *arrow::util::Codec::Create(
@@ -89,29 +91,34 @@ size_t ArrowReader::readObject(
     if (_compression != Metadata::Compression::NONE) {
         ASSIGN_OR_THROW(_arrowCompressedStream,
                         arrow::io::CompressedInputStream::Make(
-                            _arrowCodec.get(), _arrowBufferReader));
+                            _arrowCodec.get(), _arrowBufferReader),
+                        "make compressed stream for " + name);
         // Read Record Batch using Stream Reader
         ASSIGN_OR_THROW(
             _arrowBatchReader,
-            arrow::ipc::RecordBatchStreamReader::Open(_arrowCompressedStream));
+            arrow::ipc::RecordBatchStreamReader::Open(_arrowCompressedStream),
+            "open record stream (compressed) for " + name);
     }
     else {
         ASSIGN_OR_THROW(
             _arrowBatchReader,
-            arrow::ipc::RecordBatchStreamReader::Open(_arrowBufferReader));
+            arrow::ipc::RecordBatchStreamReader::Open(_arrowBufferReader),
+            "open record stream for " + name);
     }
 
-    THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatch));
+    THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatch),
+                 "read next for " + name);
 
     // No More Record Batches are Expected
     std::shared_ptr<arrow::RecordBatch> arrowBatchNext;
-    THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatchNext));
+    THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatchNext),
+                 "read next for " + name);
     if (arrowBatchNext != NULL) {
         std::ostringstream out;
         out << "More than one Arrow Record Batch found in "
             << _driver->getURL() << "/" << name;
-        throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                               SCIDB_LE_UNKNOWN_ERROR) << out.str();
+        throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER, SCIDB_LE_UNKNOWN_ERROR)
+            << out.str();
     }
 
     // Check Record Batch Schema
@@ -122,8 +129,8 @@ size_t ArrowReader::readObject(
             << _driver->getURL() << "/" << name
             << " does not match the expected schema ("
             << _schema->ToString() << ")";
-        throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
-                               SCIDB_LE_UNKNOWN_ERROR) << out.str();
+        throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER, SCIDB_LE_UNKNOWN_ERROR)
+            << out.str();
     }
 
     return arrowSize;
@@ -282,7 +289,6 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
         out << "index/" << iIndex;
         std::string objectName(out.str());
         arrowReader.readObject(objectName, true, arrowBatch);
-        // LOG4CXX_DEBUG(logger, "XINDEX|" << instID << "|load read:" << out.str());
 
         if (arrowBatch->num_columns() != static_cast<int>(nDims)) {
             out.str("");

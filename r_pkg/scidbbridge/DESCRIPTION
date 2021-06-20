@@ -13,4 +13,8 @@ RoxygenNote: 7.1.1
 Imports:
     methods,
     paws,
+    arrow,
     utils
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

@@ -48,27 +48,29 @@
 #define CACHE_SIZE_DEFAULT 268435456 // 256MB in Bytes
 #define CHUNK_MAX_SIZE 2147483648
 
+#define S3_SSE_DEFAULT "NOT_SET"
+
 #define _STR(x) #x
 #define STR(x) _STR(x)
 
-// TODO use __builtin_expect
-#define THROW_NOT_OK(status)                                            \
-    {                                                                   \
-        arrow::Status _status = (status);                               \
-        if (!_status.ok())                                              \
+#define PREDICT_FALSE(x) (__builtin_expect(!!(x), 0))
+#define THROW_NOT_OK(status, message)                                   \
+    ({                                                                  \
+        arrow::Status __s = (status);                                   \
+        if (PREDICT_FALSE(!__s.ok()))                                   \
         {                                                               \
             throw SYSTEM_EXCEPTION(                                     \
                 SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)      \
-                    << _status.ToString().c_str();                      \
+                << __s.ToString().c_str() << " " << (message);          \
         }                                                               \
-    }
+    })
 
-#define ASSIGN_OR_THROW(lhs, rexpr)                     \
-    {                                                   \
-        auto status_name = (rexpr);                     \
-        THROW_NOT_OK(status_name.status());             \
-        lhs = std::move(status_name).ValueOrDie();      \
-    }
+#define ASSIGN_OR_THROW(lhs, rexpr, message)            \
+    ({                                                  \
+        auto __s_name = (rexpr);                        \
+        THROW_NOT_OK(__s_name.status(), (message));     \
+        lhs = std::move(__s_name).ValueOrDie();         \
+    })
 
 
 // Forward Declarastions to avoid including full headers - speed-up
@@ -140,7 +142,7 @@ public:
         UPDATE = 2
     };
 
-    Driver(const std::string &url, const Driver::Mode mode):
+    Driver(const std::string& url, const Driver::Mode mode):
         _url(url),
         _mode(mode)
     {}
@@ -175,8 +177,9 @@ public:
     // Return print-friendly path used by driver
     virtual const std::string& getURL() const = 0;
 
-    static std::shared_ptr<Driver> makeDriver(const std::string url,
-                                              const Mode mode=Mode::READ);
+    static std::shared_ptr<Driver> makeDriver(const std::string& url,
+                                              const Mode mode=Mode::READ,
+                                              const std::string& s3_sse=S3_SSE_DEFAULT);
 
 protected:
     const std::string _url;
@@ -198,10 +201,12 @@ protected:
         }
         if (reuse) {
             THROW_NOT_OK(std::static_pointer_cast<arrow::ResizableBuffer>(
-                             buffer)->Resize(length, false));
+                             buffer)->Resize(length, false),
+                         "resize buffer for " + suffix);
         }
         else {
-            ASSIGN_OR_THROW(buffer, arrow::AllocateBuffer(length));
+            ASSIGN_OR_THROW(buffer, arrow::AllocateBuffer(length),
+                         "allocate buffer for " + suffix);
         }
     }
 

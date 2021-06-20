@@ -26,6 +26,7 @@
 #include "S3Driver.h"
 
 #include <log4cxx/logger.h>
+#include <boost/algorithm/string.hpp>
 
 // AWS
 #include <aws/s3/S3Client.h>
@@ -34,37 +35,11 @@
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 
+// SciDB
+#include <system/Config.h>
 
 #define RETRY_COUNT 5
 #define RETRY_SLEEP 1000        // milliseconds
-
-#define S3_EXCEPTION_NOT_SUCCESS(operation)                             \
-    {                                                                   \
-        if (!outcome.IsSuccess()) {                                     \
-            std::ostringstream exceptionOutput;                         \
-            exceptionOutput                                             \
-            << (operation) << " operation on s3://"                     \
-            << _bucket << "/" << key << " failed. ";                    \
-            auto error = outcome.GetError();                            \
-            exceptionOutput << error.GetMessage();                      \
-            if (error.GetResponseCode() ==                              \
-                Aws::Http::HttpResponseCode::FORBIDDEN)                 \
-                exceptionOutput                                         \
-                    << "See https://aws.amazon.com/premiumsupport/"     \
-                    << "knowledge-center/s3-troubleshoot-403/";         \
-            throw SYSTEM_EXCEPTION(                                     \
-                SCIDB_SE_NETWORK,                                       \
-                SCIDB_LE_UNKNOWN_ERROR) << exceptionOutput.str();       \
-        }                                                               \
-    }
-
-#define FAIL(reason, bucket, key)                                               \
-    {                                                                           \
-        std::ostringstream out;                                                 \
-        out << (reason) << " s3://" << (bucket) << "/" << (key);                \
-        throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_UNKNOWN_ERROR)      \
-            << out.str();                                                       \
-    }
 
 
 namespace scidb {
@@ -89,28 +64,88 @@ namespace scidb {
         {
              ScopedMutex lock(_lock); // LOCK
 
-             if (s_count == 0)
+             if (s_count == 0) {
                  Aws::InitAPI(_awsOptions);
+
+                 // Get and parse io-paths-list from the configuration.
+                 Config& config = *Config::getInstance();
+                 std::vector<std::string> dirs;
+                 boost::split(
+                     dirs,
+                     config.getOption<std::string>(CONFIG_IO_PATHS_LIST),
+                     boost::is_any_of(":"));
+
+                 for (std::string& d : dirs) {
+                     // Only interested in values that start with
+                     // "s3/"
+                     if (d.rfind("s3/", 0) != 0)
+                         continue;
+
+                     // Construct a valid S3 URL
+                     s_paths_list.push_back(d.insert(2, ":/"));
+                 }
+
+                 std::stringstream out;
+                 std::copy(s_paths_list.begin(),
+                           s_paths_list.end(),
+                           std::ostream_iterator<std::string>(out, ","));
+                 LOG4CXX_DEBUG(logger, "S3DRIVER|io-paths-list:" << out.str());
+             }
              s_count++;
         }
     }
 
     size_t S3Init::s_count = 0;
+    std::vector<std::string> S3Init::s_paths_list;
 
     //
     // S3Driver
     //
-    S3Driver::S3Driver(const std::string &url, const Driver::Mode mode):
+    S3Driver::S3Driver(const std::string& url,
+                       const Driver::Mode mode,
+                       const std::string& s3_sse):
         Driver(url, mode)
     {
         const size_t prefix_len = 5; // "s3://"
         size_t pos = _url.find("/", prefix_len);
-        if (_url.rfind("s3://", 0) != 0 || pos == std::string::npos)
-            throw USER_EXCEPTION(SCIDB_SE_METADATA,
-                                 SCIDB_LE_ILLEGAL_OPERATION)
-                << "Invalid S3 URL " << _url;
+        if (_url.rfind("s3://", 0) != 0 || pos == std::string::npos) {
+            std::ostringstream out;
+            out << "Invalid S3 URL " << _url;
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+                << out.str();
+        }
+
+        // Check if URL in io-paths-list
+        bool in_io_paths_list = false;
+        for (std::string &path : S3Init::s_paths_list)
+            if (_url.rfind(path, 0) == 0)
+                in_io_paths_list = true;
+        if (!in_io_paths_list) {
+            Config& config = *Config::getInstance();
+            std::ostringstream out;
+            out << "S3 URL " << _url << " not listed in "
+                << config.getOptionName(CONFIG_IO_PATHS_LIST);
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_INVALID_PERMISSIONS)
+                << out.str();
+        }
+
         _bucket = _url.substr(prefix_len, pos - prefix_len).c_str();
         _prefix = _url.substr(pos + 1);
+
+        // Evaluate S3 SSE (Server-Side Encryption) Parameter
+        if (s3_sse == "NOT_SET")
+            _s3_sse = Aws::S3::Model::ServerSideEncryption::NOT_SET;
+        else if (s3_sse == "AES256")
+            _s3_sse = Aws::S3::Model::ServerSideEncryption::AES256;
+        else if (s3_sse == "aws:kms")
+            _s3_sse = Aws::S3::Model::ServerSideEncryption::aws_kms;
+        else {
+            std::ostringstream out;
+            out << "Invalid s3_sse value " << s3_sse
+                << ". Supported values are NOT_SET, AES256, and aws:kms";
+            throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
+                << out.str();
+        }
 
         _client = std::make_unique<Aws::S3::S3Client>();
     }
@@ -124,20 +159,18 @@ namespace scidb {
         request.SetKey(key);
 
         auto outcome = _retryLoop<Aws::S3::Model::GetObjectOutcome>(
-            "Get", key, request, &Aws::S3::S3Client::GetObject, false);
+            "Get",
+            key,
+            request,
+            &Aws::S3::S3Client::GetObject,
+            _mode == Driver::Mode::READ || _mode == Driver::Mode::UPDATE);
 
-        if (_mode == Driver::Mode::READ
-            || _mode == Driver::Mode::UPDATE) {
-            // metadata *needs to* exist
-            if (!outcome.IsSuccess()) {
-                FAIL("Array not found, missing metadata", _bucket, key);
-            }
-        }
-        else if (_mode == Driver::Mode::WRITE) {
-            // metadata *cannot* exist
-            if (outcome.IsSuccess()) {
-                FAIL("Array found, metadata exists", _bucket, key);
-            }
+        if (_mode == Driver::Mode::WRITE && outcome.IsSuccess()) {
+            std::ostringstream out;
+            out << "Array found, metadata exists s3://"
+                << _bucket << "/" << key;
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_UNKNOWN_ERROR)
+                << out.str();
         }
     }
 
@@ -235,12 +268,13 @@ namespace scidb {
     }
 
     void S3Driver::_putRequest(const Aws::String &key,
-                              std::shared_ptr<Aws::IOStream> data) const
+                               const std::shared_ptr<Aws::IOStream> data) const
     {
         Aws::S3::Model::PutObjectRequest request;
         request.SetBucket(_bucket);
         request.SetKey(key);
         request.SetBody(data);
+        request.SetServerSideEncryption(_s3_sse);
 
         _retryLoop<Aws::S3::Model::PutObjectOutcome>(
             "Put", key, request, &Aws::S3::S3Client::PutObject);
@@ -258,11 +292,11 @@ namespace scidb {
         auto outcome = ((*_client).*requestFunc)(request);
 
         // -- - Retry - --
-        int retry = 1;
+        int retry = 0;
         while (!outcome.IsSuccess() && retry < RETRY_COUNT) {
             LOG4CXX_WARN(logger,
                          "S3DRIVER|" << name << " s3://" << _bucket << "/"
-                         << key << " attempt #" << retry << " failed");
+                         << key << " attempt #" << (retry + 1) << " failed");
             retry++;
 
             std::this_thread::sleep_for(
@@ -271,9 +305,19 @@ namespace scidb {
             outcome = ((*_client).*requestFunc)(request);
         }
 
-        if (throwIfFails) {
-            S3_EXCEPTION_NOT_SUCCESS(name);
+        if (throwIfFails && !outcome.IsSuccess()) {
+            std::ostringstream out;
+            out << name << " operation on s3://"
+                << _bucket << "/" << key << " failed. ";
+            auto error = outcome.GetError();
+            out << error.GetMessage();
+            if (error.GetResponseCode() == Aws::Http::HttpResponseCode::FORBIDDEN)
+                out << " See https://aws.amazon.com/premiumsupport/"
+                    << "knowledge-center/s3-troubleshoot-403/";
+            throw SYSTEM_EXCEPTION(SCIDB_SE_NETWORK, SCIDB_LE_UNKNOWN_ERROR)
+                << out.str();
         }
+
         return outcome;
     }
 } // namespace scidb

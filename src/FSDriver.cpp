@@ -66,34 +66,42 @@ namespace scidb {
 
     void FSDriver::init(const Query &query)
     {
-        // Chech path and/or create directories
-        if (_mode == Driver::Mode::READ
-            || _mode == Driver::Mode::UPDATE) {
-            // Sanitize and check path permissions
-            _prefix = path::expandForRead(_prefix, query);
+        try {
+            // Chech path and/or create directories
+            if (_mode == Driver::Mode::READ
+                || _mode == Driver::Mode::UPDATE) {
+                // Sanitize and check path permissions
+                _prefix = path::expandForRead(_prefix, query);
 
-            // Check that path exists and is a directory
-            if (!boost::filesystem::exists(_prefix) ||
-                !boost::filesystem::is_directory(_prefix))
-                FAIL("Find directory", _prefix);
+                // Check that path exists and is a directory
+                if (!boost::filesystem::exists(_prefix) ||
+                    !boost::filesystem::is_directory(_prefix))
+                    FAIL("Find directory", _prefix);
+            }
+            else if (_mode == Driver::Mode::WRITE) {
+                // Sanitize and check path permissions
+                _prefix = path::expandForSave(_prefix, query);
+
+                // Check that path does NOT exist
+                if (boost::filesystem::exists(_prefix))
+                    FAIL("Array found, path exists. Exists not", _prefix);
+
+                // Create base, index, and chunks directories
+                for (const std::string &postfix : {"", "/index", "/chunks"})
+                    try {
+                        // Not an error if the directory exists
+                        boost::filesystem::create_directory(_prefix + postfix);
+                    }
+                    catch (const std::exception &ex) {
+                        FAIL("Create directory", _prefix + postfix);
+                    }
+            }
+
         }
-        else if (_mode == Driver::Mode::WRITE) {
-            // Sanitize and check path permissions
-            _prefix = path::expandForSave(_prefix, query);
-
-            // Check that path does NOT exist
-            if (boost::filesystem::exists(_prefix))
-                FAIL("Path exists. Path", _prefix);
-
-            // Create base, index, and chunks directories
-            for (const std::string &postfix : {"", "/index", "/chunks"})
-                try {
-                    // Not an error if the directory exists
-                    boost::filesystem::create_directory(_prefix + postfix);
-                }
-                catch (const std::exception &ex) {
-                    FAIL("Create directory", _prefix + postfix);
-                }
+        // Catch all rest
+        catch (const std::exception &ex) {
+            throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_UNKNOWN_ERROR)
+                << ex.what();
         }
     }
 

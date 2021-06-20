@@ -83,13 +83,15 @@ public:
 
             THROW_NOT_OK(arrow::MakeBuilder(_arrowPool,
                                             _arrowSchema->field(i)->type(),
-                                            &_arrowBuilders[i]));
+                                            &_arrowBuilders[i]),
+                         "make builder");
             i++;
         }
         for(size_t i = _nAttrs; i < _nAttrs + _nDims; ++i) {
             THROW_NOT_OK(arrow::MakeBuilder(_arrowPool,
                                             _arrowSchema->field(i)->type(),
-                                            &_arrowBuilders[i]));
+                                            &_arrowBuilders[i]),
+                         "make builder");
         }
     }
 
@@ -443,12 +445,14 @@ public:
                 arrow::io::CompressedOutputStream::Make(codec.get(), arrowBufferStream));
             ASSIGN_OR_THROW(
                 arrowWriter,
-                arrow::ipc::MakeStreamWriter(&*arrowCompressedStream, _arrowSchema));
+                arrow::ipc::MakeStreamWriter(&*arrowCompressedStream, _arrowSchema),
+                "make compressed stream writer");
         }
         else {
             ASSIGN_OR_THROW(
                 arrowWriter,
-                arrow::ipc::MakeStreamWriter(&*arrowBufferStream, _arrowSchema));
+                arrow::ipc::MakeStreamWriter(&*arrowBufferStream, _arrowSchema),
+                "make stream writer");
         }
 
         ARROW_RETURN_NOT_OK(arrowWriter->WriteRecordBatch(*arrowBatch));
@@ -534,7 +538,8 @@ public:
         if (_driver == NULL)
             _driver = Driver::makeDriver(
                 _settings->getURL(),
-                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
+                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE,
+                _settings->getS3SSE());
 
         // Coordinator Creates/Checks Directories
         _driver->init(*query);
@@ -551,7 +556,8 @@ public:
         if (_driver == NULL)
             _driver = Driver::makeDriver(
                 _settings->getURL(),
-                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE);
+                _settings->isUpdate() ? Driver::Mode::UPDATE : Driver::Mode::WRITE,
+                _settings->getS3SSE());
 
         std::shared_ptr<Array> result(new MemArray(_schema, query));
         auto instID = query->getInstanceID();
@@ -580,6 +586,9 @@ public:
 
             // Check Schema
             auto existingSchema = metadata.getSchema(query);
+            std::ostringstream existingAttrs, inputAttrs;
+            inputSchema.getAttributes().stream_out(inputAttrs);
+            existingSchema.getAttributes().stream_out(existingAttrs);
             if (!(inputSchema.sameSchema(
                       existingSchema,
                       ArrayDesc::SchemaFieldSelector(
@@ -587,8 +596,7 @@ public:
                               ).endMax(true
                                   ).chunkInterval(true
                                       ).chunkOverlap(true))
-                  && inputSchema.getAttributes(true)
-                  == existingSchema.getAttributes(true))) {
+                 && inputAttrs.str() == existingAttrs.str())) {
                 error << "Existing schema ";
                 printSchema(error, existingSchema);
                 error << " and provided schema ";
@@ -691,6 +699,7 @@ public:
                     existingArrayIters[attr.getId()] =
                         existingArray->getConstIterator(attr);
             }
+
             // Init Writer
             // if (_settings->isArrowFormat())
             ArrowWriter dataWriter(inputSchema.getAttributes(true),
@@ -709,6 +718,7 @@ public:
 
                     // Set Object Name using Top-Left Coordinates
                     Coordinates const &pos = inputChunkIters[0]->getFirstPosition();
+                    auto objectName = Metadata::coord2ObjectName(pos, dims);
 
                     // Declare Output;
                     std::shared_ptr<arrow::Buffer> arrowBuffer;
@@ -738,13 +748,15 @@ public:
                             if (inputPos == nullptr) { // Ended Input, Write Existing
                                 THROW_NOT_OK(
                                     dataWriter.writePartArrowBuffer(
-                                        existingChunkIters, existingPos, arrowBuffer));
+                                        existingChunkIters, existingPos, arrowBuffer),
+                                    "serialize existing pos (input ended) to " + objectName);
                                 nextExisting = true;
                             }
                             else if (existingPos == nullptr) { // Ended Existing, Write Input
                                 THROW_NOT_OK(
                                     dataWriter.writePartArrowBuffer(
-                                        inputChunkIters, inputPos, arrowBuffer));
+                                        inputChunkIters, inputPos, arrowBuffer),
+                                    "serialize input pos (existing ended) to " + objectName);
                                 nextInput = true;
                             }
                             else {
@@ -753,19 +765,22 @@ public:
                                 if (res < 0) { // Input Has Lower Coordinate, Write Input
                                     THROW_NOT_OK(
                                         dataWriter.writePartArrowBuffer(
-                                            inputChunkIters, inputPos, arrowBuffer));
+                                            inputChunkIters, inputPos, arrowBuffer),
+                                        "serialize input pos (lower) to " + objectName);
                                     nextInput = true;
                                 }
                                 else if ( res > 0 ) { // Existing Has Lower Coordinate, Write Existing
                                     THROW_NOT_OK(
                                         dataWriter.writePartArrowBuffer(
-                                            existingChunkIters, existingPos, arrowBuffer));
+                                            existingChunkIters, existingPos, arrowBuffer),
+                                        "serialize existing pos (lower) to " + objectName);
                                     nextExisting = true;
                                 }
                                 else { // Coordinates are Equal, Write Input, Advance Both
                                     THROW_NOT_OK(
                                         dataWriter.writePartArrowBuffer(
-                                            inputChunkIters, inputPos, arrowBuffer));
+                                            inputChunkIters, inputPos, arrowBuffer),
+                                        "serialize input pos (equal) to " + objectName);
                                     nextInput = true;
                                     nextExisting = true;
                                 }
@@ -785,8 +800,10 @@ public:
                         }
 
                         // Finalize Chunk
-                        THROW_NOT_OK(dataWriter.finalize(arrowBuffer));
+                        THROW_NOT_OK(dataWriter.finalize(arrowBuffer),
+                                     "finalize " + objectName);
                     }
+
                     // -- -
                     // Add Input Chunk
                     // -- -
@@ -799,15 +816,13 @@ public:
                             index->insert(pos);
 
                         // Serialize Chunk
-                        THROW_NOT_OK(
-                            dataWriter.writeArrowBuffer(
-                                inputChunkIters, arrowBuffer));
+                        THROW_NOT_OK(dataWriter.writeArrowBuffer(
+                                         inputChunkIters, arrowBuffer),
+                                     "serialize input chunk to " + objectName);
                     }
 
                     // Write Chunk
-                    _driver->writeArrow(
-                        "chunks/" +
-                        Metadata::coord2ObjectName(pos, dims), arrowBuffer);
+                    _driver->writeArrow(objectName, arrowBuffer);
                 }
 
                 // Advance Array Iterators
@@ -845,17 +860,20 @@ public:
 
             auto splitPtr = index->begin();
             while (splitPtr != index->end()) {
-                // Convert to Arrow
-                std::shared_ptr<arrow::Buffer> arrowBuffer;
-                THROW_NOT_OK(indexWriter.writeArrowBuffer(splitPtr,
-                                                          index->end(),
-                                                          szSplit,
-                                                          arrowBuffer));
-
-                // Write Index
+                // Assemble Object Name
                 std::ostringstream out;
                 out << "index/" << split;
-                _driver->writeArrow(out.str(), arrowBuffer);
+                auto objectName = out.str();
+
+                // Convert to Arrow
+                std::shared_ptr<arrow::Buffer> arrowBuffer;
+                THROW_NOT_OK(
+                    indexWriter.writeArrowBuffer(
+                        splitPtr, index->end(), szSplit, arrowBuffer),
+                    "serialize index to " + objectName);
+
+                // Write Index
+                _driver->writeArrow(objectName, arrowBuffer);
 
                 // Advance to Next Index Split
                 splitPtr += std::min<size_t>(

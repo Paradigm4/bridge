@@ -208,21 +208,21 @@ void Metadata::validate() const {
 std::string Metadata::coord2ObjectName(const Coordinates &pos,
                                        const Dimensions &dims) {
     std::ostringstream out;
-    out << "c";
+    out << "chunks/c";
     for (size_t i = 0; i < dims.size(); ++i)
         out << "_" << (pos[i] -
                        dims[i].getStartMin()) / dims[i].getChunkInterval();
     return out.str();
 }
 
-std::shared_ptr<Driver> Driver::makeDriver(const std::string url,
-                                           const Driver::Mode mode)
-{
+std::shared_ptr<Driver> Driver::makeDriver(const std::string& url,
+                                           const Driver::Mode mode,
+                                           const std::string& s3_sse) {
     if (url.rfind("file://", 0) == 0)
         return std::make_shared<FSDriver>(url, mode);
 
     if (url.rfind("s3://", 0) == 0)
-        return std::make_shared<S3Driver>(url, mode);
+        return std::make_shared<S3Driver>(url, mode, s3_sse);
 
     throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
         << "Invalid URL " << url;

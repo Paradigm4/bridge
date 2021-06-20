@@ -66,6 +66,41 @@ users is in `io-paths-list` in SciDB `config.ini`.
 
 ### Advanced Usage
 
+#### Permissions
+
+When using `xinput`/`xsave` to read/write to a mounted file system,
+the `io-paths-list` values are enforced. This is similar to the
+`input`/`save` operators. Please see [File I/O
+Restrictions](https://paradigm4.atlassian.net/l/c/uhmpNqz7) in the
+SciDB documentations for more details. Note that user running the
+SciDB process also needs appropriate I/O permissions to the file
+system path used.
+
+S3 paths are also supported in the `io-paths-list` value as
+follows. Any paths that start with `s3/` are considered S3 paths. For
+example, a value of `s3/foo/bar` in `io-paths-list` is converted to
+the `s3://foo/bar` S3 URL. The S3 URLs used in the `xinput`/`xsave`
+operators have to be a super-set of one of the URLS listed in
+`io-paths-list`.
+
+For example, given:
+```
+io-paths-list=s3/foo/bar:s3/taz/qux/
+```
+the following calls are accepted:
+```
+xinput('s3://foo/bar/1')
+xinput('s3://foo/bartaz/2')     # matches s3://foo/bar
+xsave(..., 's3://taz/qux/3)
+```
+while the following are *not*:
+```
+xsave(..., 's3://taz/quxfoo/4)  # does not match s3://taz/qux/
+```
+
+The S3 URLs are checked against the `io-paths-list` values for *all*
+SciDB users.
+
 #### xsave
 
 Parameters:
@@ -79,8 +114,8 @@ Parameters:
   * Specify if a new array is created (`update:false`, default) or an
     existing array is updated (`update:true`)
 * `format`
-  * Specify array storage format. Currently only format supported and
-    the default is Apache Arrow
+  * Specify array storage format. Currently the only and the default
+    format supported is Apache Arrow
   * e.g., `xsave(..., format:'arrow')`
 * `compression`
   * Specify is the array should be stored compress and what
@@ -96,7 +131,41 @@ Parameters:
     number of dimensions. The default value is `100,000`.
   * e.g., `xsave(..., index_split:3000)` if the array has three
     dimensions, then each index split will index `1,000` chunks.
+* `s3_ss3`
+  * Specify S3 Server-Side Encryption algorithm. By default, no
+    server-side encryption algorithm is used, i.e.,
+    `s3_sse:'NOT_SET'`. Accepted values are `NOT_SET`, `AES256`, and
+    `aws:kms`.
+  * e.g., `xsave(..., s3_sse:'AES256')`
 
+#### xinput
+
+Parameters:
+
+* `format`
+  * Specify array storage format. Currently the only and the default
+    format supported is Apache Arrow
+  * e.g., `xinput(..., format:'arrow')`
+* `cache_size`
+  * Specify the size of the cache to be used for storing chunks. Once
+    a chunk is read in memory, it is stored in the cache. Once a chunk
+    is store while reading one attribute, it can be re-used when
+    reading subsequent attributes from the same chunk. The cache uses
+    a least recently used eviction policy. The value is specified in
+    bytes. The default value is `268,435,456` (`256MB`). A value of
+    `0` disables the cache.
+  * e.g., `xinput(..., cache_size:524288000)` (`500 MB`)
+
+#### Python API
+
+Rebuild the index of an array stored in S3:
+
+```
+import scidbbridge
+ar = scidbbridge.Array('s3://p4tests/bridge/foo')
+ix = ar.build_index()
+ar.write_index(ix)
+```
 
 ### Troubleshoot
 
@@ -226,8 +295,16 @@ More details: https://github.com/aws/aws-sdk-cpp/issues/1491
 
 ### Python Package
 
+#### Install Latest Release from PyPI
+
 ```
 pip install scidb-bridge
+```
+
+#### Install Latest Version from GitHub
+
+```
+pip install --user git+https://github.com/Paradigm4/bridge.git#subdirectory=py_pkg`
 ```
 
 ## AWS Configuration
