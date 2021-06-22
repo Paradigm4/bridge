@@ -41,7 +41,7 @@ XSaveSettings::XSaveSettings(
     _namespace(NamespaceDesc("public")),
     _isUpdate(false),
     _format(Metadata::Format::ARROW),
-    _compression(Metadata::Compression::NONE),
+    _compression(Metadata::Compression::LZ4),
     _indexSplit(INDEX_SPLIT_DEFAULT),
     _s3_sse(S3_SSE_DEFAULT)
 {

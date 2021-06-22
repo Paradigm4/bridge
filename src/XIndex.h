@@ -121,6 +121,8 @@ class XIndex {
 
     const XIndexStore::const_iterator find(const Coordinates&) const;
 
+    static const Metadata::Compression compression = Metadata::Compression::LZ4;
+
   private:
     const ArrayDesc& _desc;
     const Dimensions& _dims;

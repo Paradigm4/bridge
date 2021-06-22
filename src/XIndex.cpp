@@ -272,7 +272,7 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
     std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
     ArrowReader arrowReader(Attributes(),
                             _desc.getDimensions(),
-                            Metadata::Compression::GZIP,
+                            XIndex::compression,
                             driver);
     std::shared_ptr<arrow::RecordBatch> arrowBatch;
 

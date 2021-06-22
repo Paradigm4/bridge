@@ -862,7 +862,7 @@ public:
 
             ArrowWriter indexWriter(Attributes(),
                                     inputSchema.getDimensions(),
-                                    Metadata::Compression::GZIP);
+                                    XIndex::compression);
 
             auto splitPtr = index->begin();
             while (splitPtr != index->end()) {
