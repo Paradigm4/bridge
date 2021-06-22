@@ -234,7 +234,7 @@ arrow::Compression::type Metadata::compression2Arrow(
     case Metadata::Compression::GZIP:
         return arrow::Compression::type::GZIP;
     case Metadata::Compression::LZ4:
-        return arrow::Compression::type::LZ4;
+        return arrow::Compression::type::LZ4_FRAME;
     default: {
         std::ostringstream error;
         error << "Unsupported compression " << compression;
