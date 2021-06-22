@@ -33,9 +33,6 @@
 #include <array/Dimensions.h>
 #include <query/InstanceID.h>
 
-// Arrow
-#include <arrow/util/compression.h>
-
 
 // Forward Declarastions to avoid including full headers - speed-up
 // compilation

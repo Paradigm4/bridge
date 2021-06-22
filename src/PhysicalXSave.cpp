@@ -40,7 +40,6 @@
 #include <arrow/io/memory.h>
 #include <arrow/ipc/writer.h>
 #include <arrow/record_batch.h>
-#include <arrow/util/compression.h>
 
 
 namespace scidb {
@@ -438,9 +437,9 @@ public:
         // Setup Arrow Compression, If Enabled
         std::shared_ptr<arrow::ipc::RecordBatchWriter> arrowWriter;
         std::shared_ptr<arrow::io::CompressedOutputStream> arrowCompressedStream;
-        if (_compression == Metadata::Compression::GZIP) {
+        if (_compression != Metadata::Compression::NONE) {
             std::unique_ptr<arrow::util::Codec> codec = *arrow::util::Codec::Create(
-                arrow::Compression::type::GZIP);
+                Metadata::compression2Arrow(_compression));
             ASSIGN_OR_THROW(
                 arrowCompressedStream,
                 arrow::io::CompressedOutputStream::Make(codec.get(), arrowBufferStream),
@@ -463,7 +462,7 @@ public:
         ARROW_RETURN_NOT_OK(arrowWriter->Close());
 
         // Close Arrow Compression Stream, If Enabled
-        if (_compression == Metadata::Compression::GZIP) {
+        if (_compression != Metadata::Compression::NONE) {
             ARROW_RETURN_NOT_OK(arrowCompressedStream->Close());
         }
 
@@ -682,6 +681,7 @@ public:
             std::vector<std::shared_ptr<ConstChunkIterator> > inputChunkIters(nAttrs);
             for (auto const &attr : inputSchema.getAttributes(true))
                 inputArrayIters[attr.getId()] = inputArray->getConstIterator(attr);
+            auto compression = _settings->getCompression();
 
             // Allocate Existing Array and Iterators
             std::shared_ptr<XArray> existingArray;
@@ -700,7 +700,7 @@ public:
                     query,
                     _driver,
                     index,
-                    _settings->getCompression(), 0);
+                    compression, 0);
                 for (auto const &attr : inputSchema.getAttributes(true))
                     existingArrayIters[attr.getId()] =
                         existingArray->getConstIterator(attr);
@@ -710,7 +710,7 @@ public:
             // if (_settings->isArrowFormat())
             ArrowWriter dataWriter(inputSchema.getAttributes(true),
                                    inputSchema.getDimensions(),
-                                   _settings->getCompression());
+                                   compression);
 
             while (!inputArrayIters[0]->end()) {
                 if (!inputArrayIters[0]->getChunk().getConstIterator(

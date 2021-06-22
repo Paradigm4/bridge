@@ -32,7 +32,6 @@
 // Arrow
 #include <arrow/builder.h>
 #include <arrow/ipc/reader.h>
-#include <arrow/util/compression.h>
 
 
 namespace scidb {

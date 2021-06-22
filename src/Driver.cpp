@@ -26,6 +26,8 @@
 #include "S3Driver.h"
 #include "FSDriver.h"
 
+#include <boost/algorithm/string/predicate.hpp>
+
 // SciDB
 #include <query/LogicalQueryPlan.h>
 #include <query/Parser.h>
@@ -99,38 +101,11 @@ Metadata::Compression Metadata::getCompression() const {
                                scidb::SCIDB_LE_UNKNOWN_ERROR)
             << "Compression missing from metadata";
 
-    auto compression = compressionPair->second;
-    if (compression == "none")
-        return Metadata::Compression::NONE;
-    else if (compression == "gzip")
-        return Metadata::Compression::GZIP;
-    else {
-        std::ostringstream error;
-        error << "Unsupported compression '" << compression << "'";
-        throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
-            << error.str();
-    }
+    return Metadata::string2Compression(compressionPair->second);
 }
 
 void Metadata::setCompression(Metadata::Compression compression) {
-    std::string compressionStr;
-    switch (compression) {
-    case Metadata::Compression::NONE: {
-        compressionStr = "none";
-        break;
-    }
-    case Metadata::Compression::GZIP: {
-        compressionStr = "gzip";
-        break;
-    }
-    default: {
-        std::ostringstream error;
-        error << "Unsupported compression '" << compression << "'";
-        throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
-            << error.str();
-    }
-    }
-    _metadata["compression"] = compressionStr;
+    _metadata["compression"] = compression2String(compression);
 }
 
 void Metadata::validate() const {
@@ -213,6 +188,60 @@ std::string Metadata::coord2ObjectName(const Coordinates &pos,
         out << "_" << (pos[i] -
                        dims[i].getStartMin()) / dims[i].getChunkInterval();
     return out.str();
+}
+
+Metadata::Compression Metadata::string2Compression(
+    const std::string& compression) {
+
+    if (boost::iequals(compression, "none"))
+        return Metadata::Compression::NONE;
+    else if (boost::iequals(compression, "gzip"))
+        return Metadata::Compression::GZIP;
+    else if (boost::iequals(compression, "lz4"))
+        return Metadata::Compression::LZ4;
+    else {
+        std::ostringstream err;
+        err << "Unsupported compression" << compression;
+        throw USER_EXCEPTION(SCIDB_SE_METADATA,
+                             SCIDB_LE_ILLEGAL_OPERATION) << err.str();
+    }
+}
+
+std::string Metadata::compression2String(Metadata::Compression compression) {
+
+    switch (compression) {
+    case Metadata::Compression::NONE:
+        return "none";
+    case Metadata::Compression::GZIP:
+        return "gzip";
+    case Metadata::Compression::LZ4:
+        return "lz4";
+    default: {
+        std::ostringstream error;
+        error << "Unsupported compression " << compression;
+        throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
+            << error.str();
+    }
+    }
+}
+
+arrow::Compression::type Metadata::compression2Arrow(
+    Metadata::Compression compression) {
+
+    switch (compression) {
+    case Metadata::Compression::NONE:
+        return arrow::Compression::type::UNCOMPRESSED;
+    case Metadata::Compression::GZIP:
+        return arrow::Compression::type::GZIP;
+    case Metadata::Compression::LZ4:
+        return arrow::Compression::type::LZ4;
+    default: {
+        std::ostringstream error;
+        error << "Unsupported compression " << compression;
+        throw SYSTEM_EXCEPTION(SCIDB_SE_INTERNAL, SCIDB_LE_ILLEGAL_OPERATION)
+            << error.str();
+    }
+    }
 }
 
 std::shared_ptr<Driver> Driver::makeDriver(const std::string& url,

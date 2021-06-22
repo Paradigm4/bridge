@@ -38,6 +38,7 @@
 
 // Arrow
 #include <arrow/buffer.h>
+#include <arrow/util/compression.h>
 
 #define BRIDGE_VERSION 1
 #define INDEX_SPLIT_MIN 100
@@ -94,7 +95,8 @@ public:
 
     enum Compression {
         NONE  = 0,
-        GZIP  = 1
+        GZIP  = 1,
+        LZ4   = 2
     };
 
     Metadata():
@@ -127,6 +129,10 @@ public:
     void setSchema(const ArrayDesc &schema);
 
     void validate() const;
+
+    static Metadata::Compression string2Compression(const std::string&);
+    static std::string compression2String(Metadata::Compression);
+    static arrow::Compression::type compression2Arrow(Metadata::Compression);
 
     static std::string coord2ObjectName(const Coordinates &pos,
                                         const Dimensions &dims);

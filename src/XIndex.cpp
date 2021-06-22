@@ -55,9 +55,9 @@ ArrowReader::ArrowReader(
     THROW_NOT_OK(arrow::AllocateResizableBuffer(0, &_arrowResizableBuffer),
                  "allocate empty resizable buffer");
 
-    if (_compression == Metadata::Compression::GZIP)
+    if (_compression != Metadata::Compression::NONE)
         _arrowCodec = *arrow::util::Codec::Create(
-            arrow::Compression::type::GZIP);
+            Metadata::compression2Arrow(_compression));
 }
 
 size_t ArrowReader::readObject(

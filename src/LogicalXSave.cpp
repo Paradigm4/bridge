@@ -25,6 +25,8 @@
 
 #include "XSaveSettings.h"
 
+// SciDB
+#include <query/Query.h>
 #include <rbac/Rights.h>
 
 namespace scidb {

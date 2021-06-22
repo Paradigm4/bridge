@@ -53,7 +53,7 @@ CPPFLAGS := $(CFLAGS) $(INC)
 LIBS    := -shared -Wl,-soname,libbridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
 LIBS    += -rdynamic $(AWS_LIB)/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,$(AWS_LIB) $(CURL_LIB)
 
-SRCS    := plugin.cpp LogicalXSave.cpp PhysicalXSave.cpp LogicalXInput.cpp PhysicalXInput.cpp XArray.cpp XIndex.cpp S3Driver.cpp FSDriver.cpp Driver.cpp
+SRCS    := plugin.cpp LogicalXSave.cpp PhysicalXSave.cpp XSaveSettings.cpp LogicalXInput.cpp PhysicalXInput.cpp XArray.cpp XIndex.cpp S3Driver.cpp FSDriver.cpp Driver.cpp
 HEADERS := XSaveSettings.h XInputSettings.h XArray.h XIndex.h Driver.h FSDriver.h S3Driver.h
 OBJS    := $(SRCS:%.cpp=%.o)
 
@@ -81,6 +81,7 @@ PhysicalXInput.o: XInputSettings.h Driver.h XIndex.h XArray.h
 
 LogicalXSave.o:  XSaveSettings.h Driver.h
 PhysicalXSave.o: XSaveSettings.h Driver.h XIndex.h XArray.h
+XSaveSettings.o: XSaveSettings.h Driver.h
 
 XArray.o: XArray.h XIndex.h XInputSettings.h Driver.h
 XIndex.o: XIndex.h Driver.h
