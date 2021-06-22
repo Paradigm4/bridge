@@ -82,6 +82,10 @@ namespace scidb {
 
 namespace scidb {
 
+// Logger for operator. static to prevent visibility of variable outside of file
+static log4cxx::LoggerPtr logger(
+    log4cxx::Logger::getLogger("scidb.operators.bridge"));
+
 class Metadata {
 public:
     enum Format {

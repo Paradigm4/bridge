@@ -40,9 +40,6 @@
 
 
 namespace scidb {
-
-static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.xindex"));
-
 //
 // Arrow Reader
 //

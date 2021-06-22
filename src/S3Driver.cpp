@@ -25,7 +25,6 @@
 
 #include "S3Driver.h"
 
-#include <log4cxx/logger.h>
 #include <boost/algorithm/string.hpp>
 
 // AWS
@@ -43,8 +42,6 @@
 
 
 namespace scidb {
-    static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.s3driver"));
-
     //
     // ScopedMutex
     //
