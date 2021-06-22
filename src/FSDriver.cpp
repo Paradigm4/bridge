@@ -27,8 +27,8 @@
 
 #include <boost/filesystem.hpp>
 #include <fstream>
-#include <log4cxx/logger.h>
 
+// SciDB
 #include <util/PathUtils.h>
 
 
@@ -42,9 +42,6 @@
 
 
 namespace scidb {
-
-    static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.fsdriver"));
-
     //
     // FSDriver
     //

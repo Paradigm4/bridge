@@ -35,10 +35,6 @@
 
 namespace scidb {
 
-// Logger for operator. static to prevent visibility of variable outside of file
-static log4cxx::LoggerPtr logger(
-    log4cxx::Logger::getLogger("scidb.operators.xinput"));
-
 static const char* const KW_FORMAT	  = "format";
 static const char* const KW_CACHE_SIZE	  = "cache_size";
 

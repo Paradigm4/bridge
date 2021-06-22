@@ -91,7 +91,7 @@ class Array(object):
         # Read index as Arrow Table
         tables = []
         for index_url in Driver.list('{}/index'.format(self.url)):
-            reader = Driver.create_reader(index_url, 'gzip')
+            reader = Driver.create_reader(index_url, Driver.index_compression)
             tables.append(reader.read_all())
         table = pyarrow.concat_tables(tables)
 
@@ -172,7 +172,7 @@ class Array(object):
         for offset in range(0, len(index), chunk_size):
             sink = Driver.create_writer('{}/index/{}'.format(self.url, i),
                                         index_schema,
-                                        'gzip')
+                                        Driver.index_compression)
             writer = next(sink)
             writer.write_table(
                 pyarrow.Table.from_pandas(

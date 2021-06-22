@@ -40,9 +40,6 @@
 
 
 namespace scidb {
-
-static log4cxx::LoggerPtr logger(log4cxx::Logger::getLogger("scidb.xindex"));
-
 //
 // Arrow Reader
 //
@@ -59,9 +56,9 @@ ArrowReader::ArrowReader(
                     arrow::AllocateResizableBuffer(0),
                     "allocate empty resizable buffer");
 
-    if (_compression == Metadata::Compression::GZIP)
+    if (_compression != Metadata::Compression::NONE)
         _arrowCodec = *arrow::util::Codec::Create(
-            arrow::Compression::type::GZIP);
+            Metadata::compression2Arrow(_compression));
 }
 
 size_t ArrowReader::readObject(
@@ -278,7 +275,7 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
     std::unique_ptr<std::vector<Coordinate>[]> coordBuf= std::make_unique<std::vector<Coordinate>[]>(nInst);
     ArrowReader arrowReader(Attributes(),
                             _desc.getDimensions(),
-                            Metadata::Compression::GZIP,
+                            XIndex::compression,
                             driver);
     std::shared_ptr<arrow::RecordBatch> arrowBatch;
 

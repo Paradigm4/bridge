@@ -330,7 +330,7 @@ xsave(
 
 # Test with Different Cache Sizes
 @pytest.mark.parametrize('url, cache_size',
-                         itertools.product(test_urls, (None, 5000, 2500, 0)))
+                         itertools.product(test_urls, (None, 2000, 1000, 0)))
 def test_cache(scidb_con, url, cache_size):
     url = '{}/cache-{}'.format(url, cache_size)
     schema = '<v:int64 not null, w:int64 not null> [i=0:999:0:100]'
@@ -354,7 +354,7 @@ xsave(
         url,
         '' if cache_size is None else ', cache_size:{}'.format(cache_size))
 
-    if cache_size == 2500:
+    if cache_size == 1000:
         with pytest.raises(requests.exceptions.HTTPError):
             array = scidb_con.iquery(que, fetch=True)
     else:
@@ -387,10 +387,13 @@ xsave(
     if url.startswith('s3://'):
         s3_key = '{}/{}/chunks/c_0'.format(base_prefix, prefix)
         obj = s3_con.get_object(Bucket=s3_bucket, Key=s3_key)
-        reader = pyarrow.ipc.open_stream(obj['Body'].read())
+        reader = pyarrow.RecordBatchStreamReader(
+            pyarrow.input_stream(pyarrow.py_buffer(obj['Body'].read()),
+                                 compression='lz4'))
     elif url.startswith('file://'):
         fn = '{}/{}/chunks/c_0'.format(fs_base, prefix)
-        reader = pyarrow.ipc.open_stream(pyarrow.OSFile(fn))
+        reader = pyarrow.RecordBatchStreamReader(
+            pyarrow.input_stream(fn, compression='lz4'))
 
     tbl = reader.read_all()
 

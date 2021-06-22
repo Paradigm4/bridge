@@ -54,7 +54,7 @@ scidb_url = 'https://localhost:8083'
 
 base_metadata = {
     'attribute':   'ALL',
-    'compression': None,
+    'compression': 'lz4',
     'format':      'arrow',
     'index_split': '100000',
     'namespace':   'public',

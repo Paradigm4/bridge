@@ -28,6 +28,9 @@ import urllib.parse
 
 
 class Driver:
+    default_compression = 'lz4'
+    index_compression = 'lz4'
+
     _s3_client = None
     _s3_resource = None
 
@@ -88,7 +91,7 @@ class Driver:
             raise Exception('URL {} not supported'.format(url))
 
     @staticmethod
-    def create_reader(url, compression=None):
+    def create_reader(url, compression=default_compression):
         parts = urllib.parse.urlparse(url)
 
         # S3

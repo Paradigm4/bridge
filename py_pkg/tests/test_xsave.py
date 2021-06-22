@@ -290,9 +290,9 @@ xsave(
 @pytest.mark.parametrize(('url', 'compression', 'sz_min', 'sz_max'),
                          ((url, *param)
                           for url in test_urls
-                          for param in zip(('default', 'none', 'gzip'),
-                                           (1500, 1500, 0),
-                                           (9999, 9999, 500))))
+                          for param in zip(('default', 'none', 'gzip', 'lz4'),
+                                           (  0, 1500, 0,   0),
+                                           (500, 9999, 500, 500))))
 def test_compression(scidb_con, url, compression, sz_min, sz_max):
     prefix = 'compression_{}'.format(compression)
     url = '{}/{}'.format(url, prefix)
@@ -308,7 +308,8 @@ xsave(
 
     array = scidbbridge.Array(url)
 
-    m_compression = (None if compression in ('default', 'none')
+    m_compression = (None if compression == 'none'
+                     else 'lz4' if compression == 'default'
                      else compression)
     assert array.metadata == {**base_metadata,
                               **{'schema': '{}'.format(schema),
@@ -425,6 +426,13 @@ xsave(
 xsave(
   build(<v:int64> [i=0:9:0:5; j=10:20:0:5], i),
   '{}', update:true, compression:'gzip')""".format(url))
+
+    # Set compression
+    with pytest.raises(requests.exceptions.HTTPError):
+        scidb_con.iquery("""
+xsave(
+  build(<v:int64> [i=0:9:0:5; j=10:20:0:5], i),
+  '{}', update:true, compression:'lz4')""".format(url))
 
     # Set index_split
     with pytest.raises(requests.exceptions.HTTPError):
