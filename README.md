@@ -225,7 +225,7 @@ Install extra-scidb-libs following the instructions
            -DBUILD_ONLY=s3                          \
            -DCMAKE_BUILD_TYPE=RelWithDebInfo        \
            -DBUILD_SHARED_LIBS=ON                   \
-           -DCMAKE_INSTALL_PREFIX=/opt/aws
+           -DCMAKE_INSTALL_PREFIX=/opt/aws-sdk-cpp
        ```
    1. RHEL/CentOS:
        ```
@@ -233,7 +233,7 @@ Install extra-scidb-libs following the instructions
            -DBUILD_ONLY=s3                                              \
            -DCMAKE_BUILD_TYPE=RelWithDebInfo                            \
            -DBUILD_SHARED_LIBS=ON                                       \
-           -DCMAKE_INSTALL_PREFIX=/opt/aws                              \
+           -DCMAKE_INSTALL_PREFIX=/opt/aws-sdk-cpp                      \
            -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc     \
            -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++
        ```
@@ -242,7 +242,7 @@ Install extra-scidb-libs following the instructions
    aws-sdk-cpp-1.8.3/build> make
    aws-sdk-cpp-1.8.3/build> make install
    ```
-   The SDK will be installed in `/opt/aws`
+   The SDK will be installed in `/opt/aws-sdk-cpp`
 
 #### Apache Arrow
 
