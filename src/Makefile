@@ -22,19 +22,19 @@ ifeq ($(SCIDB_THIRDPARTY_PREFIX),)
 endif
 
 
-ifneq ("$(wildcard /opt/aws/lib)","")
+ifneq ("$(wildcard /opt/aws-sdk-cpp/lib)","")
   # -- - Ubuntu - --
-  AWS_LIB := /opt/aws/lib
-else ifneq ("$(wildcard /opt/aws/lib64)","")
+  AWS_LIB := /opt/aws-sdk-cpp/lib
+else ifneq ("$(wildcard /opt/aws-sdk-cpp/lib64)","")
   # -- - CentOS - --
-  AWS_LIB := /opt/aws/lib64
+  AWS_LIB := /opt/aws-sdk-cpp/lib64
   ifneq ("$(wildcard /opt/curl/lib)","")
     CURL_LIB := -Wl,-rpath,/opt/curl/lib
   else
     $(warning CentOS/RHEL setup infered but custom cURL not found in /opt/curl/lib. Make sure the system cURL is compiled with OpenSSL support and not NSS, otherwise the AWS connection will fail at runtime. Use curl -V to check.)
   endif
 else
-  $(error AWS SDK libraries not found in /opt/aws)
+  $(error AWS SDK libraries not found in /opt/aws-sdk-cpp)
 endif
 $(info Using AWS_LIB=$(AWS_LIB))
 $(info Using CURL_LIB=$(CURL_LIB))
