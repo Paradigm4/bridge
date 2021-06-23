@@ -1,0 +1,7 @@
+attribute	ALL
+compression	none
+format	arrow
+index_split	100000
+namespace	public
+schema	<v:int64,w:string NOT NULL> [i=0:20:0:5; j=0:10:0:5]
+version	1
