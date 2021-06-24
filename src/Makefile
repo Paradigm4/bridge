@@ -21,42 +21,53 @@ ifeq ($(SCIDB_THIRDPARTY_PREFIX),)
   SCIDB_THIRDPARTY_PREFIX := $(SCIDB_3RDPARTY)
 endif
 
+CPPFLAGS := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -Wall -Wextra -Wno-long-long -Wno-strict-aliasing -Wno-system-headers -Wno-unused -Wno-unused-parameter -Wno-variadic-macros -fPIC -fno-omit-frame-pointer -g -std=c++14
+CPPFLAGS += -DAWS_COMMON_USE_IMPORT_EXPORT -DAWS_EVENT_STREAM_USE_IMPORT_EXPORT -DAWS_SDK_VERSION_MAJOR=1 -DAWS_SDK_VERSION_MINOR=8 -DAWS_SDK_VERSION_PATCH=3
+CPPFLAGS += -DPROJECT_ROOT="\"$(SCIDB)\"" -I. -I"$(SCIDB)/include" -I"$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/include"
+CPPFLAGS += -I/opt/aws-sdk-cpp/include
+LIBS     := -shared -Wl,-soname,libbridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
+LIBS     += -lm -lrt -ldl
+SRCS     := plugin.cpp LogicalXSave.cpp PhysicalXSave.cpp XSaveSettings.cpp LogicalXInput.cpp PhysicalXInput.cpp XArray.cpp XIndex.cpp S3Driver.cpp FSDriver.cpp Driver.cpp
+HEADERS  := XSaveSettings.h XInputSettings.h XArray.h XIndex.h Driver.h FSDriver.h S3Driver.h
+OBJS     := $(SRCS:%.cpp=%.o)
+
+# Debug build
+# CPPFLAGS += -Wfatal-errors
 
 ifneq ("$(wildcard /opt/aws-sdk-cpp/lib)","")
   # -- - Ubuntu - --
-  AWS_LIB := /opt/aws-sdk-cpp/lib
+
+  # AWS SDK CPP
+  AWS_PATH := /opt/aws-sdk-cpp/lib
+
 else ifneq ("$(wildcard /opt/aws-sdk-cpp/lib64)","")
   # -- - CentOS - --
-  AWS_LIB := /opt/aws-sdk-cpp/lib64
+
+  # AWS SDK CPP
+  AWS_PATH := /opt/aws-sdk-cpp/lib64
+
+  # Apache Arrow
+  ifneq ("$(wildcard /opt/apache-arrow/lib64)","")
+    ARROW_PATH := /opt/apache-arrow
+    CPPFLAGS   += -I$(ARROW_PATH)/include
+    LIBS       += -L$(ARROW_PATH)/lib64
+    $(info Using Apache Arrow in $(ARROW_PATH))
+  else
+    $(warning CentOS/RHEL setup infered but custom Apache Arrow not found in /opt/apache-arrow/lib64)
+  endif
+
+  # cURL
   ifneq ("$(wildcard /opt/curl/lib)","")
-    CURL_LIB := -Wl,-rpath,/opt/curl/lib
+    LIBS += -Wl,-rpath,/opt/curl/lib
+    $(info Using cURL in /opt/curl/lib)
   else
     $(warning CentOS/RHEL setup infered but custom cURL not found in /opt/curl/lib. Make sure the system cURL is compiled with OpenSSL support and not NSS, otherwise the AWS connection will fail at runtime. Use curl -V to check.)
   endif
 else
-  $(error AWS SDK libraries not found in /opt/aws-sdk-cpp)
+  $(error AWS SDK libraries not found in /opt/aws-sdk-cpp/lib[64])
 endif
-$(info Using AWS_LIB=$(AWS_LIB))
-$(info Using CURL_LIB=$(CURL_LIB))
-
-
-# Debug:
-CFLAGS  := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -Wall -Wextra -Wno-long-long -Wno-strict-aliasing -Wno-system-headers -Wno-unused -Wno-unused-parameter -Wno-variadic-macros -fPIC -fno-omit-frame-pointer -g -std=c++14
-CFLAGS  += -DAWS_COMMON_USE_IMPORT_EXPORT -DAWS_EVENT_STREAM_USE_IMPORT_EXPORT -DAWS_SDK_VERSION_MAJOR=1 -DAWS_SDK_VERSION_MINOR=8 -DAWS_SDK_VERSION_PATCH=3
-
-INC     := -DPROJECT_ROOT="\"$(SCIDB)\"" -I. -I"$(SCIDB)/include" -I"$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/include"
-INC     += -I/opt/aws/include
-
-CPPFLAGS := $(CFLAGS) $(INC)
-# CPPFLAGS += -Wfatal-errors
-
-LIBS    := -shared -Wl,-soname,libbridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
-LIBS    += -rdynamic $(AWS_LIB)/libaws-cpp-sdk-s3.so -lm -lrt -ldl -Wl,-rpath,$(AWS_LIB) $(CURL_LIB)
-
-SRCS    := plugin.cpp LogicalXSave.cpp PhysicalXSave.cpp XSaveSettings.cpp LogicalXInput.cpp PhysicalXInput.cpp XArray.cpp XIndex.cpp S3Driver.cpp FSDriver.cpp Driver.cpp
-HEADERS := XSaveSettings.h XInputSettings.h XArray.h XIndex.h Driver.h FSDriver.h S3Driver.h
-OBJS    := $(SRCS:%.cpp=%.o)
-
+LIBS += -rdynamic $(AWS_PATH)/libaws-cpp-sdk-s3.so -Wl,-rpath,$(AWS_PATH)
+$(info Using AWS SDK CPP in $(AWS_PATH))
 
 # Compiler settings for SciDB version >= 15.7
 ifneq ("$(wildcard /usr/bin/g++-4.9)","")
@@ -70,9 +81,6 @@ else
 endif
 
 all: libbridge.so
-
-# %.o: %.cpp $(HEADERS)
-# 	$(CXX) $(CFLAGS) $(INC) -c $< -o $@
 
 plugin.o:
 
@@ -91,7 +99,7 @@ Driver.o: S3Driver.h FSDriver.h Driver.h
 
 libbridge.so: $(OBJS)
 	@if test ! -d "$(SCIDB)"; then echo  "Error. Try:\n\nmake SCIDB=<PATH TO SCIDB INSTALL PATH>"; exit 1; fi
-	$(CXX) $(CFLAGS) $(INC) -o libbridge.so $(OBJS) $(LIBS)
+	$(CXX) $(CPPFLAGS) -o libbridge.so $(OBJS) $(LIBS)
 	@echo "Now copy *.so to your SciDB lib/scidb/plugins directory and run"
 	@echo "iquery -aq \"load_library('bridge')\" # to load the plugin."
 	@echo
