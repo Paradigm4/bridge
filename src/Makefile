@@ -25,8 +25,8 @@ CPPFLAGS := -DARROW_NO_DEPRECATED_API -DNDEBUG -D__STDC_FORMAT_MACROS -D__STDC_L
 CPPFLAGS += -DAWS_COMMON_USE_IMPORT_EXPORT -DAWS_EVENT_STREAM_USE_IMPORT_EXPORT -DAWS_SDK_VERSION_MAJOR=1 -DAWS_SDK_VERSION_MINOR=8 -DAWS_SDK_VERSION_PATCH=3
 CPPFLAGS += -DPROJECT_ROOT="\"$(SCIDB)\"" -I. -I"$(SCIDB)/include" -I"$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/include"
 CPPFLAGS += -I/opt/aws-sdk-cpp/include
-LIBS     := -shared -Wl,-soname,libbridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm -larrow
-LIBS     += -lm -lrt -ldl
+LIBS     := -shared -Wl,-soname,libbridge.so -L . -L "$(SCIDB_THIRDPARTY_PREFIX)/3rdparty/boost/lib" -L "$(SCIDB)/lib" -Wl,-rpath,$(SCIDB)/lib -lm
+LIBS     +=  -larrow -laws-cpp-sdk-s3
 SRCS     := plugin.cpp LogicalXSave.cpp PhysicalXSave.cpp XSaveSettings.cpp LogicalXInput.cpp PhysicalXInput.cpp XArray.cpp XIndex.cpp S3Driver.cpp FSDriver.cpp Driver.cpp
 HEADERS  := XSaveSettings.h XInputSettings.h XArray.h XIndex.h Driver.h FSDriver.h S3Driver.h
 OBJS     := $(SRCS:%.cpp=%.o)
@@ -50,7 +50,7 @@ else ifneq ("$(wildcard /opt/aws-sdk-cpp/lib64)","")
   ifneq ("$(wildcard /opt/apache-arrow/lib64)","")
     ARROW_PATH := /opt/apache-arrow
     CPPFLAGS   += -I$(ARROW_PATH)/include
-    LIBS       += -L$(ARROW_PATH)/lib64
+    LIBS       += -L$(ARROW_PATH)/lib64 -Wl,-rpath,$(ARROW_PATH)/lib64
     $(info Using Apache Arrow in $(ARROW_PATH))
   else
     $(warning CentOS/RHEL setup infered but custom Apache Arrow not found in /opt/apache-arrow/lib64)
@@ -66,7 +66,7 @@ else ifneq ("$(wildcard /opt/aws-sdk-cpp/lib64)","")
 else
   $(error AWS SDK libraries not found in /opt/aws-sdk-cpp/lib[64])
 endif
-LIBS += -rdynamic $(AWS_PATH)/libaws-cpp-sdk-s3.so -Wl,-rpath,$(AWS_PATH)
+LIBS += -L$(AWS_PATH) -Wl,-rpath,$(AWS_PATH)
 $(info Using AWS SDK CPP in $(AWS_PATH))
 
 # Compiler settings for SciDB version >= 15.7
