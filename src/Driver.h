@@ -60,7 +60,7 @@
         if (PREDICT_FALSE(!__s.ok()))                                   \
         {                                                               \
             throw SYSTEM_EXCEPTION(                                     \
-                SCIDB_SE_ARRAY_WRITER, SCIDB_LE_ILLEGAL_OPERATION)      \
+                SCIDB_SE_EXECUTION, SCIDB_LE_ILLEGAL_OPERATION)         \
                 << __s.ToString().c_str() << " " << (message);          \
         }                                                               \
     })
