@@ -131,7 +131,7 @@ Parameters:
     number of dimensions. The default value is `100,000`.
   * e.g., `xsave(..., index_split:3000)` if the array has three
     dimensions, then each index split will index `1,000` chunks.
-* `s3_ss3`
+* `s3_sse`
   * Specify S3 Server-Side Encryption algorithm. By default, no
     server-side encryption algorithm is used, i.e.,
     `s3_sse:'NOT_SET'`. Accepted values are `NOT_SET`, `AES256`, and
