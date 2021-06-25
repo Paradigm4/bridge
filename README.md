@@ -142,10 +142,6 @@ Parameters:
 
 Parameters:
 
-* `format`
-  * Specify array storage format. Currently the only and the default
-    format supported is Apache Arrow
-  * e.g., `xinput(..., format:'arrow')`
 * `cache_size`
   * Specify the size of the cache to be used for storing chunks. Once
     a chunk is read in memory, it is stored in the cache. Once a chunk

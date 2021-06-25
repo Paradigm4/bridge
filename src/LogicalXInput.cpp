@@ -40,8 +40,7 @@ public:
     {
         static PlistSpec argSpec {
             { "",            RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) }, // URL
-            { KW_CACHE_SIZE, RE(PP(PLACEHOLDER_CONSTANT, TID_UINT64)) },
-            { KW_FORMAT,     RE(PP(PLACEHOLDER_CONSTANT, TID_STRING)) }
+            { KW_CACHE_SIZE, RE(PP(PLACEHOLDER_CONSTANT, TID_UINT64)) }
         };
         return &argSpec;
     }

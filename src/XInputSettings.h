@@ -35,7 +35,6 @@
 
 namespace scidb {
 
-static const char* const KW_FORMAT	  = "format";
 static const char* const KW_CACHE_SIZE	  = "cache_size";
 
 typedef std::shared_ptr<OperatorParamLogicalExpression> ParamType_t ;
@@ -44,7 +43,6 @@ class XInputSettings
 {
 private:
     std::string	     _url;
-    Metadata::Format _format;
     size_t           _cacheSize;
 
     Parameter findKeyword(const KeywordParameters& kwParams,
@@ -59,7 +57,6 @@ public:
                    const KeywordParameters& kwParams,
                    bool logical,
                    const std::shared_ptr<Query>& query):
-        _format(Metadata::Format::ARROW),
         _cacheSize(CACHE_SIZE_DEFAULT)
     {
         // Evaluate Parameters
@@ -67,29 +64,13 @@ public:
         // URL
         if (params.size() == 1) _url = paramToString(params[0]);
 
-        // Format
-        auto param = findKeyword(kwParams, KW_FORMAT);
-        if (param) {
-            auto format = paramToString(param);
-            if (format == "arrow")
-                _format = Metadata::Format::ARROW;
-            else
-                throw USER_EXCEPTION(SCIDB_SE_METADATA,
-                                     SCIDB_LE_ILLEGAL_OPERATION)
-                    << "format must be 'arrow'";
-        }
-
         // Cache Size
-        param = findKeyword(kwParams, KW_CACHE_SIZE);
+        auto param = findKeyword(kwParams, KW_CACHE_SIZE);
         if (param) _cacheSize = paramToUInt64(param);
     }
 
     const std::string& getURL() const {
         return _url;
-    }
-
-    bool isArrowFormat() const {
-        return _format == Metadata::Format::ARROW;
     }
 
     size_t getCacheSize() const {
