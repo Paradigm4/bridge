@@ -111,7 +111,7 @@ size_t ArrowReader::readObject(
         std::ostringstream out;
         out << "More than one Arrow Record Batch found in "
             << _driver->getURL() << "/" << name;
-        throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER, SCIDB_LE_UNKNOWN_ERROR)
+        throw SYSTEM_EXCEPTION(SCIDB_SE_EXECUTION, SCIDB_LE_ILLEGAL_OPERATION)
             << out.str();
     }
 
@@ -123,7 +123,7 @@ size_t ArrowReader::readObject(
             << _driver->getURL() << "/" << name
             << " does not match the expected schema ("
             << _schema->ToString() << ")";
-        throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER, SCIDB_LE_UNKNOWN_ERROR)
+        throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_ILLEGAL_OPERATION)
             << out.str();
     }
 
@@ -208,7 +208,7 @@ std::shared_ptr<arrow::Schema> ArrowReader::scidb2ArrowSchema(
         default: {
             std::ostringstream error;
             error << "Type " << type << " not supported in arrow format";
-            throw SYSTEM_EXCEPTION(SCIDB_SE_ARRAY_WRITER,
+            throw SYSTEM_EXCEPTION(SCIDB_SE_METADATA,
                                    SCIDB_LE_ILLEGAL_OPERATION) << error.str();
         }
         }
@@ -289,7 +289,7 @@ void XIndex::load(std::shared_ptr<const Driver> driver,
             out << objectName
                 << " Invalid number of columns";
             throw SYSTEM_EXCEPTION(scidb::SCIDB_SE_METADATA,
-                                   scidb::SCIDB_LE_UNKNOWN_ERROR)
+                                   scidb::SCIDB_LE_ILLEGAL_OPERATION)
                 << out.str();
         }
         std::vector<const int64_t*> columns(nDims);
