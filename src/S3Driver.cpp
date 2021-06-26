@@ -120,8 +120,9 @@ namespace scidb {
         if (!in_io_paths_list) {
             Config& config = *Config::getInstance();
             std::ostringstream out;
-            out << "S3 URL " << _url << " not listed in "
-                << config.getOptionName(CONFIG_IO_PATHS_LIST);
+            auto url_io = _url;
+            out << "S3 URL " << _url << ". Add " << url_io.erase(2, 2)
+                << " to " << config.getOptionName(CONFIG_IO_PATHS_LIST);
             throw USER_EXCEPTION(SCIDB_SE_METADATA, SCIDB_LE_INVALID_PERMISSIONS)
                 << out.str();
         }
