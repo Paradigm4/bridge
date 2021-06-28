@@ -242,31 +242,54 @@ Install extra-scidb-libs following the instructions
 
 #### Apache Arrow
 
-1. Apache Arrow library version `3.0.0` is required. The easiest way
-   to install it is by running:
+Apache Arrow library version `3.0.0` is required.
+
+##### Ubuntu
+
+1. Setup Apache Arrow repository and install runtime library:
    ```
    wget -O- https://paradigm4.github.io/extra-scidb-libs/install.sh \
    | sudo sh -s -- --only-prereq
    ```
 1. Install Apache Arrow development library:
-   1. Ubuntu
-      ```
-      apt-get install libarrow-dev=3.0.0-1
-      ```
-   1. RHEL/CentOS
-      ```
-      yum install arrow-devel-3.0.0
-      ```
+   ```
+   apt-get install libarrow-dev=3.0.0-1
+   ```
+
+##### RHEL/CentOS
+
+The Apache Arrow library and SciDB are compiled using different
+tool-chains. As a consequence, the Apache Arrow library needs to be
+compiled from source.
+
+```
+curl --location \
+    "https://www.apache.org/dyn/closer.lua?action=download&filename=arrow/arrow-3.0.0/apache-arrow-3.0.0.tar.gz" \
+    | tar --extract --gzip
+cd apache-arrow-3.0.0/cpp
+mkdir build
+cd build
+scl enable devtoolset-3                                             \
+    "cmake3 ..                                                      \
+         -DARROW_WITH_LZ4=ON                                        \
+         -DARROW_WITH_ZLIB=ON                                       \
+         -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ \
+         -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc   \
+         -DCMAKE_INSTALL_PREFIX=/opt/apache-arrow"
+make
+make install
+```
 
 #### cURL (RHEL/CentOS ONLY)
 
 Compile cURL with OpenSSL (instead of NSS):
 ```
-> curl https://curl.se/download/curl-7.72.0.tar.gz | tar xz
-> cd curl*
-> ./configure --prefix=/opt/curl
-> make
-> make install
+curl https://curl.se/download/curl-7.72.0.tar.gz    \
+    | tar --extract --gzip
+cd curl-7.72.0
+./configure --prefix=/opt/curl
+make
+make install
 ```
 More details: https://github.com/aws/aws-sdk-cpp/issues/1491
 
