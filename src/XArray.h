@@ -206,7 +206,7 @@ public:
 
 private:
     // SciDB members
-    const ArrayDesc _desc;
+    const ArrayDesc _schema;
     std::shared_ptr<Query> _query;
 
     // Bridge members
