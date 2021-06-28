@@ -50,16 +50,16 @@ namespace scidb {
     //
     // XCache
     //
-    XCache::XCache(const ArrayDesc &desc,
+    XCache::XCache(const ArrayDesc &schema,
                    const Metadata::Compression compression,
                    std::shared_ptr<const Driver> driver,
                    size_t cacheSize):
-        _arrowReader(desc.getAttributes(true),
-                     desc.getDimensions(),
+        _arrowReader(schema.getAttributes(true),
+                     schema.getDimensions(),
                      compression,
                      driver),
         _path(driver->getURL()),
-        _dims(desc.getDimensions()),
+        _dims(schema.getDimensions()),
         _size(0),
         _sizeMax(cacheSize)
     {}
@@ -129,7 +129,7 @@ namespace scidb {
                                    int iterationMode,
                                    std::shared_ptr<arrow::RecordBatch> arrowBatch):
         _chunk(chunk),
-        _nAtts(chunk._arrayIt._array._desc.getAttributes(true).size()),
+        _nAtts(chunk._arrayIt._array._schema.getAttributes(true).size()),
         _nDims(chunk._arrayIt._dims.size()),
         _iterationMode(iterationMode),
         _firstPos(_nDims),
@@ -444,7 +444,7 @@ namespace scidb {
 
     const ArrayDesc& XChunk::getArrayDesc() const
     {
-        return _arrayIt._array._desc;
+        return _arrayIt._array._schema;
     }
 
     const AttributeDesc& XChunk::getAttributeDesc() const
@@ -473,11 +473,11 @@ namespace scidb {
     XArrayIterator::XArrayIterator(const XArray& array, AttributeID attrID):
         ConstArrayIterator(array),
         _array(array),
-        _dims(array._desc.getDimensions()),
+        _dims(array._schema.getDimensions()),
         _attrID(attrID),
-        _attrDesc(array._desc.getAttributes().findattr(attrID)),
+        _attrDesc(array._schema.getAttributes().findattr(attrID)),
         _attrType(typeId2TypeEnum(_attrDesc.getType(), true)),
-        _arrowReader(array._desc.getAttributes(true),
+        _arrowReader(array._schema.getAttributes(true),
                      _dims,
                      array._compression,
                      array._driver),
@@ -528,7 +528,7 @@ namespace scidb {
         _currPos = pos;
         // Convert cell coords to chunk coords
         Coordinates chunkPos = pos;
-        _array._desc.getChunkPositionFor(chunkPos);
+        _array._schema.getChunkPositionFor(chunkPos);
 
         _chunkInitialized = false;
         _currIndex = _array._index->find(chunkPos);
@@ -580,15 +580,15 @@ namespace scidb {
     }
 
     //
-    // X Array
+    // XArray
     //
-    XArray::XArray(const ArrayDesc& desc,
+    XArray::XArray(const ArrayDesc& schema,
                    std::shared_ptr<Query> query,
                    std::shared_ptr<const Driver> driver,
                    std::shared_ptr<const XIndex> index,
                    const Metadata::Compression compression,
                    const size_t cacheSize):
-        _desc(desc),
+        _schema(schema),
         _query(query),
         _driver(driver),
         _index(index),
@@ -599,14 +599,14 @@ namespace scidb {
 
         // If Cache Size Is 0, The Cache Will Be disabled
         if (cacheSize > 0)
-            _cache = std::make_unique<XCache>(desc,
+            _cache = std::make_unique<XCache>(_schema,
                                               compression,
                                               driver,
                                               cacheSize);
     }
 
     ArrayDesc const& XArray::getArrayDesc() const {
-        return _desc;
+        return _schema;
     }
 
     std::shared_ptr<ConstArrayIterator> XArray::getConstIteratorImpl(
