@@ -52,8 +52,9 @@ ArrowReader::ArrowReader(
     _compression(compression),
     _driver(driver)
 {
-    THROW_NOT_OK(arrow::AllocateResizableBuffer(0, &_arrowResizableBuffer),
-                 "allocate empty resizable buffer");
+    ASSIGN_OR_THROW(_arrowResizableBuffer,
+                    arrow::AllocateResizableBuffer(0),
+                    "allocate empty resizable buffer");
 
     if (_compression != Metadata::Compression::NONE)
         _arrowCodec = *arrow::util::Codec::Create(
@@ -90,14 +91,16 @@ size_t ArrowReader::readObject(
                             _arrowCodec.get(), _arrowBufferReader),
                         "make compressed stream for " + name);
         // Read Record Batch using Stream Reader
-        THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
-                         _arrowCompressedStream, &_arrowBatchReader),
-                     "open record stream (compressed) for " + name);
+        ASSIGN_OR_THROW(
+            _arrowBatchReader,
+            arrow::ipc::RecordBatchStreamReader::Open(_arrowCompressedStream),
+            "open record stream (compressed) for " + name);
     }
     else {
-        THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(
-                         _arrowBufferReader, &_arrowBatchReader),
-                     "open record stream for " + name);
+        ASSIGN_OR_THROW(
+            _arrowBatchReader,
+            arrow::ipc::RecordBatchStreamReader::Open(_arrowBufferReader),
+            "open record stream for " + name);
     }
 
     THROW_NOT_OK(_arrowBatchReader->ReadNext(&arrowBatch),

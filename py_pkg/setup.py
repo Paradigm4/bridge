@@ -52,8 +52,8 @@ setup(
     packages=['scidbbridge'],
     install_requires=[
         'boto3>=1.14.12',
-        'pyarrow==0.16.0',
-        'scidb-py>=19.11.2',
+        'pyarrow==3.0.0',
+        'scidb-py>=19.11.4',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
@@ -61,11 +61,11 @@ setup(
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: GNU Affero General Public License v3',
         'Natural Language :: English',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Topic :: Database :: Front-Ends',
         'Topic :: Scientific/Engineering',
     ],

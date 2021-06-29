@@ -444,19 +444,17 @@ public:
                 arrowCompressedStream,
                 arrow::io::CompressedOutputStream::Make(codec.get(), arrowBufferStream),
                 "make compressed output stream");
-            ARROW_RETURN_NOT_OK(
-                arrow::ipc::RecordBatchStreamWriter::Open(
-                    &*arrowCompressedStream, _arrowSchema, &arrowWriter));
+            ASSIGN_OR_THROW(
+                arrowWriter,
+                arrow::ipc::MakeStreamWriter(&*arrowCompressedStream, _arrowSchema),
+                "make compressed stream writer");
         }
         else {
-            ARROW_RETURN_NOT_OK(
-                arrow::ipc::RecordBatchStreamWriter::Open(
-                    &*arrowBufferStream, _arrowSchema, &arrowWriter));
+            ASSIGN_OR_THROW(
+                arrowWriter,
+                arrow::ipc::MakeStreamWriter(&*arrowBufferStream, _arrowSchema),
+                "make stream writer");
         }
-        // TODO Arrow >= 0.17.0
-        // ARROW_ASSIGN_OR_RAISE(
-        //     arrowWriter,
-        //     arrow::ipc::NewStreamWriter(&*arrowStream, _arrowSchema));
 
         ARROW_RETURN_NOT_OK(arrowWriter->WriteRecordBatch(*arrowBatch));
         ARROW_RETURN_NOT_OK(arrowWriter->Close());

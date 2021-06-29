@@ -38,6 +38,7 @@
 
 // Arrow
 #include <arrow/buffer.h>
+#include <arrow/result.h>
 #include <arrow/util/compression.h>
 
 #define BRIDGE_VERSION 1
@@ -214,7 +215,7 @@ protected:
                          "resize buffer for " + suffix);
         }
         else {
-            THROW_NOT_OK(arrow::AllocateBuffer(length, &buffer),
+            ASSIGN_OR_THROW(buffer, arrow::AllocateBuffer(length),
                          "allocate buffer for " + suffix);
         }
     }

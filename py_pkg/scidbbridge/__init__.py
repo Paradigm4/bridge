@@ -32,7 +32,7 @@ import scidbpy
 
 from .driver import Driver
 
-__version__ = '19.11.1'
+__version__ = '19.11.2'
 
 type_map_pyarrow = dict(
     [(t.__str__(), t) for t in (pyarrow.binary(),
