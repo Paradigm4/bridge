@@ -31,8 +31,15 @@ from scidbbridge import Array, type_map_pyarrow
 from scidbbridge.driver import Driver
 
 def wrong_arg():
-    print('Usage:')
-    print(os.path.basename(__file__), 'URL index|chunks|both')
+    print("""Upgrade an existing Bridge Array from v1 to v2.
+
+Usage:
+
+{} URL index|chunks|both
+
+    index:  fixes index only (not idempotent)
+    chunks: fixes chunks only (idempotent)
+    both:   fixes index and chunks""".format(os.path.basename(__file__)))
     sys.exit(2)
 
 if len(sys.argv) != 3:
@@ -79,7 +86,7 @@ if mode in ('chunks', 'both'):
     for (_, pos) in array.read_index().iterrows():
         chunk = array.get_chunk(*pos.tolist())
         print('Fixing', chunk.url)
-        
+
         # Read chunk
         reader = Driver.create_reader(chunk.url, compression)
         table = reader.read_all()
