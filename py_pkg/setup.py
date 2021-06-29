@@ -53,7 +53,7 @@ setup(
     install_requires=[
         'boto3>=1.14.12',
         'pyarrow==3.0.0',
-        'scidb-py>=19.11.2',
+        'scidb-py>=19.11.4',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
