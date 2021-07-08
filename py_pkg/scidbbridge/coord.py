@@ -3,17 +3,15 @@ def pos2coord(pos, origin, chunkSize):
     nDims = len(origin)
 
     if nDims == 1:
-        coord.append(origin[0] + pos)                 # coord[0]
+        coord.append(origin[0] + pos)  # coord[0]
     elif nDims == 2:
-        coord.append(origin[1] + pos % chunkSize[1])  # coord[1]
-        pos /= chunkSize[1]
-        coord.append(origin[0] + pos)                 # coord[0]
-        coord.reverse()
+        coord.insert(0, origin[1] + pos % chunkSize[1])  # coord[1]
+        pos //= chunkSize[1]
+        coord.insert(0, origin[0] + pos)                 # coord[0]
     else:
         for i in range(nDims - 1, -1, -1):
-            coord.append(origin[i] + pos % chunkSize[i])
-            pos /= chunkSize[i]
-        coord.reverse()
+            coord.insert(0, origin[i] + pos % chunkSize[i])
+            pos //= chunkSize[i]
 
     return coord
 
