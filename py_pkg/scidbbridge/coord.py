@@ -1,36 +1,80 @@
-def pos2coord(pos, origin, chunkSize):
-    coord = []
-    nDims = len(origin)
+import numpy
+import pandas
 
-    if nDims == 1:
-        coord.append(origin[0] + pos)  # coord[0]
-    elif nDims == 2:
-        coord.insert(0, origin[1] + pos % chunkSize[1])  # coord[1]
-        pos //= chunkSize[1]
-        coord.insert(0, origin[0] + pos)                 # coord[0]
+
+# orig: chunk origin coordinates
+
+def pos2coord(pos, orig, chunk_size):
+    coord = []
+    n_dims = len(orig)
+
+    if n_dims == 1:
+        coord.append(orig[0] + pos)                     # coord[0]
+    elif n_dims == 2:
+        coord.insert(0, orig[1] + pos % chunk_size[1])  # coord[1]
+        pos //= chunk_size[1]
+        coord.insert(0, orig[0] + pos)                  # coord[0]
     else:
-        for i in range(nDims - 1, -1, -1):
-            coord.insert(0, origin[i] + pos % chunkSize[i])
-            pos //= chunkSize[i]
+        for i in range(n_dims - 1, -1, -1):
+            coord.insert(0, orig[i] + pos % chunk_size[i])
+            pos //= chunk_size[i]
 
     return coord
 
 
-def coord2pos(coord, origin, chunkSize):
-    nDims = len(origin)
+def pos2coord_all(data, pos_name, orig_names, chunk_size, res_dim_names):
+    n_dims = len(orig_names)
+    pos = data[pos_name]
 
-    if nDims == 1:
-        pos = coord[0] - origin[0]
-    elif nDims == 2:
-        pos = ((coord[0] - origin[0]) * chunkSize[1] +
-               (coord[1] - origin[1]))
+    if n_dims == 1:
+        res = (data[orig_names[0]] + pos, )
+    if n_dims == 2:
+        coord1 = data[orig_names[1]] + data[pos_name] % chunk_size[1]
+        pos = pos // chunk_size[1]
+        coord0 = data[orig_names[0]] + pos
+        res = (coord0, coord1)
+    else:
+        res = []
+        for i in range(n_dims - 1, -1, -1):
+            res.insert(0, data[orig_names[i]] + pos % chunk_size[i])
+            pos = pos // chunk_size[i]
+
+    return pandas.DataFrame(dict(zip(res_dim_names, res)))
+
+
+
+def coord2pos(coord, orig, chunk_size):
+    n_dims = len(coord)
+
+    if n_dims == 1:
+        pos = coord[0] - orig[0]
+    elif n_dims == 2:
+        pos = ((coord[0] - orig[0]) * chunk_size[1] +
+               (coord[1] - orig[1]))
     else:
         pos = 0
-        for i in range(nDims):
-            pos *= chunkSize[i]
-            pos += coord[i] - origin[i]
+        for i in range(n_dims):
+            pos *= chunk_size[i]
+            pos += coord[i] - orig[i]
 
     return pos
+
+
+def coord2pos_all(data, dim_names, orig_names, chunk_size):
+    n_dims = len(dim_names)
+
+    if n_dims == 1:
+        res = data[dim_names[0]] - data[orig_names[0]]
+    elif n_dims == 2:
+        res = ((data[dim_names[0]] - data[orig_names[0]]) * chunk_size[1] +
+               data[dim_names[1]] - data[orig_names[1]])
+    else:
+        res = pandas.Series(numpy.zeros(len(data)), dtype=numpy.int64)
+        for i in range(n_dims):
+            res *= chunk_size[i]
+            res += data[dim_names[i]] - data[orig_names[i]]
+
+    return res
 
 
 # util/ArrayCoordinatesMapper.h

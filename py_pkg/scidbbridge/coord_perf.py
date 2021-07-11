@@ -5,6 +5,7 @@ import timeit
 
 from coord import coord2pos, pos2coord
 
+
 # iquery --afl --format csv --query "
 #   sort(
 #     project(
@@ -24,36 +25,39 @@ from coord import coord2pos, pos2coord
 # ---
 # Setup
 # ---
-file_name_in = sys.argv[1]
-chunkSize = (100000, 10)
-names = ('d0',                  # 0
-         'd1',                  # 1
-         'd0_c',                # 2
-         'd1_c')                # 3
-if '_pos.' in file_name_in:
-    names = names + ('pos',
-                     'prev_d0_c',
-                     'prev_d1_c',
-                     'prev_pos',
-                     'delta')
-dtype = dict((k, numpy.int64) for k in names)
+chunk_size = (100000, 10)
 
 
 # ---
 # Read input file
 # ---
-data = pandas.read_csv(file_name_in, names=names, dtype=dtype)
+def read_file(file_name_in):
+    names = ('d0',                  # 0
+             'd1',                  # 1
+             'd0_c',                # 2
+             'd1_c')                # 3
+    if '_pos.' in file_name_in:
+        names = names + ('pos',
+                         'prev_d0_c',
+                         'prev_d1_c',
+                         'prev_pos',
+                         'delta')
+    dtype = dict((k, numpy.int64) for k in names)
+
+
+    return pandas.read_csv(file_name_in, names=names, dtype=dtype)
 
 
 # ---
-# Add pos column (run once)
+# Add pos column
 # ---
-if '_pos.' not in file_name_in:
+def add_pos(file_name_in):
+    data = read_file(file_name_in)
     file_name_out = file_name_in[:-4] + '_pos' + file_name_in[-4:]
 
     # Compute pos
     data['pos'] = data.apply(
-        lambda row: coord2pos(row[:2], row[2:4], chunkSize),
+        lambda row: coord2pos(row[:2], row[2:4], chunk_size),
         axis=1)                            # 4
 
     # Shift and assign prev_* columns
@@ -90,7 +94,7 @@ if '_pos.' not in file_name_in:
 
     data['new_pos'] = data.apply(delta2pos, axis=1)
     data[['new_d0', 'new_d1']] = data.apply(
-        lambda row: pos2coord(row['new_pos'], row[2:4], chunkSize),
+        lambda row: pos2coord(row['new_pos'], row[2:4], chunk_size),
         axis=1,
         result_type='expand')
 
@@ -108,21 +112,22 @@ if '_pos.' not in file_name_in:
 # ---
 # coord2pos
 # ---
-# data.apply(lambda row: coord2pos(row[:2], row[2:4], chunkSize), axis=1)
+# data.apply(lambda row: coord2pos(row[:2], row[2:4], chunk_size), axis=1)
 
 
 # ---
 # pos2coord
 # ---
-# data.apply(lambda row: pos2coord(row[4], row[2:4], chunkSize), axis=1)
+# data.apply(lambda row: pos2coord(row[4], row[2:4], chunk_size),
+# axis=1)
 
 
 # ---
 # timeit
 # ---
-# stmt = 'data.apply(lambda row: coord2pos(row[:2], row[2:4], chunkSize), \
+# stmt = 'data.apply(lambda row: coord2pos(row[:2], row[2:4], chunk_size), \
 # axis=1)'
-# stmt = 'data.apply(lambda row: pos2coord(row[4], row[2:4], chunkSize), \
+# stmt = 'data.apply(lambda row: pos2coord(row[4], row[2:4], chunk_size), \
 # axis=1)'
 # res = timeit.timeit(
 #     setup='data = pandas.read_csv(file_name_in, names=names, dtype=dtype)',
@@ -131,5 +136,14 @@ if '_pos.' not in file_name_in:
 #     globals=globals())
 # print(res)
 
-# %timeit data.apply(lambda r: coord2pos(r[:2], r[2:4], chunkSize), axis=1)
-# %timeit data.apply(lambda r: pos2coord(r[4], r[2:4], chunkSize), axis=1)650
+# %timeit data.apply(lambda r: coord2pos(r[:2], r[2:4], chunk_size), axis=1)
+# %timeit data.apply(lambda r: pos2coord(r[4], r[2:4], chunk_size), axis=1)
+
+
+# ---
+# Main: Add pos column
+# ---
+if __name__ == '__main__':
+    file_name_in = sys.argv[1]
+    if '_pos.' not in file_name_in:
+        add_pos(file_name_in)
