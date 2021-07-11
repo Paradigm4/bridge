@@ -1,9 +1,11 @@
 import numpy
 import pandas
+import pyarrow
 import sys
-import timeit
 
-from coord import coord2pos, pos2coord
+from coord import *
+
+# import timeit
 
 
 # iquery --afl --format csv --query "
@@ -110,31 +112,21 @@ def add_pos(file_name_in):
 
 
 # ---
-# coord2pos
+# Write Arrow table
 # ---
-# data.apply(lambda row: coord2pos(row[:2], row[2:4], chunk_size), axis=1)
-
-
-# ---
-# pos2coord
-# ---
-# data.apply(lambda row: pos2coord(row[4], row[2:4], chunk_size),
-# axis=1)
+def write_arrow(file_name, dataframe, compression='lz4'):
+    table = pyarrow.Table.from_pandas(dataframe)
+    table = table.replace_schema_metadata()
+    stream = pyarrow.output_stream(file_name, compression=compression)
+    writer = pyarrow.ipc.RecordBatchStreamWriter(stream, table.schema)
+    writer.write_table(table)
+    writer.close()
+    stream.close()
 
 
 # ---
 # timeit
 # ---
-# stmt = 'data.apply(lambda row: coord2pos(row[:2], row[2:4], chunk_size), \
-# axis=1)'
-# stmt = 'data.apply(lambda row: pos2coord(row[4], row[2:4], chunk_size), \
-# axis=1)'
-# res = timeit.timeit(
-#     setup='data = pandas.read_csv(file_name_in, names=names, dtype=dtype)',
-#     stmt=stmt,
-#     number=10,
-#     globals=globals())
-# print(res)
 
 # %timeit data.apply(lambda r: coord2pos(r[:2], r[2:4], chunk_size), axis=1)
 # %timeit data.apply(lambda r: pos2coord(r[4], r[2:4], chunk_size), axis=1)
