@@ -15,10 +15,10 @@ from coord import coord2pos, pos2coord
 #           1000000),
 #         d0,   variant_id,
 #         d1,   sub_field_id,
-#         d0_c, variant_id / 100000 * 100000,
-#         d1_c, sub_field_id / 10 * 10),
-#       d0, d1, d0_c, d1_c),
-#     d0_c, d1_c, d0, d1)
+#         d0_o, variant_id / 100000 * 100000,
+#         d1_o, sub_field_id / 10 * 10),
+#       d0, d1, d0_o, d1_o),
+#     d0_o, d1_o, d0, d1)
 #   " > assoc_dims.1m.csv
 
 
@@ -34,12 +34,12 @@ chunk_size = (100000, 10)
 def read_file(file_name_in):
     names = ('d0',                  # 0
              'd1',                  # 1
-             'd0_c',                # 2
-             'd1_c')                # 3
+             'd0_o',                # 2
+             'd1_o')                # 3
     if '_pos.' in file_name_in:
         names = names + ('pos',
-                         'prev_d0_c',
-                         'prev_d1_c',
+                         'prev_d0_o',
+                         'prev_d1_o',
                          'prev_pos',
                          'delta')
     dtype = dict((k, numpy.int64) for k in names)
@@ -62,8 +62,8 @@ def add_pos(file_name_in):
 
     # Shift and assign prev_* columns
     data_prev = data.shift(1, fill_value=0)
-    data['prev_d0_c'] = data_prev['d0_c']  # 5
-    data['prev_d1_c'] = data_prev['d1_c']  # 6
+    data['prev_d0_o'] = data_prev['d0_o']  # 5
+    data['prev_d1_o'] = data_prev['d1_o']  # 6
     data['prev_pos'] = data_prev['pos']    # 7
 
     def pos2delta(row):
@@ -138,6 +138,11 @@ def add_pos(file_name_in):
 
 # %timeit data.apply(lambda r: coord2pos(r[:2], r[2:4], chunk_size), axis=1)
 # %timeit data.apply(lambda r: pos2coord(r[4], r[2:4], chunk_size), axis=1)
+
+# %timeit coord2pos_all(data, ('d0', 'd1'), ('d0_o', 'd1_o'), chunk_size)
+# %timeit pos2coord_all(
+#     data, 'pos', ('d0_o', 'd1_o'), chunk_size, ('d0', 'd1'))
+
 
 
 # ---
