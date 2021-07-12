@@ -20,14 +20,8 @@ from coord import *
 #         d0_o, variant_id / 100000 * 100000,
 #         d1_o, sub_field_id / 10 * 10),
 #       d0, d1, d0_o, d1_o),
-#     d0_o, d1_o, d0, d1)
+#     d0, d1)
 #   " > assoc_dims.1m.csv
-
-
-# ---
-# Setup
-# ---
-chunk_size = (100000, 10)
 
 
 # ---
@@ -53,7 +47,7 @@ def read_file(file_name_in):
 # ---
 # Add pos column
 # ---
-def add_pos(file_name_in):
+def add_pos(file_name_in, chunk_size):
     data = read_file(file_name_in)
     file_name_out = file_name_in[:-4] + '_pos' + file_name_in[-4:]
 
@@ -142,5 +136,6 @@ def write_arrow(file_name, dataframe, compression='lz4'):
 # ---
 if __name__ == '__main__':
     file_name_in = sys.argv[1]
+    chunk_size = tuple(map(int, sys.argv[2].split(',')))
     if '_pos.' not in file_name_in:
-        add_pos(file_name_in)
+        add_pos(file_name_in, chunk_size)
