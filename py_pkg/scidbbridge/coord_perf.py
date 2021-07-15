@@ -24,6 +24,20 @@ from coord import *
 #     d0, d1)
 #   " > assoc_dims.1m.csv
 
+# iquery --afl --format csv --query "
+#   sort(
+#     project(
+#       apply(
+#         limit(
+#           filter(UK_BIOBANK.GENOTYPE, variant_id < 1000),
+#           1000000),
+#         d0, variant_id,
+#         d1, individual,
+#         d0_o, variant_id,
+#         d1_o, (individual - 1) / 487409 * 487409 + 1),
+#       d0, d1, d0_o, d1_o),
+#     d0, d1)"
+
 
 # ---
 # Read input file
