@@ -22,21 +22,39 @@ from coord import *
 #         d1_o, sub_field_id / 10 * 10),
 #       d0, d1, d0_o, d1_o),
 #     d0, d1)
-#   " > assoc_dims.1m.csv
+#   " > assoc.1m.csv
+
+# ASSOC_RIVAS_RESULTS
+#   <pvalue:double COMPRESSION 'zlib',
+#    odds_ratio:double COMPRESSION 'zlib',
+#    beta:double COMPRESSION 'zlib',
+#    se:double COMPRESSION 'zlib',
+#    t_stat:double COMPRESSION 'zlib',
+#    z_stat:double COMPRESSION 'zlib',
+#    nobs:int64 COMPRESSION 'zlib',
+#    note:string COMPRESSION 'zlib'>
+#   [variant_id=0:*:0:100000; sub_field_id=0:*:0:10]
 
 # iquery --afl --format csv --query "
 #   sort(
 #     project(
 #       apply(
 #         limit(
-#           filter(UK_BIOBANK.GENOTYPE, variant_id < 1000),
+#           filter(
+#             UK_BIOBANK.GENOTYPE,
+#             variant_id >= 1000000 and variant_id <= 1001000)
 #           1000000),
 #         d0, variant_id,
 #         d1, individual,
 #         d0_o, variant_id,
 #         d1_o, (individual - 1) / 487409 * 487409 + 1),
 #       d0, d1, d0_o, d1_o),
-#     d0, d1)"
+#     d0, d1)
+#   " > genotype.1m.csv
+
+# GENOTYPE
+#   <probabilities:uint16 NOT NULL COMPRESSION 'zlib'>
+#   [variant_id=0:*:0:1; individual=1:487409:0:487409]
 
 
 # ---
@@ -48,7 +66,7 @@ def read_file(file_name, n_dims, attr_names=(), attr_types=()):
 
     names = tuple(itertools.chain(dim_names, attr_names))
     dtypes = dict(itertools.chain(dim_dtype.items(),
-                                  ((name, dtype) 
+                                  ((name, dtype)
                                    for (name, dtype) in zip(attr_names,
                                                             attr_types))))
 
@@ -68,7 +86,7 @@ def write_dile(data, file_name):
 def compute_delta(data, origins, chunk_sizes):
     n_dims = len(origins)
     n_atts = len(data.columns) - n_dims
-    
+
     dim_names = tuple('d{}'.format(i) for i in range(n_dims))
     origin_names = tuple('o{}'.format(i) for i in range(n_dims))
     prev_origin_names = tuple('prev_o{}'.format(i) for i in range(n_dims))
@@ -76,7 +94,7 @@ def compute_delta(data, origins, chunk_sizes):
 
     # Compute chunk origin
     for i in range(n_dims):
-        data[origin_names[i]] = ((data[dim_names[i]] - origins[i]) 
+        data[origin_names[i]] = ((data[dim_names[i]] - origins[i])
                                  // chunk_sizes[i]
                                  * chunk_sizes[i]
                                  + origins[i])
@@ -120,7 +138,7 @@ def compute_delta(data, origins, chunk_sizes):
 
     # Compute new coords
     data = data.join(
-        pos2coord_all(data, 
+        pos2coord_all(data,
                       'new_pos',
                       origin_names,
                       chunk_sizes,

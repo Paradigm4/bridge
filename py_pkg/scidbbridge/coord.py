@@ -77,6 +77,22 @@ def coord2pos_all(data, dim_names, orig_names, chunk_size):
     return res
 
 
+def prev_delta2coord(prev_coord, delta, chunk_sizes):
+    """
+    >>> prev_delta2coord((1, 1, 0), 4, (4, 3, 2))
+    [2, 0, 0]
+    """
+    coord = list(prev_coord)
+    i = len(prev_coord) - 1
+    while coord[i] + delta >= chunk_sizes[i]:
+        coord[i] += delta
+        delta = coord[i] // chunk_sizes[i]
+        coord[i] %= chunk_sizes[i]
+        i -= 1
+    coord[i] += delta
+    return coord
+
+
 # util/ArrayCoordinatesMapper.h
 #
 # /**
